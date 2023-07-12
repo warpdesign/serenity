@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Utf32View.h>
 #include <LibWeb/Bindings/Intrinsics.h>
 #include <LibWeb/CSS/Parser/Parser.h>
 #include <LibWeb/CSS/StyleProperties.h>
@@ -13,6 +14,8 @@
 #include <LibWeb/DOM/Document.h>
 #include <LibWeb/HTML/HTMLTableCellElement.h>
 #include <LibWeb/HTML/Parser/HTMLParser.h>
+#include <LibWeb/Infra/CharacterTypes.h>
+#include <LibWeb/Infra/Strings.h>
 
 namespace Web::HTML {
 
@@ -73,7 +76,23 @@ void HTMLTableCellElement::apply_presentational_hints(CSS::StyleProperties& styl
 
 unsigned int HTMLTableCellElement::col_span() const
 {
-    return attribute(HTML::AttributeNames::colspan).to_uint().value_or(1);
+    auto string = attribute(HTML::AttributeNames::colspan);
+    auto input = Utf8View(string);
+    auto position = input.begin();
+
+    // Skip ASCII whitespace within input given position.
+    while (position != input.end() && Infra::is_ascii_whitespace(*position))
+        ++position;
+
+    if (position == input.end() || !is_ascii_digit(*position))
+        return 1;
+
+    StringBuilder number_string;
+    while (position != input.end() && is_ascii_digit(*position)) {
+        number_string.append(*position);
+        ++position;
+    }
+    return number_string.string_view().to_uint().value_or(1);
 }
 
 WebIDL::ExceptionOr<void> HTMLTableCellElement::set_col_span(unsigned int value)
