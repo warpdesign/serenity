@@ -27,6 +27,7 @@ def main():
         b"SerenityOS PowerPC: program exception roundtrip passed",
         b"SerenityOS PowerPC: MMU high alias passed",
         b"SerenityOS PowerPC: HPT high alias passed",
+        b"SerenityOS PowerPC: HPT remap and secondary hash passed",
     )
 
     with tempfile.TemporaryDirectory(prefix="serenity-pegasos2-") as directory:

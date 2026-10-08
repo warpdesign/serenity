@@ -24,6 +24,7 @@ extern int powerpc_setjmp_self_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
+extern int powerpc_hpt_mapping_lifecycle(void);
 
 static int is_pegasos2(void)
 {
@@ -218,5 +219,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
+        if (powerpc_hpt_mapping_lifecycle())
+            serial_write("SerenityOS PowerPC: HPT remap and secondary hash passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT remap and secondary hash failed\r\n");
     }
 }
