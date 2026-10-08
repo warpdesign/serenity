@@ -55,9 +55,12 @@ fi
 BUILD=$($REALPATH "$BUILD")
 
 git_patch=
+bootstrap_only=
 while [ "$1" != "" ]; do
     case $1 in
         --dev )           git_patch=1
+                          ;;
+        --bootstrap-only ) bootstrap_only=1
                           ;;
     esac
     shift
@@ -201,6 +204,16 @@ NPROC=$(get_number_of_processing_units)
 
 mkdir -p "$DIR/Build/$ARCH"
 
+TARGET_CONFIGURE_ARGS=()
+GCC_LANGUAGES="c,c++,objc,obj-c++"
+if [ "$ARCH" = "powerpc" ]; then
+    # Pegasos 2 uses only the big-endian 32-bit SysV ABI.
+    TARGET_CONFIGURE_ARGS+=(--disable-multilib --with-cpu=750)
+fi
+if [ "$bootstrap_only" = "1" ]; then
+    GCC_LANGUAGES="c,c++"
+fi
+
 pushd "$DIR/Build/$ARCH"
     unset PKG_CONFIG_LIBDIR # Just in case
 
@@ -246,13 +259,14 @@ pushd "$DIR/Build/$ARCH"
                                             --disable-nls \
                                             --disable-libstdcxx-pch \
                                             --disable-host-shared \
-                                            --enable-languages=c,c++,objc,obj-c++ \
+                                            --enable-languages="$GCC_LANGUAGES" \
                                             --enable-default-pie \
                                             --enable-lto \
                                             --enable-threads=posix \
                                             --enable-initfini-array \
                                             --with-linker-hash-style=gnu \
                                             --with-system-zlib \
+                                            "${TARGET_CONFIGURE_ARGS[@]}" \
                                             ${CI:+"--quiet"} || exit 1
 
         echo "XXX build gcc and libgcc"
@@ -261,10 +275,12 @@ pushd "$DIR/Build/$ARCH"
         echo "XXX install gcc and libgcc"
         buildstep "gcc+libgcc/install" "$MAKE" install-gcc install-target-libgcc || exit 1
 
-        echo "XXX build libstdc++"
-        buildstep "libstdc++/build" "$MAKE" -j "$MAKEJOBS" all-target-libstdc++-v3 || exit 1
-        echo "XXX install libstdc++"
-        buildstep "libstdc++/install" "$MAKE" install-target-libstdc++-v3 || exit 1
+        if [ "$bootstrap_only" != "1" ]; then
+            echo "XXX build libstdc++"
+            buildstep "libstdc++/build" "$MAKE" -j "$MAKEJOBS" all-target-libstdc++-v3 || exit 1
+            echo "XXX install libstdc++"
+            buildstep "libstdc++/install" "$MAKE" install-target-libstdc++-v3 || exit 1
+        fi
     popd
 
 popd

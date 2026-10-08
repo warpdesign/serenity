@@ -73,3 +73,9 @@ The SerenityOS dynamic linker provides a magic function
 "__get_riscv_feature_bits" that populates __riscv_feature_bits
 and __riscv_cpu_model.
 
+## `0009-Add-32-bit-PowerPC-SerenityOS-target.patch`
+
+Add GCC and libgcc support for the 32-bit PowerPC SysV ABI on SerenityOS.
+GCC's shared `rs6000/sysv4.h` declares FreeBSD spec entries, so its
+`freebsd-spec.h` definitions are needed to compile the driver. SerenityOS
+still selects its own linker spec and runtime loader.

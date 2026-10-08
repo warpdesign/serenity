@@ -52,3 +52,7 @@ which leads to build errors because this enables -Werror.
 
 https://sourceware.org/pipermail/binutils/2026-May/149177.html
 
+## `0004-Add-32-bit-PowerPC-SerenityOS-target.patch`
+
+Select big-endian ELF32 PowerPC for `powerpc-serenity`, including the
+SerenityOS dynamic linker path.

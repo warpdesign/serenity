@@ -1,0 +1,83 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 9 Oct 2026 01:00:00 +0200
+Subject: [PATCH] Add 32-bit PowerPC SerenityOS target
+
+Teach the target toolchain to produce big-endian ELF32 PowerPC
+objects for SerenityOS.
+---
+diff --git a/bfd/config.bfd b/bfd/config.bfd
+--- a/bfd/config.bfd
++++ b/bfd/config.bfd
+@@ -1172,6 +1172,10 @@
+     targ_selvecs="rs6000_xcoff_vec powerpc_elf32_vec powerpc_elf32_le_vec powerpc_boot_vec"
+     targ64_selvecs="powerpc_elf64_vec powerpc_elf64_le_vec powerpc_elf64_fbsd_vec"
+     ;;
++  powerpc-*-serenity*)
++    targ_defvec=powerpc_elf32_vec
++    targ_selvecs="powerpc_elf32_le_vec"
++    ;;
+   powerpc-*-*bsd* | powerpc-*-elf* | powerpc-*-sysv4* | powerpc-*-eabi* | \
+   powerpc-*-linux-* | powerpc-*-rtems* | powerpc-*-chorus*)
+     targ_defvec=powerpc_elf32_vec
+diff --git a/gas/configure.tgt b/gas/configure.tgt
+--- a/gas/configure.tgt
++++ b/gas/configure.tgt
+@@ -365,6 +365,7 @@
+   ppc-*-*n*bsd* | ppc-*-elf*)		fmt=elf ;;
+   ppc-*-eabi* | ppc-*-sysv4*)		fmt=elf ;;
+   ppc-*-haiku*)				fmt=elf em=haiku ;;
++  ppc-*-serenity*)			fmt=elf em=serenity ;;
+   ppc-*-linux-*)			fmt=elf em=linux ;;
+   ppc-*-macos*)				fmt=coff em=macos ;;
+   ppc-*-nto*)				fmt=elf ;;
+diff --git a/ld/Makefile.am b/ld/Makefile.am
+--- a/ld/Makefile.am
++++ b/ld/Makefile.am
+@@ -260,6 +260,7 @@
+ 	eelf32ppc_fbsd.c \
+ 	eelf32ppchaiku.c \
+ 	eelf32ppclinux.c \
++	eelf32ppcserenity.c \
+ 	eelf32ppcnto.c \
+ 	eelf32ppcsim.c \
+ 	eelf32ppcvxworks.c \
+diff --git a/ld/Makefile.in b/ld/Makefile.in
+--- a/ld/Makefile.in
++++ b/ld/Makefile.in
+@@ -775,6 +775,7 @@
+ 	eelf32ppc_fbsd.c \
+ 	eelf32ppchaiku.c \
+ 	eelf32ppclinux.c \
++	eelf32ppcserenity.c \
+ 	eelf32ppcnto.c \
+ 	eelf32ppcsim.c \
+ 	eelf32ppcvxworks.c \
+@@ -1424,6 +1425,7 @@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppc_fbsd.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppchaiku.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppclinux.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppcserenity.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppcnto.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppcsim.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eelf32ppcvxworks.Po@am__quote@
+diff --git a/ld/configure.tgt b/ld/configure.tgt
+--- a/ld/configure.tgt
++++ b/ld/configure.tgt
+@@ -677,6 +677,9 @@
+ powerpc64le-*-freebsd*)
+ 			targ_emul=elf64lppc_fbsd
+ 			targ_extra_emuls="elf64lppc"
++			;;
++powerpc-*-serenity*)	targ_emul=elf32ppcserenity
++			targ_extra_emuls=elf32ppc
+ 			;;
+ powerpc-*-vxworks*)
+ 			targ_emul=elf32ppcvxworks
+diff --git a/ld/emulparams/elf32ppcserenity.sh b/ld/emulparams/elf32ppcserenity.sh
+new file mode 100644
+--- /dev/null
++++ b/ld/emulparams/elf32ppcserenity.sh
+@@ -0,0 +1,2 @@
++source_sh ${srcdir}/emulparams/elf32ppc.sh
++source_sh ${srcdir}/emulparams/elf_serenity.sh
