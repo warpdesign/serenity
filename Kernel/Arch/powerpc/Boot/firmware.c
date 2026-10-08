@@ -26,6 +26,7 @@ extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_hpt_mapping_lifecycle(void);
 extern int powerpc_hpt_group_reuse(void);
+extern int powerpc_hpt_unmapped_fault_observed(void);
 
 static int is_pegasos2(void)
 {
@@ -228,5 +229,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT group reuse passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT group reuse failed\r\n");
+        if (powerpc_hpt_unmapped_fault_observed())
+            serial_write("SerenityOS PowerPC: HPT unmapped fault passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT unmapped fault failed\r\n");
     }
 }

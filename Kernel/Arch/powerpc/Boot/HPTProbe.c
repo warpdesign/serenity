@@ -39,11 +39,13 @@ static struct PageTableEntry s_page_table[PageTableGroupCount * PageTableEntries
     __attribute__((aligned(PageTableSize)));
 static volatile Word s_hpt_payload_word __attribute__((aligned(PageSize))) = 0x89abcdef;
 static volatile Word s_hpt_replacement_word __attribute__((aligned(PageSize))) = 0x13579bdf;
+static int s_hpt_unmapped_fault_observed;
 
 extern void powerpc_select_boot_hpt(Word table_physical);
 extern void powerpc_enable_boot_translation(void);
 extern void powerpc_disable_boot_translation(void);
 extern int powerpc_high_alias_marker(void);
+extern Word powerpc_probe_absent_high_alias(Word effective_address);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
@@ -232,6 +234,22 @@ int powerpc_hpt_group_reuse(void)
         volatile Word* original_alias = (volatile Word*)(__UINTPTR_TYPE__)CollisionBase;
         passed = *alias == 0x13579bdfu && *original_alias == 0x89abcdefu;
     }
+    Word fault_count_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(fault_count_before));
+    Word absent_alias = CollisionBase + (CollisionCount - 1) * CollisionStride;
+    Word fault_result = powerpc_probe_absent_high_alias(absent_alias);
+    Word fault_count_after;
+    Word fault_address;
+    Word fault_status;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
+        : "=r"(fault_count_after), "=r"(fault_address), "=r"(fault_status));
+    s_hpt_unmapped_fault_observed = fault_result == 0 && fault_count_after == fault_count_before + 1
+        && fault_address == absent_alias && (fault_status & 0x40000000u) != 0;
     powerpc_disable_boot_translation();
     return passed;
+}
+
+int powerpc_hpt_unmapped_fault_observed(void)
+{
+    return s_hpt_unmapped_fault_observed;
 }

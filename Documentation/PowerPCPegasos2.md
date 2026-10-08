@@ -50,8 +50,8 @@ qemu-system-ppc -M pegasos2 -m 256 \
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`, and
 `MMU high alias passed`, `HPT high alias passed`, and
-`HPT remap and secondary hash passed`, and `HPT group reuse passed` on the
-terminal.
+`HPT remap and secondary hash passed`, `HPT group reuse passed`, and
+`HPT unmapped fault passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -88,14 +88,20 @@ the ninth into the secondary group. The probe reads all nine aliases, remaps
 an already used virtual page to another physical page, invalidates its TLB
 entry, and checks reads and writes through the new mapping. It then fills both
 hash groups, confirms another insertion fails, removes a live mapping, and
-reuses the slot for a different virtual and physical page. This remains a
-fixed bootstrap probe: general allocation, an eviction policy when both hash
+reuses the slot for a different virtual and physical page. A load from the
+removed alias then enters a probe-only data-storage exception vector at
+`0x300`; the check verifies the fault address in `DAR` and the missing-page
+status in `DSISR`. The vector skips that one load to resume the probe; it is
+not a general kernel page-fault handler. This remains a fixed bootstrap probe:
+general allocation, an eviction policy when both hash
 groups fill, per-process VSIDs, and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.
 The [NXP page-table setup note](https://www.nxp.com/docs/en/application-note/AN2794.pdf)
 describes the HPT entry and hash layout.
+The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+defines the data-storage vector and missing-PTE status used by the fault check.
 
 After its last Open Firmware call, the probe copies a program-exception
 handler to physical address `0x700`, synchronizes the data and instruction
