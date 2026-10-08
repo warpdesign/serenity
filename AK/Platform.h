@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2022, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, Nico Weber <thakis@chromium.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, Nico Weber <thakis@chromium.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -37,6 +37,12 @@
 #    define AK_IS_ARCH_RISCV64() 1
 #else
 #    define AK_IS_ARCH_RISCV64() 0
+#endif
+
+#if (defined(__powerpc__) || defined(_ARCH_PPC)) && __SIZEOF_POINTER__ == 4
+#    define AK_IS_ARCH_POWERPC32() 1
+#else
+#    define AK_IS_ARCH_POWERPC32() 0
 #endif
 
 #ifdef __wasm32__
@@ -144,6 +150,12 @@
 #    define VALIDATE_IS_RISCV64()
 #else
 #    define VALIDATE_IS_RISCV64() static_assert(false, "Trying to include riscv64 only header on non riscv64 platform");
+#endif
+
+#if ARCH(POWERPC32)
+#    define VALIDATE_IS_POWERPC32()
+#else
+#    define VALIDATE_IS_POWERPC32() static_assert(false, "Trying to include 32-bit PowerPC only header on another platform");
 #endif
 
 // Apple Clang 14.0.3 (shipped in Xcode 14.3) has a bug that causes __builtin_subc{,l,ll}

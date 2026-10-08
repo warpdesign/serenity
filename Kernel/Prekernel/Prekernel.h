@@ -1,15 +1,21 @@
 /*
- * Copyright (c) 2021, Gunnar Beutner <gbeutner@serenityos.org>
- * Copyright (c) 2024, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2021-2026, Gunnar Beutner <gbeutner@serenityos.org>
+ * Copyright (c) 2024-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #pragma once
 
+#ifndef KERNEL_HAS_EFI_BOOT
+#    define KERNEL_HAS_EFI_BOOT 1
+#endif
+
 #ifdef __cplusplus
 #    include <Kernel/Boot/Multiboot.h>
-#    include <Kernel/EFIPrekernel/EFIPrekernel.h>
+#    if KERNEL_HAS_EFI_BOOT
+#        include <Kernel/EFIPrekernel/EFIPrekernel.h>
+#    endif
 #    include <Kernel/Memory/PhysicalAddress.h>
 #    include <Kernel/Memory/VirtualAddress.h>
 #    include <Kernel/Prekernel/Arch/ArchSpecificBootInfo.h>
@@ -20,7 +26,9 @@
 
 // FIXME: This should be using the define from Sections.h, but that currently is not possible
 //        and causes linker errors, because Sections.h includes BootInfo.h.
-#define KERNEL_MAPPING_BASE 0x2000000000
+#ifndef KERNEL_MAPPING_BASE
+#    define KERNEL_MAPPING_BASE 0x2000000000
+#endif
 
 #ifdef __cplusplus
 
@@ -46,11 +54,13 @@ struct Multiboot1BootInfo {
 struct PreInitBootInfo {
 };
 
+#if KERNEL_HAS_EFI_BOOT
 struct EFIBootInfo {
     EFIMemoryMap memory_map;
     VirtualAddress bootstrap_page_vaddr;
     PhysicalAddress bootstrap_page_page_directory_paddr;
 };
+#endif
 
 enum class BootMethod {
     Multiboot1,
@@ -83,7 +93,9 @@ struct SMBIOSBootInfo {
 union BootMethodSpecificBootInfo {
     PreInitBootInfo pre_init {};
     Multiboot1BootInfo multiboot1;
+#if KERNEL_HAS_EFI_BOOT
     EFIBootInfo efi;
+#endif
 };
 
 struct BootInfo {

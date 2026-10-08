@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -38,6 +38,12 @@ struct __jmp_buf {
     uint64_t fs[12];
     uint64_t sp;
     uint64_t ra;
+#elif (defined(__powerpc__) || defined(_ARCH_PPC)) && __SIZEOF_POINTER__ == 4
+    uint32_t gpr[21]; // r1, r2, r13-r31
+    uint32_t lr;
+    uint32_t cr;
+    uint32_t reserved; // Keep the FPR area aligned to eight bytes.
+    uint64_t fpr[18]; // f14-f31
 #else
 #    error "Unknown architecture"
 #endif
@@ -58,6 +64,8 @@ static_assert(sizeof(struct __jmp_buf) == 72, "struct __jmp_buf unsynchronized w
 static_assert(sizeof(struct __jmp_buf) == 176, "struct __jmp_buf unsynchronized with aarch64/setjmp.S");
 #    elif defined(__riscv) && __riscv_xlen == 64
 static_assert(sizeof(struct __jmp_buf) == 216, "struct __jmp_buf unsynchronized with riscv64/setjmp.S");
+#    elif (defined(__powerpc__) || defined(_ARCH_PPC)) && __SIZEOF_POINTER__ == 4
+static_assert(sizeof(struct __jmp_buf) == 248, "struct __jmp_buf unsynchronized with powerpc/setjmp.S");
 #    else
 #        error "Unknown architecture"
 #    endif
@@ -73,10 +81,10 @@ static_assert(sizeof(struct __jmp_buf) == 216, "struct __jmp_buf unsynchronized 
  * ways. However, we *can* implement siglongjmp() as a standard C function.
  */
 
-int setjmp(jmp_buf);
+__attribute__((returns_twice)) int setjmp(jmp_buf);
 __attribute__((noreturn)) void longjmp(jmp_buf, int val);
 
-int sigsetjmp(sigjmp_buf, int savesigs);
+__attribute__((returns_twice)) int sigsetjmp(sigjmp_buf, int savesigs);
 __attribute__((noreturn)) void siglongjmp(sigjmp_buf, int val);
 
 /**
@@ -88,7 +96,7 @@ __attribute__((noreturn)) void siglongjmp(sigjmp_buf, int val);
  *
  * https://pubs.opengroup.org/onlinepubs/9699969599/functions/_setjmp.html
  */
-int _setjmp(jmp_buf);
+__attribute__((returns_twice)) int _setjmp(jmp_buf);
 __attribute__((noreturn)) void _longjmp(jmp_buf, int val);
 
 __END_DECLS

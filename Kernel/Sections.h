@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -15,7 +15,9 @@
 #define READONLY_AFTER_INIT __attribute__((section(".ro_after_init")))
 #define UNMAP_AFTER_INIT NEVER_INLINE __attribute__((section(".unmap_after_init")))
 
-#define KERNEL_MAPPING_BASE 0x2000000000
+#ifndef KERNEL_MAPPING_BASE
+#    define KERNEL_MAPPING_BASE 0x2000000000
+#endif
 
 #define KERNEL_PD_END (g_boot_info.kernel_mapping_base + KERNEL_PD_SIZE)
 #define KERNEL_PT1024_OFFSET 0x3FE00000

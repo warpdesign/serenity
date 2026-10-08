@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Leon Albrecht <leon2002.la@gmail.com>
+ * Copyright (c) 2021-2026, Leon Albrecht <leon2002.la@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include "aarch64/regs.h"
 #elif ARCH(RISCV64)
 #    include "riscv64/regs.h"
+#elif ARCH(POWERPC32)
+#    include "powerpc/regs.h"
 #else
 #    error Unknown architecture
 #endif
