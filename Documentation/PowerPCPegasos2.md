@@ -48,7 +48,8 @@ qemu-system-ppc -M pegasos2 -m 256 \
 ```
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
-`RAM 256 MiB`, and `program exception roundtrip passed` on the terminal.
+`RAM 256 MiB`, `program exception roundtrip passed`, and
+`MMU high alias passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -69,8 +70,14 @@ The target compiler defines `__serenity__` and produces big-endian ELF32
 PowerPC objects. `AK::FlatPtr` is four bytes on that target. The PowerPC build
 selects a `0xC0000000` kernel virtual base and omits the 64-bit EFI boot data
 from its boot information; the existing architectures retain their defaults.
-These layouts compile, but the probe still runs in real mode and does not
-enable the PowerPC MMU.
+These layouts compile. The probe also enables the PowerPC MMU briefly with
+16 MiB BAT mappings: low identity RAM, a high `0xC0000000` alias of the same
+RAM, and the Pegasos 2 PCI I/O window. It executes through the high alias,
+returns from a trap taken there, checks big-endian bytes through the high data
+alias, and then disables translation before printing its result. This is a
+bootstrap mapping test, not the kernel's eventual page-table implementation.
+The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
+defines the block-length, cache, and protection fields used here.
 
 After its last Open Firmware call, the probe copies a program-exception
 handler to physical address `0x700`, synchronizes the data and instruction
@@ -94,6 +101,24 @@ succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
 LibC still needs PowerPC floating-point environment support, signal-context
 handling, and the rest of its architecture assembly before user processes can
 run.
+
+## Big-endian audit
+
+Big-endian support is separate from the pointer-width port. The QEMU alias
+test confirms native PowerPC byte order for one RAM value; it does not validate
+Serenity's file formats, device protocols, or applications. Current audit
+targets include:
+
+| Area | Finding to investigate |
+| --- | --- |
+| AK | `StringBase.h` and `FloatingPointStringConversions.cpp` contain explicit little-endian assertions. Their representations and fast paths need portable implementations and PowerPC tests. |
+| ELF and loader | `LibELF/Validation.cpp` currently expects ELF64 little-endian, while `ELFBuild.cpp` writes that format. PowerPC needs ELF32 big-endian validation, loading, relocation, and output. |
+| Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
+| Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
+
+Each fix needs a format-level regression on both a little-endian build and the
+PowerPC target. Swapping at a file or device boundary keeps native in-memory
+values in the CPU's byte order.
 
 The shortest route from this probe to a SerenityOS kernel boot is:
 
