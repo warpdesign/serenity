@@ -42,7 +42,7 @@ def main():
             while time.monotonic() < deadline and process.poll() is None:
                 output = trace_path.read_bytes() if trace_path.exists() else b""
                 serial_output = serial_path.read_bytes() if serial_path.exists() else b""
-                if b'vof_write' in output and b'"Pegasos2"' in output and b"SerenityOS PowerPC: setjmp roundtrip passed" in serial_output and b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000" in serial_output and f"SerenityOS PowerPC: RAM {args.memory} MiB".encode() in serial_output:
+                if b'vof_write' in output and b'"Pegasos2"' in output and b"SerenityOS PowerPC: program exception roundtrip passed" in serial_output and b"SerenityOS PowerPC: setjmp roundtrip passed" in serial_output and b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000" in serial_output and f"SerenityOS PowerPC: RAM {args.memory} MiB".encode() in serial_output:
                     break
                 time.sleep(0.05)
         finally:
@@ -63,6 +63,7 @@ def main():
     serial_expected = (
         b"SerenityOS PowerPC: serial online",
         b"SerenityOS PowerPC: setjmp roundtrip passed",
+        b"SerenityOS PowerPC: program exception roundtrip passed",
         b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000",
         f"SerenityOS PowerPC: RAM {args.memory} MiB".encode(),
     )

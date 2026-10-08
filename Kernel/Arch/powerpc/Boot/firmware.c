@@ -21,6 +21,7 @@ static volatile unsigned char* s_uart;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
+extern int powerpc_program_exception_roundtrip(void);
 
 static int is_pegasos2(void)
 {
@@ -203,5 +204,9 @@ void boot_main(FirmwareEntry firmware_entry)
         } else {
             serial_write("SerenityOS PowerPC: RAM unavailable\r\n");
         }
+        if (powerpc_program_exception_roundtrip())
+            serial_write("SerenityOS PowerPC: program exception roundtrip passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: program exception roundtrip failed\r\n");
     }
 }

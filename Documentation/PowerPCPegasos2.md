@@ -47,8 +47,8 @@ qemu-system-ppc -M pegasos2 -m 256 \
     -d trace:vof_getprop,trace:vof_write -D pegasos2-vof.log
 ```
 
-The native console reports `serial online`, `setjmp roundtrip passed`, and
-`RAM 256 MiB` on the terminal.
+The native console reports `serial online`, `setjmp roundtrip passed`,
+`RAM 256 MiB`, and `program exception roundtrip passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -71,6 +71,16 @@ selects a `0xC0000000` kernel virtual base and omits the 64-bit EFI boot data
 from its boot information; the existing architectures retain their defaults.
 These layouts compile, but the probe still runs in real mode and does not
 enable the PowerPC MMU.
+
+After its last Open Firmware call, the probe copies a program-exception
+handler to physical address `0x700`, synchronizes the data and instruction
+caches, selects low exception vectors, and executes a trap instruction. The
+handler records the trap status, advances `SRR0` past that instruction, and
+returns with `rfi`. The QEMU regression checks the exception count and status
+before reporting success. This covers one exception path; the kernel still
+needs the complete vector table and register-state handling. The
+[MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+documents the `0x700` vector and program-exception state.
 
 The main build still cannot link Serenity's kernel for PowerPC:
 `Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC target,
