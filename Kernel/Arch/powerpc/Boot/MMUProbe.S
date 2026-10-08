@@ -48,6 +48,23 @@ powerpc_install_boot_bats:
     blr
 .size powerpc_install_boot_bats, .-powerpc_install_boot_bats
 
+.global powerpc_select_boot_hpt
+.type powerpc_select_boot_hpt, @function
+powerpc_select_boot_hpt:
+    // r3 is the 64 KiB aligned physical HPT base. Keep BAT0 identity and
+    // DBAT2 I/O mappings; remove the high BAT so HPT must supply that alias.
+    li 4, 0
+    sync
+    mtspr 530, 4    // IBAT1U
+    mtspr 538, 4    // DBAT1U
+    sync
+    mtspr 25, 3     // SDR1, with HTABMASK = 0 for a 64 KiB table.
+    li 4, 12
+    mtsr 12, 4      // VSID 12 for effective addresses 0xc0000000-0xcfffffff.
+    isync
+    blr
+.size powerpc_select_boot_hpt, .-powerpc_select_boot_hpt
+
 .global powerpc_enable_boot_translation
 .type powerpc_enable_boot_translation, @function
 powerpc_enable_boot_translation:

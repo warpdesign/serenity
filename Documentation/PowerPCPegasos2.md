@@ -49,7 +49,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`, and
-`MMU high alias passed` on the terminal.
+`MMU high alias passed`, and `HPT high alias passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -75,9 +75,19 @@ These layouts compile. The probe also enables the PowerPC MMU briefly with
 RAM, and the Pegasos 2 PCI I/O window. It executes through the high alias,
 returns from a trap taken there, checks big-endian bytes through the high data
 alias, and then disables translation before printing its result. This is a
-bootstrap mapping test, not the kernel's eventual page-table implementation.
+bootstrap mapping test. A second probe invalidates the high BAT and installs
+a 64 KiB aligned hashed page table through `SDR1`, using VSID 12 for the
+high segment. It maps a high code page and a separate high data page, then
+checks a trap return, data writes, the segment register, `SDR1`, and the
+invalidated high BATs. The data page maps to a different physical page than
+the old BAT would have selected, so it checks actual HPT translation. This
+is still a few-page probe: general allocation, hash collisions, TLB
+invalidation, per-process VSIDs, and a complete kernel address space remain.
+Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.
+The [NXP page-table setup note](https://www.nxp.com/docs/en/application-note/AN2794.pdf)
+describes the HPT entry and hash layout.
 
 After its last Open Firmware call, the probe copies a program-exception
 handler to physical address `0x700`, synchronizes the data and instruction

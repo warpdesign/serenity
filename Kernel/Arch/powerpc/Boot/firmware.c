@@ -23,6 +23,7 @@ extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
+extern int powerpc_hpt_high_alias_roundtrip(void);
 
 static int is_pegasos2(void)
 {
@@ -213,5 +214,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: MMU high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: MMU high alias failed\r\n");
+        if (powerpc_hpt_high_alias_roundtrip())
+            serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
     }
 }
