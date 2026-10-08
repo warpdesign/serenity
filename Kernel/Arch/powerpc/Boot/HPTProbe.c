@@ -4,39 +4,29 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
 
 typedef unsigned int Word;
 typedef int (*MarkerFunction)(void);
 
 enum {
-    PageSize = 4096,
+    PageSize = POWERPC_HPT_PAGE_SIZE,
     PageTableSize = 64 * 1024,
     PageTableGroupCount = PageTableSize / 64,
-    PageTableEntriesPerGroup = 8,
+    PageTableEntriesPerGroup = POWERPC_HPT_ENTRIES_PER_GROUP,
     KernelVSID = 12,
     HighDataPage = KERNEL_MAPPING_BASE + 0x00800000,
     CollisionBase = KERNEL_MAPPING_BASE + 0x00401000,
     CollisionStride = 0x00400000,
     CollisionCount = 9,
     CollisionGroupCapacity = 2 * PageTableEntriesPerGroup,
-    Valid = 0x80000000u,
-    SecondaryHash = 0x40,
-    Referenced = 0x100,
-    Changed = 0x80,
-    Coherent = 0x10,
-    ReadWrite = 0x2,
+    PageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_WRITE,
 };
 
-struct PageTableEntry {
-    volatile Word upper;
-    volatile Word lower;
-};
-
-_Static_assert(sizeof(struct PageTableEntry) == 8, "PowerPC HPT entry size");
-
-static struct PageTableEntry s_page_table[PageTableGroupCount * PageTableEntriesPerGroup]
+static struct PowerPCHPTEntry s_page_table[PageTableGroupCount * PageTableEntriesPerGroup]
     __attribute__((aligned(PageTableSize)));
+static struct PowerPCHashPageTable s_hpt = { s_page_table, PageTableGroupCount };
 static volatile Word s_hpt_payload_word __attribute__((aligned(PageSize))) = 0x89abcdef;
 static volatile Word s_hpt_replacement_word __attribute__((aligned(PageSize))) = 0x13579bdf;
 static int s_hpt_unmapped_fault_observed;
@@ -49,71 +39,22 @@ extern Word powerpc_probe_absent_high_alias(Word effective_address);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
-    Word primary_hash = (KernelVSID & 0x7ffffu) ^ ((effective_address >> 12) & 0xffffu);
-    for (Word secondary = 0; secondary < 2; ++secondary) {
-        Word hash = secondary ? ~primary_hash : primary_hash;
-        Word group_index = hash & (PageTableGroupCount - 1);
-        struct PageTableEntry* group = &s_page_table[group_index * PageTableEntriesPerGroup];
-        for (Word slot = 0; slot < PageTableEntriesPerGroup; ++slot) {
-            if ((group[slot].upper & Valid) != 0)
-                continue;
-            group[slot].lower = (physical_address & ~(Word)(PageSize - 1)) | Referenced | Changed | Coherent | ReadWrite;
-            __asm__ volatile("eieio" : : : "memory");
-            group[slot].upper = Valid | (KernelVSID << 7) | ((effective_address >> 22) & 0x3fu)
-                | (secondary ? SecondaryHash : 0);
-            __asm__ volatile("sync" : : : "memory");
-            return 1;
-        }
-    }
-    return 0;
+    return powerpc_hpt_map(&s_hpt, KernelVSID, effective_address, physical_address, PageFlags);
 }
 
-static struct PageTableEntry* find_high_page(Word effective_address)
+static struct PowerPCHPTEntry* find_high_page(Word effective_address)
 {
-    Word primary_hash = (KernelVSID & 0x7ffffu) ^ ((effective_address >> 12) & 0xffffu);
-    for (Word secondary = 0; secondary < 2; ++secondary) {
-        Word hash = secondary ? ~primary_hash : primary_hash;
-        Word group_index = hash & (PageTableGroupCount - 1);
-        struct PageTableEntry* group = &s_page_table[group_index * PageTableEntriesPerGroup];
-        Word upper = Valid | (KernelVSID << 7) | ((effective_address >> 22) & 0x3fu)
-            | (secondary ? SecondaryHash : 0);
-        for (Word slot = 0; slot < PageTableEntriesPerGroup; ++slot) {
-            if (group[slot].upper == upper)
-                return &group[slot];
-        }
-    }
-    return 0;
-}
-
-static void invalidate_high_page(Word effective_address, struct PageTableEntry* entry)
-{
-    entry->upper = 0;
-    __asm__ volatile("sync" : : : "memory");
-    __asm__ volatile("tlbie %0; eieio; tlbsync; sync" : : "r"(effective_address) : "memory");
+    return powerpc_hpt_find(&s_hpt, KernelVSID, effective_address);
 }
 
 static int unmap_high_page(Word effective_address)
 {
-    struct PageTableEntry* entry = find_high_page(effective_address);
-    if (!entry)
-        return 0;
-    invalidate_high_page(effective_address, entry);
-    return 1;
+    return powerpc_hpt_unmap(&s_hpt, KernelVSID, effective_address);
 }
 
 static int remap_high_page(Word effective_address, Word physical_address)
 {
-    struct PageTableEntry* entry = find_high_page(effective_address);
-    if (!entry)
-        return 0;
-
-    Word upper = entry->upper;
-    invalidate_high_page(effective_address, entry);
-    entry->lower = (physical_address & ~(Word)(PageSize - 1)) | Referenced | Changed | Coherent | ReadWrite;
-    __asm__ volatile("eieio" : : : "memory");
-    entry->upper = upper;
-    __asm__ volatile("sync" : : : "memory");
-    return 1;
+    return powerpc_hpt_remap(&s_hpt, KernelVSID, effective_address, physical_address, PageFlags);
 }
 
 int powerpc_hpt_high_alias_roundtrip(void)
@@ -171,6 +112,19 @@ int powerpc_hpt_high_alias_roundtrip(void)
         && instruction_bat_high == 0 && data_bat_high == 0 && (high_segment & 0x00ffffffu) == KernelVSID;
 }
 
+int powerpc_hpt_duplicate_mapping_rejected(void)
+{
+    Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
+    if (map_high_page(HighDataPage, replacement_physical))
+        return 0;
+
+    powerpc_enable_boot_translation();
+    volatile Word* high_data = (volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    Word observed = *high_data;
+    powerpc_disable_boot_translation();
+    return observed == 0x89abcdefu;
+}
+
 int powerpc_hpt_mapping_lifecycle(void)
 {
     Word payload_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
@@ -184,8 +138,8 @@ int powerpc_hpt_mapping_lifecycle(void)
         if (!map_high_page(CollisionBase + index * CollisionStride, payload_physical))
             return 0;
     }
-    struct PageTableEntry* collision_entry = find_high_page(CollisionBase + (CollisionCount - 1) * CollisionStride);
-    if (!collision_entry || (collision_entry->upper & SecondaryHash) == 0)
+    struct PowerPCHPTEntry* collision_entry = find_high_page(CollisionBase + (CollisionCount - 1) * CollisionStride);
+    if (!collision_entry || (collision_entry->upper & POWERPC_HPT_SECONDARY_HASH) == 0)
         return 0;
 
     powerpc_enable_boot_translation();

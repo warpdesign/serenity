@@ -48,10 +48,10 @@ qemu-system-ppc -M pegasos2 -m 256 \
 ```
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
-`RAM 256 MiB`, `program exception roundtrip passed`, and
-`MMU high alias passed`, `HPT high alias passed`, and
-`HPT remap and secondary hash passed`, `HPT group reuse passed`, and
-`HPT unmapped fault passed` on the terminal.
+`RAM 256 MiB`, `program exception roundtrip passed`,
+`MMU high alias passed`, `HPT high alias passed`,
+`HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
+`HPT group reuse passed`, and `HPT unmapped fault passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -92,9 +92,12 @@ reuses the slot for a different virtual and physical page. A load from the
 removed alias then enters a probe-only data-storage exception vector at
 `0x300`; the check verifies the fault address in `DAR` and the missing-page
 status in `DSISR`. The vector skips that one load to resume the probe; it is
-not a general kernel page-fault handler. This remains a fixed bootstrap probe:
-general allocation, an eviction policy when both hash
-groups fill, per-process VSIDs, and a complete kernel address space remain.
+not a general kernel page-fault handler. The map, lookup, remap, and unmap
+operations now live in `Kernel/Arch/powerpc/HashPageTable.c`, take an explicit
+VSID, and reject a second mapping for the same virtual page. The boot image
+builds this code; the main kernel build does not yet use it. General allocation,
+an eviction policy when both hash groups fill, per-process VSID allocation,
+and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.

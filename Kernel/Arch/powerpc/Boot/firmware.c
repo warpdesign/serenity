@@ -24,6 +24,7 @@ extern int powerpc_setjmp_self_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
+extern int powerpc_hpt_duplicate_mapping_rejected(void);
 extern int powerpc_hpt_mapping_lifecycle(void);
 extern int powerpc_hpt_group_reuse(void);
 extern int powerpc_hpt_unmapped_fault_observed(void);
@@ -221,6 +222,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
+        if (powerpc_hpt_duplicate_mapping_rejected())
+            serial_write("SerenityOS PowerPC: HPT duplicate mapping rejected\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT duplicate mapping accepted\r\n");
         if (powerpc_hpt_mapping_lifecycle())
             serial_write("SerenityOS PowerPC: HPT remap and secondary hash passed\r\n");
         else
