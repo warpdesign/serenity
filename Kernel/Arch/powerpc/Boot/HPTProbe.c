@@ -19,6 +19,7 @@ enum {
     CollisionBase = KERNEL_MAPPING_BASE + 0x00401000,
     CollisionStride = 0x00400000,
     CollisionCount = 9,
+    CollisionGroupCapacity = 2 * PageTableEntriesPerGroup,
     Valid = 0x80000000u,
     SecondaryHash = 0x40,
     Referenced = 0x100,
@@ -82,6 +83,22 @@ static struct PageTableEntry* find_high_page(Word effective_address)
     return 0;
 }
 
+static void invalidate_high_page(Word effective_address, struct PageTableEntry* entry)
+{
+    entry->upper = 0;
+    __asm__ volatile("sync" : : : "memory");
+    __asm__ volatile("tlbie %0; eieio; tlbsync; sync" : : "r"(effective_address) : "memory");
+}
+
+static int unmap_high_page(Word effective_address)
+{
+    struct PageTableEntry* entry = find_high_page(effective_address);
+    if (!entry)
+        return 0;
+    invalidate_high_page(effective_address, entry);
+    return 1;
+}
+
 static int remap_high_page(Word effective_address, Word physical_address)
 {
     struct PageTableEntry* entry = find_high_page(effective_address);
@@ -89,9 +106,7 @@ static int remap_high_page(Word effective_address, Word physical_address)
         return 0;
 
     Word upper = entry->upper;
-    entry->upper = upper & ~Valid;
-    __asm__ volatile("sync" : : : "memory");
-    __asm__ volatile("tlbie %0; eieio; tlbsync; sync" : : "r"(effective_address) : "memory");
+    invalidate_high_page(effective_address, entry);
     entry->lower = (physical_address & ~(Word)(PageSize - 1)) | Referenced | Changed | Coherent | ReadWrite;
     __asm__ volatile("eieio" : : : "memory");
     entry->upper = upper;
@@ -192,6 +207,30 @@ int powerpc_hpt_mapping_lifecycle(void)
         if (!remap_high_page(HighDataPage, payload_physical) || *high_data != 0x89abcdefu)
             passed = 0;
         s_hpt_replacement_word = 0x13579bdfu;
+    }
+    powerpc_disable_boot_translation();
+    return passed;
+}
+
+int powerpc_hpt_group_reuse(void)
+{
+    Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
+    for (Word index = CollisionCount; index < CollisionGroupCapacity; ++index) {
+        if (!map_high_page(CollisionBase + index * CollisionStride, (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word))
+            return 0;
+    }
+
+    Word replacement_alias = CollisionBase + CollisionGroupCapacity * CollisionStride;
+    if (map_high_page(replacement_alias, replacement_physical))
+        return 0;
+
+    powerpc_enable_boot_translation();
+    int passed = unmap_high_page(CollisionBase + (CollisionCount - 1) * CollisionStride)
+        && map_high_page(replacement_alias, replacement_physical);
+    if (passed) {
+        volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)replacement_alias;
+        volatile Word* original_alias = (volatile Word*)(__UINTPTR_TYPE__)CollisionBase;
+        passed = *alias == 0x13579bdfu && *original_alias == 0x89abcdefu;
     }
     powerpc_disable_boot_translation();
     return passed;

@@ -50,7 +50,8 @@ qemu-system-ppc -M pegasos2 -m 256 \
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`, and
 `MMU high alias passed`, `HPT high alias passed`, and
-`HPT remap and secondary hash passed` on the terminal.
+`HPT remap and secondary hash passed`, and `HPT group reuse passed` on the
+terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -85,9 +86,11 @@ the old BAT would have selected, so it checks actual HPT translation. This
 is followed by nine virtual pages that share a primary hash group, forcing
 the ninth into the secondary group. The probe reads all nine aliases, remaps
 an already used virtual page to another physical page, invalidates its TLB
-entry, and checks reads and writes through the new mapping. This remains a
-fixed bootstrap probe: general allocation, eviction when both hash groups
-fill, per-process VSIDs, and a complete kernel address space remain.
+entry, and checks reads and writes through the new mapping. It then fills both
+hash groups, confirms another insertion fails, removes a live mapping, and
+reuses the slot for a different virtual and physical page. This remains a
+fixed bootstrap probe: general allocation, an eviction policy when both hash
+groups fill, per-process VSIDs, and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.
