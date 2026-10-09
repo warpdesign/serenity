@@ -11,8 +11,10 @@
 
 extern "C" int powerpc_install_external_interrupt_probe_vector();
 extern "C" volatile u32 powerpc_probe_use_high_irq_handler;
-extern "C" volatile u32 powerpc_irq_high_debug;
+extern "C" {
 volatile u32 powerpc_irq_high_debug;
+volatile u32 powerpc_probe_user_irq_signal_address;
+}
 
 static volatile u32 s_interrupt_count;
 static volatile u32 s_irq;
@@ -36,8 +38,70 @@ extern "C" void powerpc_external_irq_probe_dispatch(PowerPCExceptionState const*
         s_saved_srr1 = state->srr1;
         s_saved_stack = state->gpr[1];
         s_interrupt_count = s_interrupt_count + 1;
+        if ((state->srr1 & 0x4000u) && powerpc_probe_user_irq_signal_address)
+            *reinterpret_cast<volatile u32*>(powerpc_probe_user_irq_signal_address) = 1;
     }
     pic.set_masks(0xff, 0xff);
+}
+
+extern "C" void powerpc_irq_probe_reset()
+{
+    s_interrupt_count = 0;
+    s_irq = 0xff;
+    s_saved_srr0 = 0;
+    s_saved_srr1 = 0;
+    s_saved_stack = 0;
+    s_dispatch_caller_pc = 0;
+}
+
+extern "C" int powerpc_irq_prepare_user_probe()
+{
+    using Kernel::PowerPC::Pegasos2::LegacyPIC;
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(LegacyPIC::io_physical_base),
+        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    pic.initialize();
+    pic.write_port(0x43, 0x34);
+    pic.write_port(0x40, 0xa9);
+    pic.write_port(0x40, 0x04);
+    return pic.enable(0);
+}
+
+extern "C" void powerpc_irq_finish_user_probe()
+{
+    using Kernel::PowerPC::Pegasos2::LegacyPIC;
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(LegacyPIC::io_physical_base),
+        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    pic.set_masks(0xff, 0xff);
+}
+
+extern "C" u32 powerpc_irq_probe_count()
+{
+    return s_interrupt_count;
+}
+
+extern "C" u32 powerpc_irq_probe_number()
+{
+    return s_irq;
+}
+
+extern "C" u32 powerpc_irq_probe_saved_srr0()
+{
+    return s_saved_srr0;
+}
+
+extern "C" u32 powerpc_irq_probe_saved_srr1()
+{
+    return s_saved_srr1;
+}
+
+extern "C" u32 powerpc_irq_probe_saved_stack()
+{
+    return s_saved_stack;
+}
+
+extern "C" u32 powerpc_irq_probe_dispatch_caller()
+{
+    return s_dispatch_caller_pc;
 }
 
 static int run_external_irq_roundtrip(u32 timebase_frequency, u32 expected_translation)
@@ -54,12 +118,7 @@ static int run_external_irq_roundtrip(u32 timebase_frequency, u32 expected_trans
     LegacyPIC pic { reinterpret_cast<volatile u8*>(powerpc_probe_use_high_irq_handler ? POWERPC_HPT_PIC_IO_ADDRESS : LegacyPIC::io_physical_base),
         reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
     pic.initialize();
-    s_interrupt_count = 0;
-    s_irq = 0xff;
-    s_saved_srr0 = 0;
-    s_saved_srr1 = 0;
-    s_saved_stack = 0;
-    s_dispatch_caller_pc = 0;
+    powerpc_irq_probe_reset();
 
     pic.write_port(0x43, 0x34);
     pic.write_port(0x40, 0xa9);

@@ -97,6 +97,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT high alias passed`,
 `HPT external IRQ stack passed`,
 `HPT high IRQ handler passed`,
+`user-mode external IRQ resume passed`,
 `HPT and timebase boot handoff passed`,
 `HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -277,6 +278,11 @@ original SRR state with a second `rfi`. QEMU checks the high return address
 and access to cache-inhibited, guarded PIC mappings. The full kernel still
 needs to install this entry path and dispatch to registered handlers, including
 interrupts taken from user mode.
+The probe also enters a mapped user program with MSR[EE] enabled. PIT IRQ0
+arrives with user privilege and translation recorded in SRR1; the high handler
+signals a mapped user data page, and `rfi` resumes the user program. Two
+system calls then return to the supervisor probe. This verifies the exception
+transition in QEMU; the Serenity kernel has not yet installed these vectors.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond

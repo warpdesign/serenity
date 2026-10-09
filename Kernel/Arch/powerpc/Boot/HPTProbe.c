@@ -78,6 +78,7 @@ static int s_hpt_unmapped_fault_observed;
 static int s_user_stack_observed;
 static int s_user_syscall_resume_observed;
 static int s_user_exception_frame_observed;
+static int s_user_external_irq_observed;
 
 volatile struct PowerPCExceptionState powerpc_user_probe_frame;
 
@@ -98,15 +99,27 @@ extern Word powerpc_probe_absent_high_alias(Word effective_address);
 extern void powerpc_probe_read_only_store(Word effective_address, Word value);
 extern Word powerpc_user_probe_start[];
 extern Word powerpc_user_probe_end[];
+extern Word powerpc_user_irq_probe_start[];
+extern Word powerpc_user_irq_probe_end[];
 extern Word powerpc_user_probe_after_first_syscall[];
 extern Word powerpc_user_probe_after_second_syscall[];
-extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top);
+extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top, Word extra_msr_bits);
 extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
 extern unsigned char powerpc_probe_high_stack[];
 extern unsigned char powerpc_probe_exception_stack[];
 extern char __text_end[];
 extern volatile Word powerpc_probe_use_high_irq_handler;
 extern int powerpc_run_hpt_stack_external_irq_probe(Word timebase_frequency);
+extern void powerpc_irq_probe_reset(void);
+extern int powerpc_irq_prepare_user_probe(void);
+extern void powerpc_irq_finish_user_probe(void);
+extern Word powerpc_irq_probe_count(void);
+extern Word powerpc_irq_probe_number(void);
+extern Word powerpc_irq_probe_saved_srr0(void);
+extern Word powerpc_irq_probe_saved_srr1(void);
+extern Word powerpc_irq_probe_saved_stack(void);
+extern Word powerpc_irq_probe_dispatch_caller(void);
+extern volatile Word powerpc_probe_user_irq_signal_address;
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
@@ -204,6 +217,79 @@ int powerpc_hpt_external_irq_stack_roundtrip(Word timebase_frequency)
     return passed && unmapped && instruction_bat_high == 0 && data_bat_high == 0;
 }
 
+static int probe_user_irq_from_high_handler(void)
+{
+    Word code_physical = (Word)(__UINTPTR_TYPE__)powerpc_user_irq_probe_start;
+    Word code_length = (Word)(__UINTPTR_TYPE__)powerpc_user_irq_probe_end - code_physical;
+    Word data_physical = (Word)(__UINTPTR_TYPE__)s_user_data_page;
+    Word stack_physical = (Word)(__UINTPTR_TYPE__)s_user_stack;
+    if ((code_physical & (PageSize - 1)) || !code_length || code_length > PageSize
+        || code_physical >= 0x01000000u - PageSize || data_physical >= 0x01000000u
+        || stack_physical >= 0x01000000u)
+        return 0;
+
+    if (!powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeCodePage, code_physical, UserPageFlags))
+        return 0;
+    if (!powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeDataPage, data_physical, UserPageFlags)) {
+        (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage);
+        return 0;
+    }
+    if (!powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeStackPage, stack_physical, UserPageFlags)) {
+        (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage);
+        (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage);
+        return 0;
+    }
+
+    Word original_segment = powerpc_read_segment_register(1);
+    s_user_data_page[0] = 0;
+    s_user_data_page[1] = 0;
+    s_user_data_page[2] = 0;
+    powerpc_user_probe_syscall_count = 0;
+    powerpc_irq_probe_reset();
+    powerpc_probe_user_irq_signal_address = data_physical;
+    int prepared = powerpc_irq_prepare_user_probe();
+    Word user_result = 0;
+    Word supervisor_stack_before = 0;
+    Word supervisor_stack_after = 0;
+    Word returned_state = 0;
+    if (prepared) {
+        powerpc_write_segment_register(1, 0x20000000u | UserProbeVSID);
+        __asm__ volatile("mr %0,1" : "=r"(supervisor_stack_before));
+        user_result = powerpc_enter_user_probe(UserProbeCodePage, HighDataPage, UserProbeDataPage, 0,
+            UserProbeStackPage + PageSize - 16, 0x8000u);
+        __asm__ volatile("mr %0,1; mfmsr %1" : "=r"(supervisor_stack_after), "=r"(returned_state));
+        powerpc_write_segment_register(1, original_segment);
+    }
+    powerpc_probe_user_irq_signal_address = 0;
+    powerpc_irq_finish_user_probe();
+
+    Word signal = s_user_data_page[0];
+    Word observed_signal = s_user_data_page[1];
+    Word user_stack = s_user_data_page[2];
+    s_user_data_page[0] = 0;
+    s_user_data_page[1] = 0;
+    s_user_data_page[2] = 0;
+    int unmapped = powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeStackPage);
+    Word saved_srr1 = powerpc_irq_probe_saved_srr1();
+    Word saved_srr0 = powerpc_irq_probe_saved_srr0();
+    Word high_caller = powerpc_irq_probe_dispatch_caller();
+    return prepared && unmapped && user_result == 0 && powerpc_user_probe_syscall_count == 2
+        && signal == 1 && observed_signal == 1 && user_stack == UserProbeStackPage + PageSize - 16
+        && powerpc_irq_probe_count() == 1 && powerpc_irq_probe_number() == 0
+        && (saved_srr1 & 0xc030u) == 0xc030u
+        && saved_srr0 >= UserProbeCodePage && saved_srr0 < UserProbeCodePage + code_length
+        && powerpc_irq_probe_saved_stack() == UserProbeStackPage + PageSize - 16
+        && high_caller >= 0xc0000000u && high_caller < 0xc1000000u
+        && supervisor_stack_before == supervisor_stack_after && (returned_state & 0xc030u) == 0;
+}
+
+int powerpc_hpt_user_external_irq_observed(void)
+{
+    return s_user_external_irq_observed;
+}
+
 int powerpc_hpt_external_irq_high_handler_roundtrip(Word timebase_frequency)
 {
     enum { TextStart = 0x00200000u, MaximumTextPages = 128 };
@@ -265,6 +351,8 @@ int powerpc_hpt_external_irq_high_handler_roundtrip(Word timebase_frequency)
     powerpc_probe_use_high_irq_handler = 1;
     __asm__ volatile("sync" : : : "memory");
     passed = powerpc_run_hpt_stack_external_irq_probe(timebase_frequency);
+    if (passed)
+        s_user_external_irq_observed = probe_user_irq_from_high_handler();
     powerpc_probe_use_high_irq_handler = 0;
     __asm__ volatile("sync" : : : "memory");
 
@@ -697,7 +785,7 @@ int powerpc_hpt_user_mode_roundtrip(void)
     Word supervisor_stack_before;
     __asm__ volatile("mfspr %0,272" : "=r"(fault_count_before));
     __asm__ volatile("mr %0,1" : "=r"(supervisor_stack_before));
-    Word user_result = powerpc_enter_user_probe(UserProbeCodePage, HighDataPage, UserProbeDataPage, 0x2468ace0u, UserProbeStackPage + PageSize - 16);
+    Word user_result = powerpc_enter_user_probe(UserProbeCodePage, HighDataPage, UserProbeDataPage, 0x2468ace0u, UserProbeStackPage + PageSize - 16, 0);
     Word fault_count_after;
     Word fault_address;
     Word fault_status;

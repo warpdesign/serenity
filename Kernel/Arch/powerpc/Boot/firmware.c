@@ -61,6 +61,7 @@ extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_hpt_external_irq_stack_roundtrip(Cell);
 extern int powerpc_hpt_external_irq_high_handler_roundtrip(Cell);
+extern int powerpc_hpt_user_external_irq_observed(void);
 extern volatile Cell powerpc_irq_high_debug;
 extern int powerpc_hpt_quickmap_roundtrip(void);
 extern int powerpc_hpt_physical_array_roundtrip(void);
@@ -402,6 +403,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write_hex(powerpc_irq_high_debug);
             serial_write("\r\n");
         }
+        if (powerpc_hpt_user_external_irq_observed())
+            serial_write("SerenityOS PowerPC: user-mode external IRQ resume passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: user-mode external IRQ resume failed\r\n");
         if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency))
             serial_write("SerenityOS PowerPC: HPT and timebase boot handoff passed\r\n");
         else

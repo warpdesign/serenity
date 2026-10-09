@@ -122,6 +122,7 @@ powerpc_enter_user_probe:
     stw 12, powerpc_user_probe_resume_address@l(11)
     mfmsr 12
     ori 12, 12, 0x4030  // PR | IR | DR
+    or 12, 12, 8         // Optional EE bit supplied by the caller.
     mtspr 27, 12
     mtspr 26, 3
     lis 11, powerpc_user_probe_saved_supervisor_stack@ha
@@ -186,3 +187,26 @@ powerpc_user_probe_after_second_syscall:
 1:
     b 1b
 powerpc_user_probe_end:
+
+// A separate user program waits for the high kernel IRQ handler to signal its
+// mapped data page, then exits through the existing two-syscall probe path.
+.section .text.user_irq_probe, "ax"
+.balign 4096
+.global powerpc_user_irq_probe_start
+.global powerpc_user_irq_probe_end
+powerpc_user_irq_probe_start:
+    lis 8, 0x0040
+    mtctr 8
+1:
+    lwz 10, 0(5)
+    cmpwi 10, 0
+    bne 2f
+    bdnz 1b
+2:
+    stw 10, 4(5)
+    stw 1, 8(5)
+    sc
+    sc
+3:
+    b 3b
+powerpc_user_irq_probe_end:
