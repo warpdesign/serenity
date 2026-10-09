@@ -33,6 +33,7 @@ def main():
         b"SerenityOS PowerPC: HPT unmapped fault passed",
         b"SerenityOS PowerPC: HPT read-only fault passed",
         b"SerenityOS PowerPC: HPT VSID switch passed",
+        b"SerenityOS PowerPC: HPT kernel protection passed",
     )
 
     with tempfile.TemporaryDirectory(prefix="serenity-pegasos2-") as directory:

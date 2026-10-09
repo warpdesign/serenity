@@ -59,8 +59,9 @@ powerpc_select_boot_hpt:
     mtspr 538, 4    // DBAT1U
     sync
     mtspr 25, 3     // SDR1, with HTABMASK = 0 for a 64 KiB table.
-    li 4, 12
-    mtsr 12, 4      // VSID 12 for effective addresses 0xc0000000-0xcfffffff.
+    lis 4, 0x2000
+    ori 4, 4, 12
+    mtsr 12, 4      // VSID 12, Kp=1: user-key accesses obey the kernel PTEs.
     isync
     blr
 .size powerpc_select_boot_hpt, .-powerpc_select_boot_hpt

@@ -51,8 +51,9 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
-`HPT group reuse passed`, `HPT unmapped fault passed`, and
-`HPT read-only fault passed`, and `HPT VSID switch passed` on the terminal.
+`HPT group reuse passed`, `HPT unmapped fault passed`,
+`HPT read-only fault passed`, `HPT VSID switch passed`, and
+`HPT kernel protection passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -100,10 +101,13 @@ also maps a read-only page and confirms that a store faults without changing
 either the virtual or physical value. It then maps the same low virtual page
 under two VSIDs, changes SR1 while translation is enabled, and checks that
 each VSID reaches a distinct physical page while the kernel's SR12 mapping
-remains accessible. This uses supervisor mode; process context switching and
-user-mode protection are not implemented. The main kernel build does not yet
-use this code. General allocation, an eviction policy when both hash groups
-fill, per-process VSID allocation, and a complete kernel address space remain.
+remains accessible. The high kernel PTEs use supervisor-only protection with
+SR12's user key set. The probe temporarily selects the protected key for
+supervisor access and checks that the high page faults, then restores access.
+These checks run in supervisor mode; process context switching and user-mode
+entry still need implementation. The main kernel build does not yet use this
+code. General allocation, an eviction policy when both hash groups fill,
+per-process VSID allocation, and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.

@@ -25,7 +25,8 @@ enum {
     CollisionStride = 0x00400000,
     CollisionCount = 9,
     CollisionGroupCapacity = 2 * PageTableEntriesPerGroup,
-    PageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_WRITE,
+    KernelPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_SUPERVISOR_ONLY,
+    UserPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_WRITE,
 };
 
 static struct PowerPCHPTEntry s_page_table[PageTableGroupCount * PageTableEntriesPerGroup]
@@ -44,7 +45,7 @@ extern void powerpc_probe_read_only_store(Word effective_address, Word value);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
-    return powerpc_hpt_map(&s_hpt, KernelVSID, effective_address, physical_address, PageFlags);
+    return powerpc_hpt_map(&s_hpt, KernelVSID, effective_address, physical_address, KernelPageFlags);
 }
 
 static struct PowerPCHPTEntry* find_high_page(Word effective_address)
@@ -59,7 +60,7 @@ static int unmap_high_page(Word effective_address)
 
 static int remap_high_page(Word effective_address, Word physical_address)
 {
-    return powerpc_hpt_remap(&s_hpt, KernelVSID, effective_address, physical_address, PageFlags);
+    return powerpc_hpt_remap(&s_hpt, KernelVSID, effective_address, physical_address, KernelPageFlags);
 }
 
 int powerpc_hpt_high_alias_roundtrip(void)
@@ -255,8 +256,8 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
     Word second_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
-    if (!powerpc_hpt_map(&s_hpt, FirstUserVSID, UserTestAddress, first_physical, PageFlags)
-        || !powerpc_hpt_map(&s_hpt, SecondUserVSID, UserTestAddress, second_physical, PageFlags))
+    if (!powerpc_hpt_map(&s_hpt, FirstUserVSID, UserTestAddress, first_physical, UserPageFlags)
+        || !powerpc_hpt_map(&s_hpt, SecondUserVSID, UserTestAddress, second_physical, UserPageFlags))
         return 0;
 
     volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)UserTestAddress;
@@ -290,4 +291,33 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
         && first_again == 0x11223344u && second_again == 0x55667788u
         && s_hpt_payload_word == 0x89abcdefu && s_hpt_replacement_word == 0x13579bdfu
         && unmapped;
+}
+
+int powerpc_hpt_kernel_protection_roundtrip(void)
+{
+    Word original_segment;
+    __asm__ volatile("mfsr %0,12" : "=r"(original_segment));
+    if ((original_segment & 0x00ffffffu) != KernelVSID)
+        return 0;
+
+    powerpc_enable_boot_translation();
+    Word protected_segment = original_segment | 0x60000000u; // Ks and Kp select the protected key.
+    __asm__ volatile("mtsr 12,%0; isync" : : "r"(protected_segment) : "memory");
+
+    Word fault_count_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(fault_count_before));
+    Word fault_result = powerpc_probe_absent_high_alias(HighDataPage);
+    Word fault_count_after;
+    Word fault_address;
+    Word fault_status;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
+        : "=r"(fault_count_after), "=r"(fault_address), "=r"(fault_status));
+
+    __asm__ volatile("mtsr 12,%0; isync" : : "r"(original_segment) : "memory");
+    Word readable_again = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    powerpc_disable_boot_translation();
+
+    return (original_segment & 0x20000000u) != 0 && fault_result == 0
+        && fault_count_after == fault_count_before + 1 && fault_address == HighDataPage
+        && (fault_status & 0x48000000u) == 0x08000000u && readable_again == 0x89abcdefu;
 }
