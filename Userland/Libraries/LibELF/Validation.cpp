@@ -134,6 +134,12 @@ bool validate_elf_header(Elf_Ehdr const& elf_header, size_t file_size, bool verb
                     dbgln("File has unsupported float ABI ({}), only double ({}) is supported.", float_abi, EF_RISCV_FLOAT_ABI_DOUBLE);
                 return false;
             }
+        } else if (elf_header.e_machine == EM_PPC) {
+            if (elf_header.e_flags & ~EF_PPC_RELOCATABLE_LIB) {
+                if (verbose)
+                    dbgln("File has unsupported PowerPC ELF flags ({:#x})", elf_header.e_flags);
+                return false;
+            }
         } else {
             if (verbose)
                 dbgln("File has incorrect ELF header flags...? ({}), expected ({}).", elf_header.e_flags, 0);

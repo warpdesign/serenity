@@ -42,9 +42,16 @@ extern "C" int powerpc_native_elf_header_test()
     wrong_byte_order.e_ident[EI_DATA] = ELFDATA2LSB;
     auto wrong_machine = header;
     wrong_machine.e_machine = EM_X86_64;
+    auto relocatable_library = header;
+    relocatable_library.e_type = ET_DYN;
+    relocatable_library.e_flags = EF_PPC_RELOCATABLE_LIB;
+    auto unsupported_flags = relocatable_library;
+    unsupported_flags.e_flags |= 0x4000;
 
     auto const* bytes = reinterpret_cast<unsigned char const*>(&header);
     return ELF::validate_elf_header(header, sizeof(header), false)
+        && ELF::validate_elf_header(relocatable_library, sizeof(relocatable_library), false)
+        && !ELF::validate_elf_header(unsupported_flags, sizeof(unsupported_flags), false)
         && !ELF::validate_elf_header(wrong_class, sizeof(wrong_class), false)
         && !ELF::validate_elf_header(wrong_byte_order, sizeof(wrong_byte_order), false)
         && !ELF::validate_elf_header(wrong_machine, sizeof(wrong_machine), false)

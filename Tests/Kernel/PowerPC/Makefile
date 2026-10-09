@@ -30,6 +30,10 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only TestTLSLayout.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only TestTLSLookup.cpp
 	$(CXX) $(CXXFLAGS) -fsyntax-only TestELFEntry.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries -fsyntax-only TestSecurePLT.cpp
+	mkdir -p $(BUILD_DIR)/AK
+	sed -E 's/^#    cmakedefine01 ([A-Z0-9_]+)/#    define \1 0/' ../../../AK/Debug.h.in > $(BUILD_DIR)/AK/Debug.h
+	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicLoader.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -fsyntax-only TestLibCHeaders.cpp
 	$(CC) $(CFLAGS) -c ../../../Userland/Libraries/LibC/arch/powerpc/setjmp.S -o $(BUILD_DIR)/setjmp.o
 	$(CC) $(CFLAGS) -O0 -I../../../Userland/Libraries/LibC -I../../.. -c TestSetjmp.c -o $(BUILD_DIR)/TestSetjmp.o

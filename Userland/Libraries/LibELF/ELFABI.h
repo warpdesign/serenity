@@ -599,6 +599,7 @@ typedef struct {
 #define DT_HIOS 0x6ffff000    /*  specific dynamic array tags */
 #define DT_LOPROC 0x70000000  /* reserved range for processor */
 #define DT_HIPROC 0x7fffffff  /*  specific dynamic array tags */
+#define DT_PPC_GOT (DT_LOPROC + 0)
 
 /* some other useful tags */
 #define DT_GNU_HASH 0x6ffffef5  /* address of GNU hash table */
@@ -855,7 +856,8 @@ struct elf_args {
 #define R_386_TLS_TPOFF32 37
 #define R_386_IRELATIVE 42 /* PLT entry resolved indirectly at runtime */
 
-/* 32-bit PowerPC ELF relocation numbers. */
+/* 32-bit PowerPC ELF flags and relocation numbers. */
+#define EF_PPC_RELOCATABLE_LIB 0x00008000
 #define R_PPC_NONE 0
 #define R_PPC_ADDR32 1
 #define R_PPC_COPY 19

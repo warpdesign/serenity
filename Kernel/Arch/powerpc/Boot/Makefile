@@ -6,6 +6,7 @@ CROSS_COMPILE ?= $(abspath ../../../../Toolchain/Local/powerpc/bin)/powerpc-sere
 CC := $(CROSS_COMPILE)gcc
 CXX := $(CROSS_COMPILE)g++
 LD := $(CROSS_COMPILE)ld
+OBJCOPY := $(CROSS_COMPILE)objcopy
 QEMU ?= qemu-system-ppc
 BUILD_DIR ?= build
 
@@ -16,6 +17,7 @@ IMAGE_CXXFLAGS := $(CXXFLAGS) -I$(BUILD_DIR) -I../../../../Userland/Libraries -W
 LDFLAGS := -m elf32ppcserenity -T linker.ld --build-id=none
 LIBGCC := $(shell $(CC) -print-libgcc-file-name)
 TLS_TEST_OBJECTS := $(BUILD_DIR)/libc_tls.o $(BUILD_DIR)/test_tls_lookup.o
+PLT_TEST_OBJECTS := $(BUILD_DIR)/secure_plt_fixture.o $(BUILD_DIR)/test_secure_plt.o $(BUILD_DIR)/plt_trampoline.o
 
 .PHONY: all check check-quick clean
 
@@ -115,14 +117,26 @@ $(BUILD_DIR)/elf_entry.o: ../../../../Userland/Libraries/LibELF/Arch/powerpc/ent
 $(BUILD_DIR)/test_elf_entry.o: ../../../../Tests/Kernel/PowerPC/TestELFEntry.cpp | $(BUILD_DIR)
 	$(CXX) $(PARSER_CXXFLAGS) -c $< -o $@
 
+$(BUILD_DIR)/secure_plt_probe.so: ../../../../Tests/Kernel/PowerPC/SecurePLTProbe.c | $(BUILD_DIR)
+	$(CC) -m32 -mhard-float -msdata=none -msecure-plt -fPIC -shared -nostdlib -fno-stack-protector -O2 $< -o $@
+
+$(BUILD_DIR)/secure_plt_fixture.o: $(BUILD_DIR)/secure_plt_probe.so
+	cd $(BUILD_DIR) && $(OBJCOPY) -I binary -O elf32-powerpc -B powerpc secure_plt_probe.so secure_plt_fixture.o
+
+$(BUILD_DIR)/test_secure_plt.o: ../../../../Tests/Kernel/PowerPC/TestSecurePLT.cpp ../../../../Userland/Libraries/LibELF/ELFABI.h | $(BUILD_DIR)
+	$(CXX) $(IMAGE_CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/plt_trampoline.o: ../../../../Userland/Libraries/LibELF/Arch/powerpc/plt_trampoline.S | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(BUILD_DIR)/runtime.o: Runtime.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/runtime_assertions.o: RuntimeAssertions.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o $(LIBGCC) -o $@
+$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o $(LIBGCC) -o $@
 
 check-quick: all
 	$(MAKE) -C ../../../../Tests/Toolchain/PowerPC check-quick CROSS_COMPILE=$(CROSS_COMPILE)

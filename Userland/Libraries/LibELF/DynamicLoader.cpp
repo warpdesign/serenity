@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2019-2020, Andrew Kaster <akaster@serenityos.org>
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
- * Copyright (c) 2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022-2023, Daniel Bertalan <dani@danielbertalan.dev>
+ * Copyright (c) 2019-2026, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2021-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, Daniel Bertalan <dani@danielbertalan.dev>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,6 +12,7 @@
 #include <AK/QuickSort.h>
 #include <AK/StringBuilder.h>
 #include <LibELF/Arch/GenericDynamicRelocationType.h>
+#include <LibELF/Arch/plt.h>
 #include <LibELF/Arch/tls.h>
 #include <LibELF/DynamicLinker.h>
 #include <LibELF/DynamicLoader.h>
@@ -771,19 +772,7 @@ void DynamicLoader::setup_plt_trampoline()
 {
     VERIFY(m_dynamic_object);
     VERIFY(m_dynamic_object->has_plt());
-    VirtualAddress got_address = m_dynamic_object->plt_got_base_address();
-
-    auto* got_ptr = (FlatPtr*)got_address.as_ptr();
-
-#if ARCH(AARCH64) || ARCH(X86_64)
-    got_ptr[1] = (FlatPtr)m_dynamic_object.ptr();
-    got_ptr[2] = (FlatPtr)&_plt_trampoline;
-#elif ARCH(RISCV64)
-    got_ptr[0] = (FlatPtr)&_plt_trampoline;
-    got_ptr[1] = (FlatPtr)m_dynamic_object.ptr();
-#else
-#    error Unknown architecture
-#endif
+    install_plt_trampoline(*m_dynamic_object, &_plt_trampoline);
 }
 
 // Called from our ASM routine _plt_trampoline.

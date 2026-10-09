@@ -30,6 +30,7 @@ extern int powerpc_relative_relocations_test(void);
 extern int powerpc_tls_layout_test(void);
 extern int powerpc_static_tls_lookup_test(void);
 extern int powerpc_elf_entry_test(void);
+extern int powerpc_secure_plt_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
@@ -251,6 +252,14 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: ELF32 entry transfer passed\r\n");
         else
             serial_write("SerenityOS PowerPC: ELF32 entry transfer failed\r\n");
+        int secure_plt_result = powerpc_secure_plt_test();
+        if (secure_plt_result == 1)
+            serial_write("SerenityOS PowerPC: secure PLT lazy binding passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: secure PLT lazy binding failed 0x");
+            serial_write_hex(secure_plt_result);
+            serial_write("\r\n");
+        }
         serial_write("SerenityOS PowerPC: 32-bit kernel base 0x");
         serial_write_hex(powerpc_kernel_mapping_base());
         serial_write("\r\n");
