@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2023-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -18,6 +18,8 @@ struct FPUState;
 #    include <Kernel/Arch/aarch64/FPUState.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/FPUState.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/FPUState.h>
 #else
 #    error "Unknown architecture"
 #endif

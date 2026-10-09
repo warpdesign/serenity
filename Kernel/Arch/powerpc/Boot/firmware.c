@@ -25,6 +25,7 @@ extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
 extern int powerpc_fenv_test(void);
+extern int powerpc_fpu_state_test(void);
 extern int powerpc_native_elf_header_test(void);
 extern int powerpc_native_elf_image_test(void);
 extern int powerpc_relative_relocations_test(void);
@@ -241,6 +242,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write_hex(fenv_result);
             serial_write("\r\n");
         }
+        if (powerpc_fpu_state_test())
+            serial_write("SerenityOS PowerPC: FPU state roundtrip passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: FPU state roundtrip failed\r\n");
         if (powerpc_native_elf_header_test())
             serial_write("SerenityOS PowerPC: ELF32 big-endian header passed\r\n");
         else

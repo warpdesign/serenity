@@ -75,6 +75,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
 `FPSCR environment passed`,
+`FPU state roundtrip passed`,
 `ELF32 big-endian header passed`,
 `ELF32 big-endian image passed`,
 `ELF32 relative relocations passed`,
@@ -174,8 +175,11 @@ returns with `rfi`. The QEMU regression checks the exception count and status
 before reporting success. PowerPC's 32-bit integer `RegisterState` now uses
 the captured frame layout; QEMU checks its mode, stack, instruction pointer,
 syscall arguments, and ptrace conversion against a real user trap. The kernel
-still needs a complete exception entry and return path, thread FPU state, and
-context switching. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+still needs a complete exception entry and return path and context switching.
+PowerPC's `FPUState` now saves all 32 scalar registers and FPSCR, and QEMU
+checks a state roundtrip with different rounding modes. The kernel still needs
+to call those routines during thread switches and handle vector state on CPUs
+that provide it. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved

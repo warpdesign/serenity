@@ -618,6 +618,11 @@ elseif("${SERENITY_ARCH}" STREQUAL "riscv64")
     else()
         set_source_files_properties(${SOURCES_RUNNING_WITHOUT_MMU} PROPERTIES COMPILE_FLAGS "-fno-stack-protector -fno-sanitize=all -ftrivial-auto-var-init=uninitialized")
     endif()
+elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
+    set(KERNEL_SOURCES
+        ${KERNEL_SOURCES}
+        Arch/powerpc/FPUState.S
+    )
 endif()
 
 set(AK_SOURCES
