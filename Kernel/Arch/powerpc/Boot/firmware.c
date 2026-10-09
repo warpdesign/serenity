@@ -53,6 +53,7 @@ extern int powerpc_register_state_test(void);
 extern int powerpc_thread_registers_test(void);
 extern int powerpc_stack_unwinder_test(void);
 extern int powerpc_program_exception_roundtrip(void);
+extern int powerpc_decrementer_exception_roundtrip(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_hpt_quickmap_roundtrip(void);
@@ -89,6 +90,14 @@ static Cell find_device(char const* path)
     struct FirmwareCall call = { "finddevice", 1, 1, { firmware_pointer(path), 0 } };
     if (s_firmware_entry(&call) != 0)
         return (Cell)-1;
+    return call.cells[1];
+}
+
+static Cell first_child(Cell device)
+{
+    struct FirmwareCall call = { "child", 1, 1, { device, 0 } };
+    if (s_firmware_entry(&call) != 0)
+        return 0;
     return call.cells[1];
 }
 
@@ -202,6 +211,18 @@ static int discover_memory_size(Cell root, unsigned long long* total_bytes)
         sizeof(s_memory_ranges) / sizeof(s_memory_ranges[0]), &s_memory_range_count, total_bytes);
 }
 
+static Cell discover_timebase_frequency(void)
+{
+    Cell cpus = find_device("/cpus");
+    if (cpus == (Cell)-1)
+        return 0;
+    Cell cpu = first_child(cpus);
+    Cell frequency = 0;
+    if (cpu == 0 || cpu == (Cell)-1 || get_property(cpu, "timebase-frequency", &frequency, sizeof(frequency)) != sizeof(frequency))
+        return 0;
+    return frequency;
+}
+
 void boot_main(FirmwareEntry firmware_entry)
 {
     s_firmware_entry = firmware_entry;
@@ -225,6 +246,7 @@ void boot_main(FirmwareEntry firmware_entry)
 
     Cell qemu_boot_kernel[4];
     if (is_pegasos2() && get_property(chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) == sizeof(qemu_boot_kernel) && initialize_qemu_pegasos2_serial()) {
+        Cell timebase_frequency = discover_timebase_frequency();
         if (powerpc_setjmp_self_test())
             serial_write("SerenityOS PowerPC: setjmp roundtrip passed\r\n");
         else
@@ -331,6 +353,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: program exception roundtrip passed\r\n");
         else
             serial_write("SerenityOS PowerPC: program exception roundtrip failed\r\n");
+        if (powerpc_decrementer_exception_roundtrip(timebase_frequency))
+            serial_write("SerenityOS PowerPC: decrementer interrupt passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: decrementer interrupt failed\r\n");
         if (powerpc_elf_breakpoint_test())
             serial_write("SerenityOS PowerPC: loader breakpoint passed\r\n");
         else

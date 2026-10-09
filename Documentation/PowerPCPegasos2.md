@@ -89,6 +89,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `secure PLT lazy binding passed`,
 `RAM 256 MiB`, `firmware memory ranges passed`,
 `program exception roundtrip passed`,
+`decrementer interrupt passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT boot handoff passed`,
@@ -236,6 +237,12 @@ depth and scheduler state, controls external interrupts through MSR, and reads
 the 64-bit timebase. The QEMU probe checks these operations on the default CPU
 and a 750cxe. Full processor initialization, TLB and cache maintenance, trap
 entry, and context switching still require kernel integration.
+The QEMU probe also reads `timebase-frequency` from the Open Firmware CPU node,
+programs a 10 ms decrementer interval, and checks the resulting exception at
+vector `0x900` against elapsed timebase ticks. The
+[MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+defines the decrementer exception and its vector. The full kernel still needs
+an interrupt entry path and time manager integration.
 The architecture memory fence interface uses `sync` for full, load, and store
 fences, so cached descriptor writes can be ordered before device access. The
 probe executes all three fences; DMA visibility still needs validation on real

@@ -42,6 +42,21 @@ program_exception_vector_start:
     rfi
 program_exception_vector_end:
 
+.section .text.decrementer_exception_probe, "ax"
+.global decrementer_exception_vector_start
+.global decrementer_exception_vector_end
+decrementer_exception_vector_start:
+    mtspr 275, 11     // SPRG3: preserve r11.
+    mfspr 11, 272     // SPRG0: interrupt count.
+    addi 11, 11, 1
+    mtspr 272, 11
+    lis 11, 0x7fff
+    ori 11, 11, 0xffff
+    mtdec 11
+    mfspr 11, 275
+    rfi
+decrementer_exception_vector_end:
+
 .section .text, "ax"
 .global trigger_program_exception
 .type trigger_program_exception, @function

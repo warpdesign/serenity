@@ -9,6 +9,7 @@
 #include <AK/Optional.h>
 #include <AK/Platform.h>
 #include <Kernel/Arch/CPU.h>
+#include <Kernel/Arch/powerpc/Time/Timebase.h>
 
 VALIDATE_IS_POWERPC32()
 
@@ -133,15 +134,7 @@ ALWAYS_INLINE void ProcessorBase::wait_check()
 
 ALWAYS_INLINE Optional<u64> ProcessorBase::read_cycle_count()
 {
-    u32 upper_before;
-    u32 lower;
-    u32 upper_after;
-    do {
-        asm volatile("mftbu %0" : "=r"(upper_before));
-        asm volatile("mftb %0" : "=r"(lower));
-        asm volatile("mftbu %0" : "=r"(upper_after));
-    } while (upper_before != upper_after);
-    return (static_cast<u64>(upper_after) << 32) | lower;
+    return PowerPC::read_timebase();
 }
 
 }
