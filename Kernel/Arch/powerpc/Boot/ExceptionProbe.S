@@ -58,3 +58,10 @@ powerpc_probe_absent_high_alias:
     lwz 3, 0(4)       // The data-storage handler skips this exact instruction.
     blr
 .size powerpc_probe_absent_high_alias, .-powerpc_probe_absent_high_alias
+
+.global powerpc_probe_read_only_store
+.type powerpc_probe_read_only_store, @function
+powerpc_probe_read_only_store:
+    stw 4, 0(3)       // The data-storage handler skips this exact instruction.
+    blr
+.size powerpc_probe_read_only_store, .-powerpc_probe_read_only_store

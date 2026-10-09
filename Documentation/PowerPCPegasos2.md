@@ -51,7 +51,8 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
-`HPT group reuse passed`, and `HPT unmapped fault passed` on the terminal.
+`HPT group reuse passed`, `HPT unmapped fault passed`, and
+`HPT read-only fault passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -95,8 +96,10 @@ status in `DSISR`. The vector skips that one load to resume the probe; it is
 not a general kernel page-fault handler. The map, lookup, remap, and unmap
 operations now live in `Kernel/Arch/powerpc/HashPageTable.c`, take an explicit
 VSID, and reject a second mapping for the same virtual page. The boot image
-builds this code; the main kernel build does not yet use it. General allocation,
-an eviction policy when both hash groups fill, per-process VSID allocation,
+also maps a read-only page and confirms that a store faults without changing
+either the virtual or physical value. The main kernel build does not yet use
+this code. General allocation, an eviction policy when both hash groups fill,
+per-process VSID allocation,
 and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
@@ -105,6 +108,8 @@ The [NXP page-table setup note](https://www.nxp.com/docs/en/application-note/AN2
 describes the HPT entry and hash layout.
 The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 defines the data-storage vector and missing-PTE status used by the fault check.
+The [PowerPC Programming Environments manual](https://www.nxp.com/docs/en/user-guide/MPCFPE.pdf)
+defines the PTE protection bits, including the read-only encoding.
 
 After its last Open Firmware call, the probe copies a program-exception
 handler to physical address `0x700`, synchronizes the data and instruction

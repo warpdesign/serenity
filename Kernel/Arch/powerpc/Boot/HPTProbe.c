@@ -17,6 +17,7 @@ enum {
     PageTableEntriesPerGroup = POWERPC_HPT_ENTRIES_PER_GROUP,
     KernelVSID = 12,
     HighDataPage = KERNEL_MAPPING_BASE + 0x00800000,
+    ReadOnlyPage = KERNEL_MAPPING_BASE + 0x00900000,
     CollisionBase = KERNEL_MAPPING_BASE + 0x00401000,
     CollisionStride = 0x00400000,
     CollisionCount = 9,
@@ -36,6 +37,7 @@ extern void powerpc_enable_boot_translation(void);
 extern void powerpc_disable_boot_translation(void);
 extern int powerpc_high_alias_marker(void);
 extern Word powerpc_probe_absent_high_alias(Word effective_address);
+extern void powerpc_probe_read_only_store(Word effective_address, Word value);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
@@ -206,4 +208,31 @@ int powerpc_hpt_group_reuse(void)
 int powerpc_hpt_unmapped_fault_observed(void)
 {
     return s_hpt_unmapped_fault_observed;
+}
+
+int powerpc_hpt_read_only_fault_roundtrip(void)
+{
+    Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
+    Word read_only_flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_ONLY;
+    if (!powerpc_hpt_map(&s_hpt, KernelVSID, ReadOnlyPage, replacement_physical, read_only_flags))
+        return 0;
+
+    powerpc_enable_boot_translation();
+    volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)ReadOnlyPage;
+    Word value_before = *alias;
+    Word fault_count_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(fault_count_before));
+    powerpc_probe_read_only_store(ReadOnlyPage, 0xdeadbeefu);
+    Word fault_count_after;
+    Word fault_address;
+    Word fault_status;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
+        : "=r"(fault_count_after), "=r"(fault_address), "=r"(fault_status));
+    Word value_after = *alias;
+    Word physical_value = s_hpt_replacement_word;
+    powerpc_disable_boot_translation();
+
+    return value_before == 0x13579bdfu && value_after == value_before && physical_value == value_before
+        && fault_count_after == fault_count_before + 1 && fault_address == ReadOnlyPage
+        && (fault_status & 0x0a000000u) == 0x0a000000u && (fault_status & 0x40000000u) == 0;
 }

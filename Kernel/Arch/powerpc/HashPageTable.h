@@ -21,6 +21,7 @@ enum {
     POWERPC_HPT_CHANGED = 0x80,
     POWERPC_HPT_COHERENT = 0x10,
     POWERPC_HPT_READ_WRITE = 0x2,
+    POWERPC_HPT_READ_ONLY = 0x3,
 };
 
 struct PowerPCHPTEntry {
