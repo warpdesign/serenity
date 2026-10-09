@@ -87,9 +87,11 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `PPC32 static TLS lookup passed`,
 `ELF32 entry transfer passed`,
 `secure PLT lazy binding passed`,
-`RAM 256 MiB`, `program exception roundtrip passed`,
+`RAM 256 MiB`, `firmware memory ranges passed`,
+`program exception roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
+`HPT boot handoff passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `processor TLB maintenance passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
@@ -112,7 +114,14 @@ The firmware's root node reports `model = Pegasos2`, and its `/memory@0`
 `reg` property describes RAM. The image is linked at `0x00200000`, like the
 local Haiku Open Firmware loader. QEMU's Virtual Open Firmware does not expose
 the RAM node through `/chosen`, so the probe finds `/memory@0` directly. The
-COM2 address used for early serial output is a QEMU Pegasos 2 fallback; a
+`reg` cells are now decoded into generic boot RAM ranges, with one- and
+two-cell forms checked in QEMU. The [Open Firmware standard](https://www.openfirmware.info/data/docs/of1275.pdf)
+defines the memory node's `reg` and `available` properties. The HPT handoff
+records both SDR1's physical table address and a mapped table address, and
+requires an explicit reservation so the memory allocator cannot reuse it.
+The kernel loader still has to preserve the range arrays and transfer control
+to Serenity's kernel entry with this BootInfo.
+The COM2 address used for early serial output is a QEMU Pegasos 2 fallback; a
 physical-machine implementation must discover the UART and PCI I/O window
 from firmware.
 
@@ -267,9 +276,10 @@ select 64-bit EFI structures. This is a compile prerequisite, not a linked
 kernel.
 The shared memory manager now delegates PTE mapping, boot page-table setup,
 and quickmap to an architecture-selected hierarchical implementation. The
-PowerPC HPT backend accepts complete page-mapping requests, but a PowerPC
-`PageDirectory`, physical-page array mapping, quickmap, and Open Firmware RAM
-handoff are still needed before generic memory initialization can run. EFI
+PowerPC HPT backend accepts complete page-mapping requests, and a PowerPC
+`PageDirectory` can install the validated HPT from BootInfo. The physical-page
+array mapping, quickmap, and kernel entry handoff are still needed before
+generic memory initialization can run. EFI
 memory-map parsing is disabled by the PowerPC boot-layout setting. A single-ABI
 libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.

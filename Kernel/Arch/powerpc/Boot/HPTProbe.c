@@ -38,6 +38,16 @@ enum {
 static struct PowerPCHPTEntry s_page_table[PageTableGroupCount * PageTableEntriesPerGroup]
     __attribute__((aligned(PageTableSize)));
 static struct PowerPCHashPageTable s_hpt = { s_page_table, PageTableGroupCount };
+
+Word powerpc_hpt_table_physical(void)
+{
+    return (Word)(__UINTPTR_TYPE__)s_page_table;
+}
+
+Word powerpc_hpt_group_count(void)
+{
+    return PageTableGroupCount;
+}
 static volatile Word s_hpt_payload_word __attribute__((aligned(PageSize))) = 0x89abcdef;
 static volatile Word s_hpt_replacement_word __attribute__((aligned(PageSize))) = 0x13579bdf;
 static volatile Word s_user_data_page[PageSize / sizeof(Word)] __attribute__((aligned(PageSize)));

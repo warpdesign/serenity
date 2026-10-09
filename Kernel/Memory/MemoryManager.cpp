@@ -76,7 +76,7 @@ bool MemoryManager::is_initialized()
 
 static UNMAP_AFTER_INIT VirtualRange kernel_virtual_range()
 {
-    if (g_boot_info.boot_method == BootMethod::PreInit)
+    if (g_boot_info.boot_method == BootMethod::PreInit || g_boot_info.boot_method == BootMethod::FirmwareMemoryMap)
         return VirtualRange { VirtualAddress(g_boot_info.kernel_mapping_base), KERNEL_PD_END - g_boot_info.kernel_mapping_base };
 
     size_t kernel_range_start = g_boot_info.kernel_mapping_base + 2 * MiB; // The first 2 MiB are used for mapping the pre-kernel
@@ -215,6 +215,8 @@ UNMAP_AFTER_INIT void MemoryManager::parse_memory_map()
             parse_memory_map_multiboot(global_data);
         else if (g_boot_info.boot_method == BootMethod::PreInit)
             parse_memory_map_fdt(global_data, DeviceTree::s_fdt_storage);
+        else if (g_boot_info.boot_method == BootMethod::FirmwareMemoryMap)
+            parse_memory_map_firmware(global_data);
         else
             VERIFY_NOT_REACHED();
 
@@ -681,6 +683,31 @@ UNMAP_AFTER_INIT void MemoryManager::parse_memory_map_multiboot(MemoryManager::G
             global_data.physical_memory_ranges.try_append(PhysicalMemoryRange { PhysicalMemoryRangeType::Unknown, start_address, length }).release_value_but_fixme_should_propagate_errors();
             break;
         }
+    }
+}
+
+UNMAP_AFTER_INIT void MemoryManager::parse_memory_map_firmware(MemoryManager::GlobalData& global_data)
+{
+    VERIFY(g_boot_info.boot_method == BootMethod::FirmwareMemoryMap);
+    auto const& map = g_boot_info.boot_method_specific.firmware_memory_map;
+    VERIFY(map.usable_ranges != nullptr && map.usable_range_count != 0);
+    VERIFY(map.reserved_range_count == 0 || map.reserved_ranges != nullptr);
+
+    for (unsigned int index = 0; index < map.usable_range_count; ++index) {
+        auto const& range = map.usable_ranges[index];
+        VERIFY(range.length != 0 && range.physical_start <= ~0ull - range.length);
+        global_data.physical_memory_ranges.try_append(PhysicalMemoryRange {
+            PhysicalMemoryRangeType::Usable, PhysicalAddress { range.physical_start }, range.length
+        }).release_value_but_fixme_should_propagate_errors();
+    }
+    for (unsigned int index = 0; index < map.reserved_range_count; ++index) {
+        auto const& range = map.reserved_ranges[index];
+        VERIFY(range.length != 0 && range.physical_start <= ~0ull - range.length);
+        global_data.used_memory_ranges.try_append(UsedMemoryRange {
+            UsedMemoryRangeType::FirmwareReserved,
+            PhysicalAddress { range.physical_start },
+            PhysicalAddress { range.physical_start + range.length },
+        }).release_value_but_fixme_should_propagate_errors();
     }
 }
 

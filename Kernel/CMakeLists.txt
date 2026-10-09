@@ -622,8 +622,10 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
     set(KERNEL_SOURCES
         ${KERNEL_SOURCES}
         Arch/powerpc/CPUID.cpp
+        Arch/powerpc/BootHandoff.cpp
         Arch/powerpc/FPUState.S
         Arch/powerpc/HashPageTable.cpp
+        Arch/powerpc/OpenFirmwareMemoryMap.cpp
         Arch/powerpc/PageDirectory.cpp
         Arch/powerpc/PageDirectoryContext.cpp
         Arch/powerpc/PageDirectoryBackend.cpp

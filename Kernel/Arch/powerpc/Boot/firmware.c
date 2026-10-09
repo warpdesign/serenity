@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
+
 typedef unsigned int Cell;
 typedef int (*FirmwareEntry)(void*);
 
@@ -18,6 +20,8 @@ static FirmwareEntry s_firmware_entry;
 static Cell s_stdout;
 static char s_model[64];
 static volatile unsigned char* s_uart;
+static struct BootMemoryRange s_memory_ranges[32];
+static Cell s_memory_range_count;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
@@ -27,6 +31,8 @@ extern int powerpc_memory_fences_test(void);
 extern int powerpc_cache_maintenance_test(void);
 extern int powerpc_tlb_maintenance_test(void);
 extern int powerpc_vsid_allocator_test(void);
+extern int powerpc_firmware_memory_map_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
+extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
@@ -167,7 +173,7 @@ static int initialize_qemu_pegasos2_serial(void)
     return 1;
 }
 
-static int discover_memory_size(Cell root, Cell* total_bytes)
+static int discover_memory_size(Cell root, unsigned long long* total_bytes)
 {
     Cell address_cells = 1;
     Cell size_cells = 1;
@@ -186,22 +192,12 @@ static int discover_memory_size(Cell root, Cell* total_bytes)
 
     Cell ranges[64];
     int length = get_property(memory, "reg", ranges, sizeof(ranges));
-    Cell stride = address_cells + size_cells;
-    if (length <= 0 || length % sizeof(Cell) != 0 || (Cell)length / sizeof(Cell) % stride != 0)
+    if (length <= 0 || length % sizeof(Cell) != 0)
         return 0;
 
-    Cell total = 0;
-    for (Cell index = 0; index < (Cell)length / sizeof(Cell); index += stride) {
-        if ((address_cells == 2 && ranges[index] != 0) || (size_cells == 2 && ranges[index + address_cells] != 0))
-            return 0;
-        Cell base = ranges[index + address_cells - 1];
-        Cell size = ranges[index + stride - 1];
-        if (size > (Cell)-1 - base || size > (Cell)-1 - total)
-            return 0;
-        total += size;
-    }
-    *total_bytes = total;
-    return total != 0;
+    return powerpc_parse_open_firmware_memory_reg(ranges, (Cell)length / sizeof(Cell),
+        address_cells, size_cells, s_memory_ranges,
+        sizeof(s_memory_ranges) / sizeof(s_memory_ranges[0]), &s_memory_range_count, total_bytes);
 }
 
 void boot_main(FirmwareEntry firmware_entry)
@@ -317,11 +313,15 @@ void boot_main(FirmwareEntry firmware_entry)
         serial_write("SerenityOS PowerPC: 32-bit kernel base 0x");
         serial_write_hex(powerpc_kernel_mapping_base());
         serial_write("\r\n");
-        Cell total_bytes;
+        unsigned long long total_bytes = 0;
         if (discover_memory_size(root, &total_bytes)) {
             serial_write("SerenityOS PowerPC: RAM ");
-            serial_write_decimal(total_bytes >> 20);
+            serial_write_decimal((Cell)(total_bytes >> 20));
             serial_write(" MiB\r\n");
+            if (powerpc_firmware_memory_map_test(s_memory_ranges, s_memory_range_count, total_bytes))
+                serial_write("SerenityOS PowerPC: firmware memory ranges passed\r\n");
+            else
+                serial_write("SerenityOS PowerPC: firmware memory ranges failed\r\n");
         } else {
             serial_write("SerenityOS PowerPC: RAM unavailable\r\n");
         }
@@ -345,6 +345,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
+        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes))
+            serial_write("SerenityOS PowerPC: HPT boot handoff passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT boot handoff failed\r\n");
         if (powerpc_hpt_duplicate_mapping_rejected())
             serial_write("SerenityOS PowerPC: HPT duplicate mapping rejected\r\n");
         else

@@ -12,6 +12,7 @@
 #endif
 
 #ifdef __cplusplus
+#    include <Kernel/Boot/BootMemoryMap.h>
 #    include <Kernel/Boot/Multiboot.h>
 #    if KERNEL_HAS_EFI_BOOT
 #        include <Kernel/EFIPrekernel/EFIPrekernel.h>
@@ -66,6 +67,7 @@ enum class BootMethod {
     Multiboot1,
     PreInit,
     EFI,
+    FirmwareMemoryMap,
 };
 
 enum class BootFramebufferType {
@@ -96,6 +98,7 @@ union BootMethodSpecificBootInfo {
 #if KERNEL_HAS_EFI_BOOT
     EFIBootInfo efi;
 #endif
+    BootMemoryMap firmware_memory_map;
 };
 
 struct BootInfo {
@@ -139,6 +142,8 @@ struct AK::Formatter<Kernel::BootMethod> : Formatter<StringView> {
             return builder.put_literal("Multiboot1"sv);
         case EFI:
             return builder.put_literal("EFI"sv);
+        case FirmwareMemoryMap:
+            return builder.put_literal("FirmwareMemoryMap"sv);
         }
 
         VERIFY_NOT_REACHED();

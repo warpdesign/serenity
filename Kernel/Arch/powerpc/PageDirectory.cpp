@@ -7,7 +7,9 @@
 #include <AK/Singleton.h>
 #include <Kernel/API/POSIX/errno.h>
 #include <Kernel/Arch/PageDirectory.h>
+#include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
+#include <Kernel/Boot/BootInfo.h>
 #include <Kernel/Library/LockRefPtr.h>
 
 namespace Kernel::Memory {
@@ -18,6 +20,7 @@ struct VSIDDirectoryMap {
 
 static Singleton<VSIDDirectoryMap> s_directory_map;
 static PowerPCHashPageTable const* s_shared_hpt;
+static PowerPCHashPageTable s_boot_hpt;
 static PowerPCVSIDAllocator s_vsid_allocator;
 static Spinlock<LockRank::None> s_hpt_lock;
 
@@ -62,7 +65,10 @@ ErrorOr<NonnullLockRefPtr<PageDirectory>> PageDirectory::try_create_for_userspac
 
 NonnullLockRefPtr<PageDirectory> PageDirectory::must_create_kernel_page_directory()
 {
-    VERIFY(s_shared_hpt != nullptr);
+    if (!s_shared_hpt) {
+        VERIFY(PowerPC::boot_hpt_from_boot_info(g_boot_info, s_boot_hpt));
+        install_shared_hpt(s_boot_hpt);
+    }
     auto directory = adopt_lock_ref_if_nonnull(new (nothrow) PageDirectory).release_nonnull();
     directory->m_backend.table = s_shared_hpt;
     return directory;

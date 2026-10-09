@@ -46,6 +46,7 @@ enum class UsedMemoryRangeType {
     BootModule,
     PhysicalPages,
     SMBIOS,
+    FirmwareReserved,
     __Count,
 };
 
@@ -55,6 +56,7 @@ static constexpr StringView used_memory_range_type_names[] {
     "Boot module"sv,
     "Physical Pages"sv,
     "SMBIOS"sv,
+    "Firmware Reserved"sv,
 };
 static_assert(array_size(used_memory_range_type_names) == to_underlying(UsedMemoryRangeType::__Count));
 
@@ -264,6 +266,7 @@ private:
     void parse_memory_map_efi(GlobalData&);
     void parse_memory_map_fdt(GlobalData&, u8 const* fdt_addr);
     void parse_memory_map_multiboot(GlobalData&);
+    void parse_memory_map_firmware(GlobalData&);
     static void flush_tlb_local(VirtualAddress, size_t page_count = 1);
     static void flush_tlb(PageDirectory const*, VirtualAddress, size_t page_count = 1);
 
