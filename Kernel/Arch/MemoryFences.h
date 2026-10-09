@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2025-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -44,6 +44,8 @@ void store_memory_fence();
 #    include <Kernel/Arch/riscv64/MemoryFences.h>
 #elif ARCH(X86_64)
 #    include <Kernel/Arch/x86_64/MemoryFences.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/MemoryFences.h>
 #else
 #    error Unknown architecture
 #endif

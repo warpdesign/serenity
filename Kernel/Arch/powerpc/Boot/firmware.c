@@ -23,6 +23,7 @@ extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
 extern int powerpc_cpu_features_test(void);
 extern int powerpc_processor_test(void);
+extern int powerpc_memory_fences_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
@@ -236,6 +237,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: processor primitives passed\r\n");
         else
             serial_write("SerenityOS PowerPC: processor primitives failed\r\n");
+        if (powerpc_memory_fences_test())
+            serial_write("SerenityOS PowerPC: memory fences passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: memory fences failed\r\n");
         if (powerpc_short_string_layout_test())
             serial_write("SerenityOS PowerPC: big-endian short string passed\r\n");
         else

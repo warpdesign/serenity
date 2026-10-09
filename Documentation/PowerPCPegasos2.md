@@ -71,7 +71,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 ```
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
-`CPU features passed`, `processor primitives passed`,
+`CPU features passed`, `processor primitives passed`, `memory fences passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
@@ -189,6 +189,10 @@ depth and scheduler state, controls external interrupts through MSR, and reads
 the 64-bit timebase. The QEMU probe checks these operations on the default CPU
 and a 750cxe. Full processor initialization, TLB and cache maintenance, trap
 entry, and context switching still require kernel integration.
+The architecture memory fence interface uses `sync` for full, load, and store
+fences, so cached descriptor writes can be ordered before device access. The
+probe executes all three fences; DMA visibility still needs validation on real
+Pegasos 2 hardware.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved
 return address from the caller's frame. QEMU checks two GCC-generated nested

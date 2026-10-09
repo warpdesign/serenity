@@ -24,6 +24,7 @@ def main():
         b"SerenityOS PowerPC: setjmp roundtrip passed",
         b"SerenityOS PowerPC: CPU features passed",
         b"SerenityOS PowerPC: processor primitives passed",
+        b"SerenityOS PowerPC: memory fences passed",
         b"SerenityOS PowerPC: big-endian short string passed",
         b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: big-endian float parser passed",
