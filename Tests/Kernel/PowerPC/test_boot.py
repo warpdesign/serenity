@@ -37,6 +37,7 @@ def main():
         b"SerenityOS PowerPC: user-mode page protection passed",
         b"SerenityOS PowerPC: user-mode stack passed",
         b"SerenityOS PowerPC: user-mode syscall resume passed",
+        b"SerenityOS PowerPC: user-mode exception frame passed",
     )
 
     with tempfile.TemporaryDirectory(prefix="serenity-pegasos2-") as directory:

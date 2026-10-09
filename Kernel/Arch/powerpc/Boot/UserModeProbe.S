@@ -9,16 +9,45 @@
 .global system_call_probe_vector_start
 .global system_call_probe_vector_end
 system_call_probe_vector_start:
-    // The first sc returns to user mode. Preserve the registers used below.
+    ba powerpc_system_call_probe_handler
+system_call_probe_vector_end:
+
+.section .text, "ax"
+.type powerpc_system_call_probe_handler, @function
+powerpc_system_call_probe_handler:
+    // Address translation is off. Save every user GPR before using a scratch
+    // register, then capture the rest of the integer exception state.
     mtspr 275, 12
-    lis 12, powerpc_user_probe_saved_user_r11@ha
-    stw 11, powerpc_user_probe_saved_user_r11@l(12)
+    lis 12, powerpc_user_probe_frame@ha
+    addi 12, 12, powerpc_user_probe_frame@l
+    stw 0, 0(12)
+    stw 1, 4(12)
+    stw 2, 8(12)
+    stw 3, 12(12)
+    stw 4, 16(12)
+    stw 5, 20(12)
+    stw 6, 24(12)
+    stw 7, 28(12)
+    stw 8, 32(12)
+    stw 9, 36(12)
+    stw 10, 40(12)
+    stw 11, 44(12)
     mfspr 11, 275
-    lis 12, powerpc_user_probe_saved_user_r12@ha
-    stw 11, powerpc_user_probe_saved_user_r12@l(12)
+    stw 11, 48(12)
+    stmw 13, 52(12)
     mfcr 11
-    lis 12, powerpc_user_probe_saved_user_cr@ha
-    stw 11, powerpc_user_probe_saved_user_cr@l(12)
+    stw 11, 128(12)
+    mfctr 11
+    stw 11, 132(12)
+    mfxer 11
+    stw 11, 136(12)
+    mflr 11
+    stw 11, 140(12)
+    mfspr 11, 26
+    stw 11, 144(12)
+    mfspr 11, 27
+    stw 11, 148(12)
+
     lis 12, powerpc_user_probe_syscall_count@ha
     lwz 11, powerpc_user_probe_syscall_count@l(12)
     addi 11, 11, 1
@@ -46,17 +75,37 @@ system_call_probe_vector_start:
     mfspr 11, 27
     lis 12, powerpc_user_probe_observed_srr1@ha
     stw 11, powerpc_user_probe_observed_srr1@l(12)
-    lis 12, powerpc_user_probe_saved_user_cr@ha
-    lwz 11, powerpc_user_probe_saved_user_cr@l(12)
+    lis 12, powerpc_user_probe_frame@ha
+    addi 12, 12, powerpc_user_probe_frame@l
+    lwz 11, 128(12)
     mtcrf 255, 11
-    lis 12, powerpc_user_probe_saved_user_r11@ha
-    lwz 11, powerpc_user_probe_saved_user_r11@l(12)
-    lis 12, powerpc_user_probe_saved_user_r12@ha
-    lwz 12, powerpc_user_probe_saved_user_r12@l(12)
+    lwz 11, 132(12)
+    mtctr 11
+    lwz 11, 136(12)
+    mtxer 11
+    lwz 11, 140(12)
+    mtlr 11
+    lwz 11, 144(12)
+    mtspr 26, 11
+    lwz 11, 148(12)
+    mtspr 27, 11
+    lwz 0, 0(12)
+    lwz 1, 4(12)
+    lwz 2, 8(12)
+    lwz 3, 12(12)
+    lwz 4, 16(12)
+    lwz 5, 20(12)
+    lwz 6, 24(12)
+    lwz 7, 28(12)
+    lwz 8, 32(12)
+    lwz 9, 36(12)
+    lwz 10, 40(12)
+    lmw 13, 52(12)
+    lwz 11, 44(12)
+    lwz 12, 48(12)
     rfi
-system_call_probe_vector_end:
+.size powerpc_system_call_probe_handler, .-powerpc_system_call_probe_handler
 
-.section .text, "ax"
 .global powerpc_enter_user_probe
 .type powerpc_enter_user_probe, @function
 powerpc_enter_user_probe:
@@ -101,16 +150,39 @@ powerpc_user_probe_start:
     lwz 3, 0(5)
     lwz 3, 0(4)
     addi 1, 1, 16
+    li 8, 8
+    li 9, 9
+    li 10, 10
+    mtctr 10
+    li 10, 0
+    mtxer 10
+    lis 10, 0x1122
+    ori 10, 10, 0x3344
+    mtlr 10
+    li 10, 10
     li 11, 5
     li 12, 7
     cmpw 11, 12
     sc
-    mfcr 8
+.global powerpc_user_probe_after_first_syscall
+powerpc_user_probe_after_first_syscall:
     stw 8, 4(5)
-    stw 11, 8(5)
-    stw 12, 12(5)
-    stw 1, 16(5)
+    stw 9, 8(5)
+    stw 10, 12(5)
+    stw 11, 16(5)
+    stw 12, 20(5)
+    mfcr 8
+    stw 8, 24(5)
+    mfctr 8
+    stw 8, 28(5)
+    mfxer 8
+    stw 8, 32(5)
+    mflr 8
+    stw 8, 36(5)
+    stw 1, 40(5)
     sc
+.global powerpc_user_probe_after_second_syscall
+powerpc_user_probe_after_second_syscall:
 1:
     b 1b
 powerpc_user_probe_end:

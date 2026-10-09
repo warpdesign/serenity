@@ -34,6 +34,7 @@ extern int powerpc_hpt_kernel_protection_roundtrip(void);
 extern int powerpc_hpt_user_mode_roundtrip(void);
 extern int powerpc_user_stack_observed(void);
 extern int powerpc_user_syscall_resume_observed(void);
+extern int powerpc_user_exception_frame_observed(void);
 
 static int is_pegasos2(void)
 {
@@ -268,5 +269,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: user-mode syscall resume passed\r\n");
         else
             serial_write("SerenityOS PowerPC: user-mode syscall resume failed\r\n");
+        if (powerpc_user_exception_frame_observed())
+            serial_write("SerenityOS PowerPC: user-mode exception frame passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: user-mode exception frame failed\r\n");
     }
 }

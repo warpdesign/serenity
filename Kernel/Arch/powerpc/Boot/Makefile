@@ -44,7 +44,7 @@ $(BUILD_DIR)/mmu_probe_asm.o: MMUProbe.S | $(BUILD_DIR)
 $(BUILD_DIR)/hash_page_table.o: ../HashPageTable.c ../HashPageTable.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../HashPageTable.h ../MemoryLayout.h | $(BUILD_DIR)
+$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
 $(BUILD_DIR)/abi.o: abi.cpp ../MemoryLayout.h ../../../../AK/Platform.h ../../../../AK/Types.h | $(BUILD_DIR)

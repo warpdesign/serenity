@@ -54,7 +54,8 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
 `HPT read-only fault passed`, `HPT VSID switch passed`,
 `HPT kernel protection passed`, `user-mode page protection passed`,
-`user-mode stack passed`, and `user-mode syscall resume passed` on the terminal.
+`user-mode stack passed`, `user-mode syscall resume passed`, and
+`user-mode exception frame passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -111,11 +112,13 @@ protected kernel page. It checks the data-storage protection fault and returns
 through the low `0xc00` system-call vector. The first `sc` resumes in problem
 state and the probe checks its general registers, condition register, and
 stack pointer. A second `sc` returns to supervisor real mode and restores the
-supervisor stack. The vector still saves only the state used by this probe;
-complete thread context handling and process context switching remain. The
-main kernel build does not yet use this code. General allocation, an eviction
-policy when both hash groups fill, per-process VSID
-allocation, and a complete kernel address space remain.
+supervisor stack. The low vector branches to an out-of-line handler that saves
+all 32 general registers, CR, CTR, XER, LR, SRR0, and SRR1 in an integer
+exception frame. This remains a single static probe frame; nested exceptions,
+floating-point state, and per-thread context handling remain. The main kernel
+build does not yet use this code. General allocation, an eviction policy when
+both hash groups fill, per-process VSID allocation, and a complete kernel
+address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.

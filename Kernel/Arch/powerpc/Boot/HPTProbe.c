@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/ExceptionState.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
 
@@ -43,6 +44,9 @@ static volatile Word s_user_stack[PageSize / sizeof(Word)] __attribute__((aligne
 static int s_hpt_unmapped_fault_observed;
 static int s_user_stack_observed;
 static int s_user_syscall_resume_observed;
+static int s_user_exception_frame_observed;
+
+volatile struct PowerPCExceptionState powerpc_user_probe_frame;
 
 volatile Word powerpc_user_probe_saved_msr;
 volatile Word powerpc_user_probe_resume_address;
@@ -51,9 +55,6 @@ volatile Word powerpc_user_probe_observed_srr1;
 volatile Word powerpc_user_probe_saved_supervisor_stack;
 volatile Word powerpc_user_probe_observed_user_stack;
 volatile Word powerpc_user_probe_saved_supervisor_cr;
-volatile Word powerpc_user_probe_saved_user_r11;
-volatile Word powerpc_user_probe_saved_user_r12;
-volatile Word powerpc_user_probe_saved_user_cr;
 volatile Word powerpc_user_probe_syscall_count;
 
 extern void powerpc_select_boot_hpt(Word table_physical);
@@ -64,6 +65,8 @@ extern Word powerpc_probe_absent_high_alias(Word effective_address);
 extern void powerpc_probe_read_only_store(Word effective_address, Word value);
 extern Word powerpc_user_probe_start[];
 extern Word powerpc_user_probe_end[];
+extern Word powerpc_user_probe_after_first_syscall[];
+extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top);
 
 static int map_high_page(Word effective_address, Word physical_address)
@@ -355,7 +358,10 @@ int powerpc_hpt_user_mode_roundtrip(void)
 
     Word code_physical = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_start;
     Word code_length = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_end - code_physical;
+    Word first_resume_offset = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_after_first_syscall - code_physical;
+    Word second_resume_offset = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_after_second_syscall - code_physical;
     if ((code_physical & (PageSize - 1)) != 0 || code_length == 0 || code_length > PageSize
+        || first_resume_offset >= code_length || second_resume_offset >= code_length
         || code_physical >= 0x01000000u - PageSize)
         return 0;
     if (!powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeCodePage, code_physical, UserPageFlags))
@@ -391,11 +397,17 @@ int powerpc_hpt_user_mode_roundtrip(void)
         : "=r"(fault_count_after), "=r"(fault_address), "=r"(fault_status), "=r"(returned_state));
     __asm__ volatile("mr %0,1" : "=r"(supervisor_stack_after));
     Word user_data_value = s_user_data_page[0];
-    Word user_saved_cr = s_user_data_page[1];
-    Word user_saved_r11 = s_user_data_page[2];
-    Word user_saved_r12 = s_user_data_page[3];
-    Word user_stack_after_syscall = s_user_data_page[4];
-    for (Word index = 0; index < 5; ++index)
+    Word user_saved_r8 = s_user_data_page[1];
+    Word user_saved_r9 = s_user_data_page[2];
+    Word user_saved_r10 = s_user_data_page[3];
+    Word user_saved_r11 = s_user_data_page[4];
+    Word user_saved_r12 = s_user_data_page[5];
+    Word user_saved_cr = s_user_data_page[6];
+    Word user_saved_ctr = s_user_data_page[7];
+    Word user_saved_xer = s_user_data_page[8];
+    Word user_saved_lr = s_user_data_page[9];
+    Word user_stack_after_syscall = s_user_data_page[10];
+    for (Word index = 0; index < 11; ++index)
         s_user_data_page[index] = 0;
     Word user_stack_back_chain = s_user_stack[(PageSize - 32) / sizeof(Word)];
     Word user_stack_value = s_user_stack[(PageSize - 24) / sizeof(Word)];
@@ -413,14 +425,27 @@ int powerpc_hpt_user_mode_roundtrip(void)
         && supervisor_stack_after == supervisor_stack_before;
     s_user_syscall_resume_observed = powerpc_user_probe_syscall_count == 2
         && (user_saved_cr & 0xe0000000u) == 0x80000000u
+        && user_saved_r8 == 8 && user_saved_r9 == 9 && user_saved_r10 == 10
         && user_saved_r11 == 5 && user_saved_r12 == 7
+        && user_saved_ctr == 10 && user_saved_xer == 0 && user_saved_lr == 0x11223344u
         && user_stack_after_syscall == UserProbeStackPage + PageSize - 16;
+    s_user_exception_frame_observed = powerpc_user_probe_frame.gpr[1] == UserProbeStackPage + PageSize - 16
+        && powerpc_user_probe_frame.gpr[3] == 0x2468ace0u
+        && powerpc_user_probe_frame.gpr[5] == UserProbeDataPage
+        && powerpc_user_probe_frame.gpr[8] == 0x11223344u
+        && powerpc_user_probe_frame.gpr[9] == 9 && powerpc_user_probe_frame.gpr[10] == 10
+        && powerpc_user_probe_frame.gpr[11] == 5 && powerpc_user_probe_frame.gpr[12] == 7
+        && (powerpc_user_probe_frame.cr & 0xe0000000u) == 0x80000000u
+        && powerpc_user_probe_frame.ctr == 10 && powerpc_user_probe_frame.xer == 0
+        && powerpc_user_probe_frame.lr == 0x11223344u
+        && powerpc_user_probe_frame.srr0 == UserProbeCodePage + second_resume_offset
+        && (powerpc_user_probe_frame.srr1 & 0x4030u) == 0x4030u;
 
     return user_result == 0x2468ace0u && user_data_value == 0x2468ace0u
         && fault_count_after == fault_count_before + 1
         && fault_address == HighDataPage && (fault_status & 0x48000000u) == 0x08000000u
         && (powerpc_user_probe_observed_srr1 & 0x4030u) == 0x4030u
-        && powerpc_user_probe_observed_srr0 == UserProbeCodePage + 44
+        && powerpc_user_probe_observed_srr0 == UserProbeCodePage + first_resume_offset
         && (returned_state & 0x4030u) == 0 && s_hpt_payload_word == 0x89abcdefu
         && unmapped;
 }
@@ -433,4 +458,9 @@ int powerpc_user_stack_observed(void)
 int powerpc_user_syscall_resume_observed(void)
 {
     return s_user_syscall_resume_observed;
+}
+
+int powerpc_user_exception_frame_observed(void)
+{
+    return s_user_exception_frame_observed;
 }
