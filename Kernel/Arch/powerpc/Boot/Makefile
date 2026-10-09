@@ -28,6 +28,7 @@ CACHE_TEST_OBJECTS := $(BUILD_DIR)/test_cache_maintenance.o
 TLB_TEST_OBJECTS := $(BUILD_DIR)/tlb.o $(BUILD_DIR)/test_tlb_maintenance.o
 SEGMENT_REGISTER_OBJECTS := $(BUILD_DIR)/segment_registers.o
 PAGE_DIRECTORY_BACKEND_OBJECTS := $(BUILD_DIR)/page_directory_backend.o
+PHYSICAL_PAGE_ARRAY_OBJECTS := $(BUILD_DIR)/physical_page_array.o
 PAGE_MAPPING_TEST_OBJECTS := $(BUILD_DIR)/test_page_mapping.o
 VSID_ALLOCATOR_OBJECTS := $(BUILD_DIR)/vsid_allocator.o $(BUILD_DIR)/test_vsid_allocator.o
 FIRMWARE_MEMORY_MAP_TEST_OBJECTS := $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/test_firmware_memory_map.o
@@ -70,13 +71,16 @@ $(BUILD_DIR)/mmu_probe_asm.o: MMUProbe.S | $(BUILD_DIR)
 $(BUILD_DIR)/hash_page_table.o: ../HashPageTable.cpp ../HashPageTable.h ../TLB.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../SegmentRegisters.h ../VSIDAllocator.h | $(BUILD_DIR)
+$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../PhysicalPageArray.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
+
+$(BUILD_DIR)/physical_page_array.o: ../PhysicalPageArray.cpp ../PhysicalPageArray.h ../PageDirectoryBackend.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/page_directory_backend.o: ../PageDirectoryBackend.cpp ../PageDirectoryBackend.h ../HashPageTable.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_page_mapping.o: ../../../../Tests/Kernel/PowerPC/TestPageMapping.cpp ../PageDirectoryBackend.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_page_mapping.o: ../../../../Tests/Kernel/PowerPC/TestPageMapping.cpp ../PageDirectoryBackend.h ../PhysicalPageArray.h ../../../../Kernel/Memory/PageMapping.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/segment_registers.o: ../SegmentRegisters.cpp ../SegmentRegisters.h ../VSIDAllocator.h | $(BUILD_DIR)
@@ -94,7 +98,7 @@ $(BUILD_DIR)/test_firmware_memory_map.o: ../../../../Tests/Kernel/PowerPC/TestFi
 $(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_vsid_allocator.o: ../../../../Tests/Kernel/PowerPC/TestVSIDAllocator.cpp ../VSIDAllocator.h | $(BUILD_DIR)
@@ -238,8 +242,8 @@ $(BUILD_DIR)/runtime.o: Runtime.c | $(BUILD_DIR)
 $(BUILD_DIR)/runtime_assertions.o: RuntimeAssertions.cpp | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(SEGMENT_REGISTER_OBJECTS) $(PAGE_DIRECTORY_BACKEND_OBJECTS) $(PAGE_MAPPING_TEST_OBJECTS) $(VSID_ALLOCATOR_OBJECTS) $(FIRMWARE_MEMORY_MAP_TEST_OBJECTS) $(BOOT_INFO_TEST_OBJECTS) $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(SYSCALL_TEST_OBJECTS) $(FENV_TEST_OBJECTS) $(FPU_STATE_TEST_OBJECTS) $(CPU_TEST_OBJECTS) $(PROCESSOR_TEST_OBJECTS) $(MEMORY_FENCES_TEST_OBJECTS) $(CACHE_TEST_OBJECTS) $(TLB_TEST_OBJECTS) $(REGISTER_TEST_OBJECTS) $(STACK_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld Makefile
-	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(SEGMENT_REGISTER_OBJECTS) $(PAGE_DIRECTORY_BACKEND_OBJECTS) $(PAGE_MAPPING_TEST_OBJECTS) $(VSID_ALLOCATOR_OBJECTS) $(FIRMWARE_MEMORY_MAP_TEST_OBJECTS) $(BOOT_INFO_TEST_OBJECTS) $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(SYSCALL_TEST_OBJECTS) $(FENV_TEST_OBJECTS) $(FPU_STATE_TEST_OBJECTS) $(CPU_TEST_OBJECTS) $(PROCESSOR_TEST_OBJECTS) $(MEMORY_FENCES_TEST_OBJECTS) $(CACHE_TEST_OBJECTS) $(TLB_TEST_OBJECTS) $(REGISTER_TEST_OBJECTS) $(STACK_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o $(LIBGCC) -o $@
+$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(SEGMENT_REGISTER_OBJECTS) $(PAGE_DIRECTORY_BACKEND_OBJECTS) $(PHYSICAL_PAGE_ARRAY_OBJECTS) $(PAGE_MAPPING_TEST_OBJECTS) $(VSID_ALLOCATOR_OBJECTS) $(FIRMWARE_MEMORY_MAP_TEST_OBJECTS) $(BOOT_INFO_TEST_OBJECTS) $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(SYSCALL_TEST_OBJECTS) $(FENV_TEST_OBJECTS) $(FPU_STATE_TEST_OBJECTS) $(CPU_TEST_OBJECTS) $(PROCESSOR_TEST_OBJECTS) $(MEMORY_FENCES_TEST_OBJECTS) $(CACHE_TEST_OBJECTS) $(TLB_TEST_OBJECTS) $(REGISTER_TEST_OBJECTS) $(STACK_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld Makefile
+	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(SEGMENT_REGISTER_OBJECTS) $(PAGE_DIRECTORY_BACKEND_OBJECTS) $(PHYSICAL_PAGE_ARRAY_OBJECTS) $(PAGE_MAPPING_TEST_OBJECTS) $(VSID_ALLOCATOR_OBJECTS) $(FIRMWARE_MEMORY_MAP_TEST_OBJECTS) $(BOOT_INFO_TEST_OBJECTS) $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o $(BUILD_DIR)/float_parser.o $(BUILD_DIR)/test_float_parser.o $(BUILD_DIR)/elf_validation.o $(BUILD_DIR)/test_elf_header.o $(BUILD_DIR)/elf_image.o $(BUILD_DIR)/test_elf_image.o $(BUILD_DIR)/elf_relocation.o $(BUILD_DIR)/test_relative_relocations.o $(BUILD_DIR)/elf_tls.o $(BUILD_DIR)/test_tls_layout.o $(BUILD_DIR)/elf_entry.o $(BUILD_DIR)/test_elf_entry.o $(TLS_TEST_OBJECTS) $(PLT_TEST_OBJECTS) $(SYSCALL_TEST_OBJECTS) $(FENV_TEST_OBJECTS) $(FPU_STATE_TEST_OBJECTS) $(CPU_TEST_OBJECTS) $(PROCESSOR_TEST_OBJECTS) $(MEMORY_FENCES_TEST_OBJECTS) $(CACHE_TEST_OBJECTS) $(TLB_TEST_OBJECTS) $(REGISTER_TEST_OBJECTS) $(STACK_TEST_OBJECTS) $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o $(LIBGCC) -o $@
 
 check-quick: all
 	$(MAKE) -C ../../../../Tests/Toolchain/PowerPC check-quick CROSS_COMPILE=$(CROSS_COMPILE)

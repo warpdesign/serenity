@@ -55,7 +55,7 @@ void ProcessorBase::flush_data_cache(VirtualAddress vaddr, size_t byte_count)
     u64 last_block = (end - 1) & ~(cache_block_size - 1);
     for (u64 block = vaddr.get() & ~(cache_block_size - 1);; block += cache_block_size) {
         auto address = static_cast<FlatPtr>(block);
-        asm volatile("dcbst 0,%0" : : "r"(address) : "memory");
+        asm volatile("dcbf 0,%0" : : "r"(address) : "memory");
         if (block == last_block)
             break;
     }

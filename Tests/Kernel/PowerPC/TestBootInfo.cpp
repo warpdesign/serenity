@@ -9,6 +9,7 @@
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Boot/BootInfo.h>
+#include <Kernel/Sections.h>
 
 static_assert(ARCH(POWERPC32));
 static_assert(KERNEL_HAS_EFI_BOOT == 0);
@@ -30,10 +31,13 @@ static_assert(__builtin_offsetof(PowerPCExceptionState, srr1) == 148);
 
 extern "C" u32 powerpc_hpt_table_physical();
 extern "C" u32 powerpc_hpt_group_count();
+extern "C" u32 powerpc_quickmap_probe_address();
 
 extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes)
 {
     if (!ranges || range_count == 0 || total_bytes == 0)
+        return 0;
+    if (powerpc_quickmap_probe_address() != KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE)
         return 0;
 
     BootMemoryRange hpt_reservation { powerpc_hpt_table_physical(), 64 * 1024 };
@@ -53,6 +57,10 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
         || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[0].physical_start != powerpc_hpt_table_physical())
         return 0;
 
+    boot_info.kernel_mapping_base = 0xd0000000u;
+    if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
+        return 0;
+    boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
     boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 0;
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
         return 0;

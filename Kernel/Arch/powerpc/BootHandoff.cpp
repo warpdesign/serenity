@@ -10,7 +10,7 @@ namespace Kernel::PowerPC {
 
 bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& table)
 {
-    if (boot_info.boot_method != BootMethod::FirmwareMemoryMap)
+    if (boot_info.boot_method != BootMethod::FirmwareMemoryMap || boot_info.kernel_mapping_base != KERNEL_MAPPING_BASE)
         return false;
     auto const& arch = boot_info.arch_specific;
     auto physical = arch.hpt_physical_address.get();

@@ -71,29 +71,49 @@ int powerpc_page_directory_backend_activate(PowerPCPageDirectoryBackend const* d
     return powerpc_activate_user_segments(directory->user_vsid_base);
 }
 
+static PowerPCHPTWord memory_type_flags(Kernel::Memory::MemoryType memory_type)
+{
+    switch (memory_type) {
+    case Kernel::Memory::MemoryType::Normal:
+        return POWERPC_HPT_COHERENT;
+    case Kernel::Memory::MemoryType::NonCacheable:
+        return POWERPC_HPT_CACHE_INHIBITED;
+    case Kernel::Memory::MemoryType::IO:
+        return POWERPC_HPT_CACHE_INHIBITED | POWERPC_HPT_GUARDED;
+    }
+    __builtin_trap();
+}
+
 bool powerpc_page_directory_backend_apply_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const& request)
 {
     auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);
     if (!vsid || !request.user_allowed || request.execute_disabled || request.physical_page_base > 0xfffff000u)
         return false;
 
-    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED;
+    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | memory_type_flags(request.memory_type);
     flags |= request.writable ? POWERPC_HPT_READ_WRITE : POWERPC_HPT_READ_ONLY;
-    switch (request.memory_type) {
-    case Kernel::Memory::MemoryType::Normal:
-        flags |= POWERPC_HPT_COHERENT;
-        break;
-    case Kernel::Memory::MemoryType::NonCacheable:
-        flags |= POWERPC_HPT_CACHE_INHIBITED;
-        break;
-    case Kernel::Memory::MemoryType::IO:
-        flags |= POWERPC_HPT_CACHE_INHIBITED | POWERPC_HPT_GUARDED;
-        break;
-    }
 
     if (powerpc_hpt_find(directory->table, vsid, effective_address))
         return powerpc_hpt_remap(directory->table, vsid, effective_address, static_cast<PowerPCHPTWord>(request.physical_page_base), flags);
     return powerpc_hpt_map(directory->table, vsid, effective_address, static_cast<PowerPCHPTWord>(request.physical_page_base), flags);
+}
+
+bool powerpc_apply_kernel_mapping(PowerPCHashPageTable const* table, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const& request)
+{
+    if (!table || !table->entries || effective_address < 0xc0000000u
+        || (effective_address & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || request.physical_page_base > 0xfffff000u
+        || (request.physical_page_base & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || request.user_allowed || !request.writable || request.execute_disabled)
+        return false;
+
+    PowerPCHPTWord vsid = effective_address >> 28;
+    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED
+        | memory_type_flags(request.memory_type) | POWERPC_HPT_SUPERVISOR_ONLY;
+    auto physical = static_cast<PowerPCHPTWord>(request.physical_page_base);
+    if (powerpc_hpt_find(table, vsid, effective_address))
+        return powerpc_hpt_remap(table, vsid, effective_address, physical, flags);
+    return powerpc_hpt_map(table, vsid, effective_address, physical, flags);
 }
 
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address)

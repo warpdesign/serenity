@@ -55,6 +55,8 @@ extern int powerpc_stack_unwinder_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
+extern int powerpc_hpt_quickmap_roundtrip(void);
+extern int powerpc_hpt_physical_array_roundtrip(void);
 extern int powerpc_hpt_duplicate_mapping_rejected(void);
 extern int powerpc_hpt_mapping_lifecycle(void);
 extern int powerpc_hpt_group_reuse(void);
@@ -349,6 +351,14 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT boot handoff passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT boot handoff failed\r\n");
+        if (powerpc_hpt_quickmap_roundtrip())
+            serial_write("SerenityOS PowerPC: HPT quickmap alias passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT quickmap alias failed\r\n");
+        if (powerpc_hpt_physical_array_roundtrip())
+            serial_write("SerenityOS PowerPC: HPT physical metadata array passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT physical metadata array failed\r\n");
         if (powerpc_hpt_duplicate_mapping_rejected())
             serial_write("SerenityOS PowerPC: HPT duplicate mapping rejected\r\n");
         else

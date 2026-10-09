@@ -36,4 +36,5 @@ int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend c
 
 bool powerpc_page_directory_backend_apply_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const&);
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
+bool powerpc_apply_kernel_mapping(PowerPCHashPageTable const*, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const&);
 #endif

@@ -92,6 +92,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT boot handoff passed`,
+`HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `processor TLB maintenance passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
@@ -167,18 +168,19 @@ remaps one user's virtual page to a third physical page and back while the
 other user's mapping stays intact. A PowerPC `PageDirectory` now owns that
 backend and registers user directories by VSID. Destruction purges the
 directory's HPT entries; QEMU checks that purging one address space leaves the
-other address space accessible. Its boot-time shared HPT installation still
-needs to be connected to the Open Firmware kernel handoff. Generic `Region`
+other address space accessible. Its boot-time shared HPT installation now
+validates the firmware BootInfo and SDR1. Generic `Region`
 mapping now passes a complete request to an architecture-selected mapping
 operation instead of mutating a PTE field by field. The existing hierarchical
 architectures use their PTEs; the PowerPC backend applies the same request to
 the HPT for user pages. QEMU checks the resulting physical page, permissions,
 and normal, noncacheable, and guarded I/O attributes. Kernel-only activation
-selects reserved user-segment VSIDs while leaving SR12-SR15 intact; QEMU checks
-the register values. Early physical-page
-metadata mapping, quickmap, and kernel protection still require PowerPC
-implementations. The high kernel PTEs use supervisor-only protection with
-SR12's user key set. The probe
+selects reserved user-segment VSIDs and fixed SR12-SR15 kernel VSIDs. The probe
+maps three contiguous physical metadata pages into the high kernel range and
+checks reads and writes across all three. It also maps the actual CPU 0
+quickmap slot at `0xffec0000`, unmaps it, and checks the resulting fault. A
+full kernel entry handoff and kernel text protection remain. The high kernel
+PTEs use supervisor-only protection with SR12's user key set. The probe
 temporarily selects the protected key for supervisor access and checks that
 the high page faults, then restores access.
 The current SR12 key pair cannot express a supervisor read-only page that is
@@ -277,9 +279,11 @@ kernel.
 The shared memory manager now delegates PTE mapping, boot page-table setup,
 and quickmap to an architecture-selected hierarchical implementation. The
 PowerPC HPT backend accepts complete page-mapping requests, and a PowerPC
-`PageDirectory` can install the validated HPT from BootInfo. The physical-page
-array mapping, quickmap, and kernel entry handoff are still needed before
-generic memory initialization can run. EFI
+`PageDirectory` can install the validated HPT from BootInfo. PowerPC now has
+HPT-backed physical-page metadata initialization and a quickmap path, including
+data-cache invalidation before a RAM page becomes noncacheable. These compile
+only with a temporary time-interface shim until the PowerPC time and interrupt
+interfaces are implemented, and the kernel entry handoff is still absent. EFI
 memory-map parsing is disabled by the PowerPC boot-layout setting. A single-ABI
 libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.

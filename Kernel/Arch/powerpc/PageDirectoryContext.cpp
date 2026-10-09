@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/PageDirectory.h>
+#include <Kernel/FileSystem/OpenFileDescription.h>
 #include <Kernel/Tasks/Thread.h>
 
 namespace Kernel::Memory {

@@ -8,8 +8,10 @@
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
 #include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
+#include <Kernel/Arch/powerpc/PhysicalPageArray.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
 #include <Kernel/Arch/powerpc/VSIDAllocator.h>
+#include <Kernel/Sections.h>
 
 typedef unsigned int Word;
 typedef int (*MarkerFunction)(void);
@@ -22,6 +24,8 @@ enum {
     KernelVSID = 12,
     HighDataPage = KERNEL_MAPPING_BASE + 0x00800000,
     ReadOnlyPage = KERNEL_MAPPING_BASE + 0x00900000,
+    QuickmapTestAddress = KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * PageSize,
+    PhysicalArrayTestAddress = 0xc2400000u,
     UserTestAddress = 0x10000000,
     UserProbeCodePage = 0x10010000,
     UserProbeDataPage = 0x10020000,
@@ -39,6 +43,11 @@ static struct PowerPCHPTEntry s_page_table[PageTableGroupCount * PageTableEntrie
     __attribute__((aligned(PageTableSize)));
 static struct PowerPCHashPageTable s_hpt = { s_page_table, PageTableGroupCount };
 
+Word powerpc_quickmap_probe_address(void)
+{
+    return QuickmapTestAddress;
+}
+
 Word powerpc_hpt_table_physical(void)
 {
     return (Word)(__UINTPTR_TYPE__)s_page_table;
@@ -50,6 +59,12 @@ Word powerpc_hpt_group_count(void)
 }
 static volatile Word s_hpt_payload_word __attribute__((aligned(PageSize))) = 0x89abcdef;
 static volatile Word s_hpt_replacement_word __attribute__((aligned(PageSize))) = 0x13579bdf;
+static volatile Word s_quickmap_payload[PageSize / sizeof(Word)] __attribute__((aligned(PageSize))) = { 0x2468ace0u };
+static volatile Word s_physical_array_payload[3 * PageSize / sizeof(Word)] __attribute__((aligned(PageSize))) = {
+    [0] = 0x10203040u,
+    [PageSize / sizeof(Word)] = 0x50607080u,
+    [2 * PageSize / sizeof(Word)] = 0x90abcdefu,
+};
 static volatile Word s_user_data_page[PageSize / sizeof(Word)] __attribute__((aligned(PageSize)));
 static volatile Word s_user_stack[PageSize / sizeof(Word)] __attribute__((aligned(PageSize)));
 static int s_hpt_unmapped_fault_observed;
@@ -79,6 +94,7 @@ extern Word powerpc_user_probe_end[];
 extern Word powerpc_user_probe_after_first_syscall[];
 extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top);
+extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
@@ -166,6 +182,73 @@ int powerpc_hpt_duplicate_mapping_rejected(void)
     Word observed = *high_data;
     powerpc_disable_boot_translation();
     return observed == 0x89abcdefu;
+}
+
+int powerpc_hpt_quickmap_roundtrip(void)
+{
+    Word machine_state;
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
+    Word physical = (Word)(__UINTPTR_TYPE__)s_quickmap_payload;
+    if ((machine_state & 0x30u) != 0 || (physical & (PageSize - 1)) != 0 || physical >= 0x01000000u)
+        return 0;
+
+    Word original_segments[16];
+    for (Word segment = 0; segment < 16; ++segment)
+        original_segments[segment] = powerpc_read_segment_register(segment);
+    if (!powerpc_test_map_kernel_page(&s_hpt, QuickmapTestAddress, physical))
+        return 0;
+
+    powerpc_activate_kernel_segments();
+    powerpc_enable_boot_translation();
+    volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)QuickmapTestAddress;
+    Word initial = *alias;
+    *alias = 0x12345678u;
+    __asm__ volatile("sync" : : : "memory");
+    Word physical_read = s_quickmap_payload[0];
+
+    int unmapped = powerpc_hpt_unmap(&s_hpt, 15, QuickmapTestAddress);
+    Word faults_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(faults_before));
+    Word fault_result = powerpc_probe_absent_high_alias(QuickmapTestAddress);
+    Word faults_after;
+    Word fault_address;
+    Word fault_status;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
+        : "=r"(faults_after), "=r"(fault_address), "=r"(fault_status));
+    powerpc_disable_boot_translation();
+    for (Word segment = 0; segment < 16; ++segment)
+        powerpc_write_segment_register(segment, original_segments[segment]);
+    s_quickmap_payload[0] = 0x2468ace0u;
+
+    return initial == 0x2468ace0u && physical_read == 0x12345678u && unmapped
+        && fault_result == 0 && faults_after == faults_before + 1
+        && fault_address == QuickmapTestAddress && (fault_status & 0x40000000u) != 0;
+}
+
+int powerpc_hpt_physical_array_roundtrip(void)
+{
+    Word machine_state;
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
+    Word physical = (Word)(__UINTPTR_TYPE__)s_physical_array_payload;
+    if ((machine_state & 0x30u) != 0 || (physical & (PageSize - 1)) != 0 || physical >= 0x01000000u - 3 * PageSize)
+        return 0;
+    if (!powerpc_map_kernel_page_array(&s_hpt, PhysicalArrayTestAddress, physical, 3))
+        return 0;
+
+    powerpc_enable_boot_translation();
+    volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)PhysicalArrayTestAddress;
+    Word first = alias[0];
+    Word second = alias[PageSize / sizeof(Word)];
+    Word third = alias[2 * PageSize / sizeof(Word)];
+    alias[PageSize / sizeof(Word)] = 0x11223344u;
+    __asm__ volatile("sync" : : : "memory");
+    Word physical_read = s_physical_array_payload[PageSize / sizeof(Word)];
+    powerpc_disable_boot_translation();
+
+    int unmapped = powerpc_unmap_kernel_page_array(&s_hpt, PhysicalArrayTestAddress, 3);
+    s_physical_array_payload[PageSize / sizeof(Word)] = 0x50607080u;
+    return first == 0x10203040u && second == 0x50607080u && third == 0x90abcdefu
+        && physical_read == 0x11223344u && unmapped;
 }
 
 static void replace_test_mapping_without_tlb_flush(struct PowerPCHPTEntry* entry, Word upper, Word lower)
@@ -331,7 +414,10 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     Word original_segments[POWERPC_USER_SEGMENT_COUNT];
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         original_segments[segment] = powerpc_read_segment_register(segment);
-    Word original_kernel_segment = powerpc_read_segment_register(12);
+    Word original_kernel_segments[4];
+    for (Word segment = 12; segment < 16; ++segment)
+        original_kernel_segments[segment - 12] = powerpc_read_segment_register(segment);
+    Word original_kernel_segment = original_kernel_segments[0];
 
     struct PowerPCVSIDAllocator allocator;
     powerpc_vsid_allocator_initialize(&allocator);
@@ -405,13 +491,15 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     powerpc_disable_boot_translation();
     s_user_data_page[0] = 0;
     powerpc_activate_kernel_segments();
-    int kernel_segments_match = powerpc_read_segment_register(12) == original_kernel_segment;
-    for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment) {
+    int kernel_segments_match = 1;
+    for (Word segment = 0; segment < 16; ++segment) {
         if (powerpc_read_segment_register(segment) != (0x20000000u | segment))
             kernel_segments_match = 0;
     }
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         powerpc_write_segment_register(segment, original_segments[segment]);
+    for (Word segment = 12; segment < 16; ++segment)
+        powerpc_write_segment_register(segment, original_kernel_segments[segment - 12]);
 
     int unmapped = powerpc_page_directory_backend_unmap(&second_directory, UserTestAddress);
     return first_activated && second_activated && first_segments_match && second_segments_match && kernel_segments_match
