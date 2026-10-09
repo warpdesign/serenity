@@ -18,6 +18,9 @@ enum {
     KernelVSID = 12,
     HighDataPage = KERNEL_MAPPING_BASE + 0x00800000,
     ReadOnlyPage = KERNEL_MAPPING_BASE + 0x00900000,
+    UserTestAddress = 0x10000000,
+    FirstUserVSID = 0x101,
+    SecondUserVSID = 0x201,
     CollisionBase = KERNEL_MAPPING_BASE + 0x00401000,
     CollisionStride = 0x00400000,
     CollisionCount = 9,
@@ -235,4 +238,56 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
     return value_before == 0x13579bdfu && value_after == value_before && physical_value == value_before
         && fault_count_after == fault_count_before + 1 && fault_address == ReadOnlyPage
         && (fault_status & 0x0a000000u) == 0x0a000000u && (fault_status & 0x40000000u) == 0;
+}
+
+static void select_user_segment(Word vsid)
+{
+    __asm__ volatile("mtsr 1,%0; isync" : : "r"(vsid) : "memory");
+}
+
+int powerpc_hpt_vsid_switch_roundtrip(void)
+{
+    Word machine_state;
+    Word original_segment;
+    __asm__ volatile("mfmsr %0; mfsr %1,1" : "=r"(machine_state), "=r"(original_segment));
+    if ((machine_state & 0x30u) != 0)
+        return 0;
+
+    Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
+    Word second_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
+    if (!powerpc_hpt_map(&s_hpt, FirstUserVSID, UserTestAddress, first_physical, PageFlags)
+        || !powerpc_hpt_map(&s_hpt, SecondUserVSID, UserTestAddress, second_physical, PageFlags))
+        return 0;
+
+    volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)UserTestAddress;
+    powerpc_enable_boot_translation();
+    select_user_segment(FirstUserVSID);
+    Word first_read = *alias;
+    *alias = 0x11223344u;
+    __asm__ volatile("sync" : : : "memory");
+    Word first_physical_read = s_hpt_payload_word;
+
+    select_user_segment(SecondUserVSID);
+    Word second_read = *alias;
+    Word kernel_read = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    *alias = 0x55667788u;
+    __asm__ volatile("sync" : : : "memory");
+    Word second_physical_read = s_hpt_replacement_word;
+
+    select_user_segment(FirstUserVSID);
+    Word first_again = *alias;
+    *alias = 0x89abcdefu;
+    select_user_segment(SecondUserVSID);
+    Word second_again = *alias;
+    *alias = 0x13579bdfu;
+    powerpc_disable_boot_translation();
+    select_user_segment(original_segment);
+
+    int unmapped = powerpc_hpt_unmap(&s_hpt, FirstUserVSID, UserTestAddress)
+        && powerpc_hpt_unmap(&s_hpt, SecondUserVSID, UserTestAddress);
+    return first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
+        && first_physical_read == 0x11223344u && second_physical_read == 0x55667788u
+        && first_again == 0x11223344u && second_again == 0x55667788u
+        && s_hpt_payload_word == 0x89abcdefu && s_hpt_replacement_word == 0x13579bdfu
+        && unmapped;
 }

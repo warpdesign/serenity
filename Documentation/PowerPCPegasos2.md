@@ -52,7 +52,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`, and
-`HPT read-only fault passed` on the terminal.
+`HPT read-only fault passed`, and `HPT VSID switch passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -97,10 +97,13 @@ not a general kernel page-fault handler. The map, lookup, remap, and unmap
 operations now live in `Kernel/Arch/powerpc/HashPageTable.c`, take an explicit
 VSID, and reject a second mapping for the same virtual page. The boot image
 also maps a read-only page and confirms that a store faults without changing
-either the virtual or physical value. The main kernel build does not yet use
-this code. General allocation, an eviction policy when both hash groups fill,
-per-process VSID allocation,
-and a complete kernel address space remain.
+either the virtual or physical value. It then maps the same low virtual page
+under two VSIDs, changes SR1 while translation is enabled, and checks that
+each VSID reaches a distinct physical page while the kernel's SR12 mapping
+remains accessible. This uses supervisor mode; process context switching and
+user-mode protection are not implemented. The main kernel build does not yet
+use this code. General allocation, an eviction policy when both hash groups
+fill, per-process VSID allocation, and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.

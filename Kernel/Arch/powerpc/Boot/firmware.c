@@ -29,6 +29,7 @@ extern int powerpc_hpt_mapping_lifecycle(void);
 extern int powerpc_hpt_group_reuse(void);
 extern int powerpc_hpt_unmapped_fault_observed(void);
 extern int powerpc_hpt_read_only_fault_roundtrip(void);
+extern int powerpc_hpt_vsid_switch_roundtrip(void);
 
 static int is_pegasos2(void)
 {
@@ -243,5 +244,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT read-only fault passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT read-only fault failed\r\n");
+        if (powerpc_hpt_vsid_switch_roundtrip())
+            serial_write("SerenityOS PowerPC: HPT VSID switch passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: HPT VSID switch failed\r\n");
     }
 }
