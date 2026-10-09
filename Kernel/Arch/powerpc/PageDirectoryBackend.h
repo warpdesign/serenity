@@ -23,6 +23,7 @@ struct PowerPCPageDirectoryBackend {
 int powerpc_page_directory_backend_initialize(struct PowerPCPageDirectoryBackend*, struct PowerPCHashPageTable const*, struct PowerPCVSIDAllocator*);
 PowerPCVSIDWord powerpc_page_directory_backend_vsid_for(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
 int powerpc_page_directory_backend_map(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
+int powerpc_page_directory_backend_remap(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_page_directory_backend_unmap(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
 int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend const*);
 

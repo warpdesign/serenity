@@ -350,7 +350,9 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
     Word second_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
-    if (powerpc_page_directory_backend_map(&first_directory, HighDataPage, first_physical, UserPageFlags)
+    Word third_physical = (Word)(__UINTPTR_TYPE__)s_user_data_page;
+    if ((third_physical & (PageSize - 1)) != 0 || third_physical >= 0x01000000u
+        || powerpc_page_directory_backend_map(&first_directory, HighDataPage, first_physical, UserPageFlags)
         || !powerpc_page_directory_backend_map(&first_directory, UserTestAddress, first_physical, UserPageFlags)
         || !powerpc_page_directory_backend_map(&second_directory, UserTestAddress, second_physical, UserPageFlags))
         return 0;
@@ -376,11 +378,19 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     powerpc_page_directory_backend_activate(&first_directory);
     Word first_again = *alias;
+    int remapped = powerpc_page_directory_backend_remap(&first_directory, UserTestAddress, third_physical, UserPageFlags);
+    Word third_read = *alias;
+    *alias = 0xaabbccddu;
+    __asm__ volatile("sync" : : : "memory");
+    Word third_physical_read = s_user_data_page[0];
+    int restored = powerpc_page_directory_backend_remap(&first_directory, UserTestAddress, first_physical, UserPageFlags);
+    Word first_after_remap = *alias;
     *alias = 0x89abcdefu;
     powerpc_page_directory_backend_activate(&second_directory);
     Word second_again = *alias;
     *alias = 0x13579bdfu;
     powerpc_disable_boot_translation();
+    s_user_data_page[0] = 0;
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         powerpc_write_segment_register(segment, original_segments[segment]);
 
@@ -391,6 +401,8 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
         && first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
         && first_physical_read == 0x11223344u && second_physical_read == 0x55667788u
         && first_again == 0x11223344u && second_again == 0x55667788u
+        && remapped && restored && third_read == 0 && third_physical_read == 0xaabbccddu
+        && first_after_remap == 0x11223344u
         && s_hpt_payload_word == 0x89abcdefu && s_hpt_replacement_word == 0x13579bdfu
         && unmapped;
 }

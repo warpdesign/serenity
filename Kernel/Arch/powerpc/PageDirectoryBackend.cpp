@@ -41,6 +41,14 @@ int powerpc_page_directory_backend_map(PowerPCPageDirectoryBackend const* direct
     return powerpc_hpt_map(directory->table, vsid, effective_address, physical_address, lower_flags);
 }
 
+int powerpc_page_directory_backend_remap(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags)
+{
+    auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);
+    if (!vsid)
+        return 0;
+    return powerpc_hpt_remap(directory->table, vsid, effective_address, physical_address, lower_flags);
+}
+
 int powerpc_page_directory_backend_unmap(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address)
 {
     auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);

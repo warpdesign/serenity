@@ -151,8 +151,10 @@ kernel's SR12 mapping remains accessible. The segment switch accepts aligned
 unique blocks for user address spaces and reports exhaustion without reusing a
 block while old HPT entries may remain. The QEMU isolation test maps two
 allocated VSIDs to different physical pages through a PowerPC page-directory
-backend. That backend binds an allocated VSID block to the shared HPT, maps and
-unmaps user pages, and activates its segment registers. Integrating it with
+backend. That backend binds an allocated VSID block to the shared HPT, maps,
+remaps, and unmaps user pages, and activates its segment registers. The probe
+remaps one user's virtual page to a third physical page and back while the
+other user's mapping stays intact. Integrating the backend with
 Serenity's generic `PageDirectory` and memory manager remains. The high kernel
 PTEs use supervisor-only protection with SR12's user key set. The probe
 temporarily selects the protected key for supervisor access and checks that
