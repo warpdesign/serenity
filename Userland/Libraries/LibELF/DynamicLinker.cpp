@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
- * Copyright (c) 2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, the SerenityOS developers.
- * Copyright (c) 2022, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2021-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, the SerenityOS developers.
+ * Copyright (c) 2022-2026, Jesse Buhagiar <jooster669@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -18,6 +18,7 @@
 #include <AK/Vector.h>
 #include <Kernel/API/VirtualMemoryAnnotations.h>
 #include <Kernel/API/prctl_numbers.h>
+#include <LibELF/Arch/breakpoint.h>
 #include <LibELF/Arch/tls.h>
 #include <LibELF/AuxiliaryVector.h>
 #include <LibELF/DynamicLinker.h>
@@ -758,17 +759,8 @@ Examples of static-pie ELF objects are ELF packers, and the system dynamic loade
     }
 
     dbgln_if(DYNAMIC_LOAD_DEBUG, "Jumping to entry point: {:p}", entry_point_function);
-    if (s_do_breakpoint_trap_before_entry) {
-#if ARCH(AARCH64)
-        asm("brk #0");
-#elif ARCH(RISCV64)
-        asm("ebreak");
-#elif ARCH(X86_64)
-        asm("int3");
-#else
-#    error "Unknown architecture"
-#endif
-    }
+    if (s_do_breakpoint_trap_before_entry)
+        breakpoint_trap();
 
     return entry_point_function;
 }

@@ -31,6 +31,8 @@ extern int powerpc_tls_layout_test(void);
 extern int powerpc_static_tls_lookup_test(void);
 extern int powerpc_elf_entry_test(void);
 extern int powerpc_secure_plt_test(void);
+extern int powerpc_elf_breakpoint_test(void);
+extern int powerpc_syscall_invoke_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
@@ -275,6 +277,14 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: program exception roundtrip passed\r\n");
         else
             serial_write("SerenityOS PowerPC: program exception roundtrip failed\r\n");
+        if (powerpc_elf_breakpoint_test())
+            serial_write("SerenityOS PowerPC: loader breakpoint passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: loader breakpoint failed\r\n");
+        if (powerpc_syscall_invoke_test())
+            serial_write("SerenityOS PowerPC: syscall register ABI passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: syscall register ABI failed\r\n");
         if (powerpc_mmu_high_alias_roundtrip())
             serial_write("SerenityOS PowerPC: MMU high alias passed\r\n");
         else

@@ -35,6 +35,8 @@ def main():
         b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000",
         f"SerenityOS PowerPC: RAM {args.memory} MiB".encode(),
         b"SerenityOS PowerPC: program exception roundtrip passed",
+        b"SerenityOS PowerPC: loader breakpoint passed",
+        b"SerenityOS PowerPC: syscall register ABI passed",
         b"SerenityOS PowerPC: MMU high alias passed",
         b"SerenityOS PowerPC: HPT high alias passed",
         b"SerenityOS PowerPC: HPT duplicate mapping rejected",

@@ -70,6 +70,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `ELF32 entry transfer passed`,
 `secure PLT lazy binding passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
+`loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
@@ -159,6 +160,14 @@ before reporting success. This covers one exception path; the kernel still
 needs the complete vector table and register-state handling. The
 [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
+
+LibSystem now invokes PowerPC system calls with `sc`. The chosen Serenity
+PowerPC syscall ABI puts the function number in r0, up to four arguments in
+r3-r6, and the result in r3. A temporary QEMU trap handler checks all five
+LibSystem wrappers and their returned values; the probe also checks the
+loader's PowerPC breakpoint hook. The kernel still needs a real syscall
+dispatcher and complete user register state. `DynamicLinker.cpp` passes a
+PowerPC cross-compiler syntax check but has not run as a user process.
 
 The main build still cannot link Serenity's kernel for PowerPC:
 `Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC target,
