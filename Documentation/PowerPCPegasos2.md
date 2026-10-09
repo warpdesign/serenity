@@ -72,6 +72,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `CPU features passed`, `processor primitives passed`, `memory fences passed`,
+`cache maintenance passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
@@ -193,6 +194,11 @@ The architecture memory fence interface uses `sync` for full, load, and store
 fences, so cached descriptor writes can be ordered before device access. The
 probe executes all three fences; DMA visibility still needs validation on real
 Pegasos 2 hardware.
+The processor cache interface now writes back data blocks and invalidates
+instruction blocks over unaligned ranges using the 32-byte block size of the
+supported 750 and G4 CPUs. QEMU runs code copied across a block boundary,
+changes its return value, flushes the instruction cache, and checks the new
+result. Physical hardware still needs to validate cache coherency with DMA.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved
 return address from the caller's frame. QEMU checks two GCC-generated nested

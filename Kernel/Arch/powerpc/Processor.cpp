@@ -43,4 +43,41 @@ void ProcessorBase::load_fpu_state(FPUState const& state)
     ::Kernel::load_fpu_state(&state);
 }
 
+void ProcessorBase::flush_data_cache(VirtualAddress vaddr, size_t byte_count)
+{
+    if (byte_count == 0)
+        return;
+
+    constexpr u64 cache_block_size = 32;
+    u64 end = static_cast<u64>(vaddr.get()) + byte_count;
+    VERIFY(end <= 0x1'0000'0000ull);
+    u64 last_block = (end - 1) & ~(cache_block_size - 1);
+    for (u64 block = vaddr.get() & ~(cache_block_size - 1);; block += cache_block_size) {
+        auto address = static_cast<FlatPtr>(block);
+        asm volatile("dcbst 0,%0" : : "r"(address) : "memory");
+        if (block == last_block)
+            break;
+    }
+    asm volatile("sync" : : : "memory");
+}
+
+void ProcessorBase::flush_instruction_cache(VirtualAddress vaddr, size_t byte_count)
+{
+    if (byte_count == 0)
+        return;
+
+    flush_data_cache(vaddr, byte_count);
+
+    constexpr u64 cache_block_size = 32;
+    u64 end = static_cast<u64>(vaddr.get()) + byte_count;
+    u64 last_block = (end - 1) & ~(cache_block_size - 1);
+    for (u64 block = vaddr.get() & ~(cache_block_size - 1);; block += cache_block_size) {
+        auto address = static_cast<FlatPtr>(block);
+        asm volatile("icbi 0,%0" : : "r"(address) : "memory");
+        if (block == last_block)
+            break;
+    }
+    asm volatile("sync; isync" : : : "memory");
+}
+
 }
