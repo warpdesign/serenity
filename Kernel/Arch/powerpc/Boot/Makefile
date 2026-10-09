@@ -62,8 +62,11 @@ $(BUILD_DIR)/test_setjmp_registers.o: ../../../../Tests/Kernel/PowerPC/TestSetjm
 $(BUILD_DIR)/test_short_string_layout.o: ../../../../Tests/Kernel/PowerPC/TestShortStringLayout.cpp ../../../../AK/StringBase.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o linker.ld Makefile
-	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o -o $@
+$(BUILD_DIR)/test_float_digit_packing.o: ../../../../Tests/Kernel/PowerPC/TestFloatDigitPacking.cpp ../../../../AK/FloatingPointDigits.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/serenity-powerpc-boot.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o linker.ld Makefile
+	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/exception_probe.o $(BUILD_DIR)/exception_probe_vector.o $(BUILD_DIR)/user_mode_probe.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/mmu_probe_asm.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/hpt_probe.o $(BUILD_DIR)/abi.o $(BUILD_DIR)/setjmp.o $(BUILD_DIR)/test_setjmp.o $(BUILD_DIR)/test_setjmp_registers.o $(BUILD_DIR)/test_short_string_layout.o $(BUILD_DIR)/test_float_digit_packing.o -o $@
 
 check-quick: all
 	$(MAKE) -C ../../../../Tests/Toolchain/PowerPC check-quick CROSS_COMPILE=$(CROSS_COMPILE)

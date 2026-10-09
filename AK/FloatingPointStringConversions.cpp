@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2022, David Tuin <davidot@serenityos.org>
+ * Copyright (c) 2022-2026, David Tuin <davidot@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <AK/BigIntBase.h>
 #include <AK/CharacterTypes.h>
+#include <AK/FloatingPointDigits.h>
 #include <AK/FloatingPointStringConversions.h>
 #include <AK/Format.h>
 #include <AK/Math/Constants.h>
@@ -15,6 +16,8 @@
 #include <AK/UFixedBigIntDivision.h>
 
 namespace AK {
+
+using Detail::read_eight_digits;
 
 // This entire algorithm is an implementation of the paper: Number Parsing at a Gigabyte per Second
 // by Daniel Lemire, available at https://arxiv.org/abs/2101.11408 and an implementation
@@ -177,15 +180,6 @@ static constexpr auto max_representable_power_of_ten_in_u64 = 19;
 static_assert(1e19 <= static_cast<double>(NumericLimits<u64>::max()));
 static_assert(1e20 >= static_cast<double>(NumericLimits<u64>::max()));
 
-static_assert(HostIsLittleEndian, "Float parsing currently assumes little endian, this fact is only used in fast parsing of 8 digits at a time"
-                                  "\nyou _should_ only need to change read eight_digits to make this big endian compatible.");
-constexpr u64 read_eight_digits(char const* string)
-{
-    u64 val;
-    __builtin_memcpy(&val, string, sizeof(val));
-    return val;
-}
-
 constexpr static bool has_eight_digits(u64 value)
 {
     // The ascii digits 0-9 are hex 0x30 - 0x39
@@ -215,10 +209,10 @@ constexpr static u32 eight_digits_to_value(u64 value)
     // First convert the digits to their respectively numbers (0x30 -> 0x00 etc.)
     value -= 0x3030303030303030;
 
-    // Because of little endian the first number will in fact be the least significant
-    // bits of value i.e. "12345678" -> 0x0807060504030201
-    // This means that we need to shift/multiply each digit with 8 - the byte it is in
-    // So the eight need to go down, and the 01 need to be multiplied with 10000000
+    // read_eight_digits() puts the first character in the least significant byte
+    // on either host byte order. After the subtraction, "12345678" is
+    // 0x0807060504030201. We shift/multiply each digit according to its byte
+    // position: 08 must move down, and 01 must be multiplied by 10000000.
 
     // We effectively multiply by 10 and then shift those values to the right (2^8 = 256)
     // We then shift the values back down, this leads to 4 digits pairs in the 2 byte parts

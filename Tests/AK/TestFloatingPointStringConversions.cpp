@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Tomás Simões <tomasprsimoes@tecnico.ulisboa.pt>
+ * Copyright (c) 2025-2026, Tomás Simões <tomasprsimoes@tecnico.ulisboa.pt>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -64,6 +64,13 @@ static void floating_point_parsing_helper(FloatingPointTestCase const& test_case
 TEST_CASE(basic_integer)
 {
     floating_point_parsing_helper({ "123"sv, 123.0, FloatingPointError::None, 3, ParserType::Regular });
+}
+
+TEST_CASE(eight_digit_chunks)
+{
+    floating_point_parsing_helper({ "12345678.12500000"sv, 12345678.125, FloatingPointError::None, 17, ParserType::Regular });
+    floating_point_parsing_helper({ "0000000012345678"sv, 12345678.0, FloatingPointError::None, 16, ParserType::Regular });
+    floating_point_parsing_helper({ "99999999"sv, 99999999.0, FloatingPointError::None, 8, ParserType::Regular });
 }
 
 TEST_CASE(decimal_number)

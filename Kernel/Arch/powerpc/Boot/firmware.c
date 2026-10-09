@@ -22,6 +22,7 @@ static volatile unsigned char* s_uart;
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
 extern int powerpc_short_string_layout_test(void);
+extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
@@ -211,6 +212,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: big-endian short string passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian short string failed\r\n");
+        if (powerpc_float_digit_packing_test())
+            serial_write("SerenityOS PowerPC: big-endian float digits passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: big-endian float digits failed\r\n");
         serial_write("SerenityOS PowerPC: 32-bit kernel base 0x");
         serial_write_hex(powerpc_kernel_mapping_base());
         serial_write("\r\n");

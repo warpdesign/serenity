@@ -23,6 +23,7 @@ def main():
         b"SerenityOS PowerPC: serial online",
         b"SerenityOS PowerPC: setjmp roundtrip passed",
         b"SerenityOS PowerPC: big-endian short string passed",
+        b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000",
         f"SerenityOS PowerPC: RAM {args.memory} MiB".encode(),
         b"SerenityOS PowerPC: program exception roundtrip passed",

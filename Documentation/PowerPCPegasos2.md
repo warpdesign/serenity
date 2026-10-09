@@ -49,6 +49,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian short string passed`,
+`big-endian float digits passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -162,7 +163,7 @@ targets include:
 
 | Area | Finding to investigate |
 | --- | --- |
-| AK | The short-string tag now overlays the correct pointer byte on either host byte order, with a PowerPC QEMU check. `FloatingPointStringConversions.cpp` still has a little-endian assertion and a digit fast path to adapt. |
+| AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both representations, and the full float parser cross-compiles; its PowerPC runtime path still needs testing. |
 | ELF and loader | `LibELF/Validation.cpp` currently expects ELF64 little-endian, while `ELFBuild.cpp` writes that format. PowerPC needs ELF32 big-endian validation, loading, relocation, and output. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
