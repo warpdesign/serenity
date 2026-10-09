@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2024-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -21,6 +21,8 @@ void set_thread_pointer_register(FlatPtr);
 #    include <LibELF/Arch/riscv64/tls.h>
 #elif ARCH(X86_64)
 #    include <LibELF/Arch/x86_64/tls.h>
+#elif ARCH(POWERPC32)
+#    include <LibELF/Arch/powerpc/tls.h>
 #else
 #    error Unknown architecture
 #endif
