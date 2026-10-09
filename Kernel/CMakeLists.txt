@@ -625,11 +625,14 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/BootHandoff.cpp
         Arch/powerpc/FPUState.S
         Arch/powerpc/HashPageTable.cpp
+        Arch/powerpc/InterruptManagement.cpp
+        Arch/powerpc/Interrupts.cpp
         Arch/powerpc/MemoryManager.cpp
         Arch/powerpc/OpenFirmwareMemoryMap.cpp
         Arch/powerpc/PageDirectory.cpp
         Arch/powerpc/PageDirectoryContext.cpp
         Arch/powerpc/PageDirectoryBackend.cpp
+        Arch/powerpc/Pegasos2/InterruptController.cpp
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp
         Arch/powerpc/SegmentRegisters.cpp

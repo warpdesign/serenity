@@ -90,6 +90,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `RAM 256 MiB`, `firmware memory ranges passed`,
 `program exception roundtrip passed`,
 `decrementer interrupt passed`,
+`legacy PIC IRQ0 acknowledge passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT and timebase boot handoff passed`,
@@ -245,8 +246,13 @@ defines the decrementer exception and its vector. The boot probe temporarily
 masks both Pegasos 2 legacy 8259 controllers while CPU external interrupts are
 enabled, then restores their masks. QEMU otherwise delivers a device interrupt
 at the unimplemented `0x500` vector during the second tick. The full kernel
-still needs a device interrupt entry path and timer callback dispatch in the
-full kernel.
+still needs a device interrupt entry path and timer callback dispatch.
+The Pegasos 2 controller now uses Serenity's `IRQController` interface with
+MMIO mappings for the VT8231 I/O ports and MV64361 interrupt acknowledge
+window. The same register logic runs in the real-mode probe: it programs PIT
+channel 0, acknowledges IRQ0 through the bridge, checks edge EOI, and checks
+slave cascade mask changes. The controller and handler table compile for
+PowerPC; the kernel exception vector has not yet dispatched an IRQ to them.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond

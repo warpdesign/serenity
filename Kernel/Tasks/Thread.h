@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,7 @@
 #include <AK/Optional.h>
 #include <AK/OwnPtr.h>
 #include <AK/Platform.h>
+#include <AK/RefPtr.h>
 #include <AK/Time.h>
 #include <AK/Variant.h>
 #include <AK/Vector.h>

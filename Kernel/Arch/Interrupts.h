@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2022-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -15,6 +15,8 @@
 #    include <Kernel/Arch/x86_64/Interrupts.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/Interrupts.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/Interrupts.h>
 #endif
 
 namespace Kernel {

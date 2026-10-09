@@ -13,7 +13,9 @@ CXXFLAGS := $(CFLAGS) -std=c++23 -fno-exceptions -fno-rtti -I../../.. -Wno-liter
 .PHONY: check check-quick clean
 
 check-quick:
-	mkdir -p $(BUILD_DIR)
+	mkdir -p $(BUILD_DIR)/AK $(BUILD_DIR)/Kernel
+	sed -E 's/^#    cmakedefine01 ([A-Z0-9_]+)/#    define \1 0/' ../../../AK/Debug.h.in > $(BUILD_DIR)/AK/Debug.h
+	sed -E 's/^#cmakedefine01 ([A-Z0-9_]+)/#define \1 0/' ../../../Kernel/Debug.h.in > $(BUILD_DIR)/Kernel/Debug.h
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -DTEST_POWERPC_LAYOUT -fsyntax-only Test32BitLayout.c
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -fsyntax-only Test32BitLayout.c
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/SegmentRegisters.cpp
@@ -32,6 +34,9 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestCPUFeatures.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestProcessor.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only ../../../Kernel/Arch/powerpc/Processor.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/InterruptManagement.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Interrupts.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Pegasos2/InterruptController.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only TestMemoryFences.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestCacheMaintenance.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestTLBMaintenance.cpp
@@ -62,8 +67,6 @@ check-quick:
 	$(CC) $(CFLAGS) -c TestSyscallInvoke.S -o $(BUILD_DIR)/TestSyscallInvoke.o
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries -fsyntax-only TestELFBreakpoint.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries -fsyntax-only TestSecurePLT.cpp
-	mkdir -p $(BUILD_DIR)/AK
-	sed -E 's/^#    cmakedefine01 ([A-Z0-9_]+)/#    define \1 0/' ../../../AK/Debug.h.in > $(BUILD_DIR)/AK/Debug.h
 	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicLoader.cpp
 	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibSystem -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicLinker.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -fsyntax-only TestLibCHeaders.cpp
