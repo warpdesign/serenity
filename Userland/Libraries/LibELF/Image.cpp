@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -294,6 +294,8 @@ Optional<StringView> Image::object_machine_type_to_string(Elf_Half type)
         return "MIPS R3000 Big-Endian only"sv;
     case EM_X86_64:
         return "x86_64"sv;
+    case EM_PPC:
+        return "PowerPC"sv;
     default:
         return {};
     }

@@ -23,6 +23,25 @@ void* memset(void* destination, int value, Size count)
     return destination;
 }
 
+int memcmp(void const* first, void const* second, Size count)
+{
+    unsigned char const* a = first;
+    unsigned char const* b = second;
+    for (Size index = 0; index < count; ++index) {
+        if (a[index] != b[index])
+            return (int)a[index] - (int)b[index];
+    }
+    return 0;
+}
+
+Size strnlen(char const* string, Size maximum)
+{
+    Size length = 0;
+    while (length < maximum && string[length] != '\0')
+        ++length;
+    return length;
+}
+
 __attribute__((noreturn)) void ak_verification_failed(char const* message)
 {
     (void)message;

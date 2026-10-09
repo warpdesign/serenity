@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -60,9 +60,9 @@ public:
         unsigned index() const { return m_index; }
         unsigned type() const
         {
-            return ELF64_ST_TYPE(m_sym.st_info);
+            return ELF_ST_TYPE(m_sym.st_info);
         }
-        unsigned bind() const { return ELF64_ST_BIND(m_sym.st_info); }
+        unsigned bind() const { return ELF_ST_BIND(m_sym.st_info); }
         Section section() const
         {
             return m_image.section(section_index());
@@ -127,7 +127,7 @@ public:
         ReadonlyBytes bytes() const { return { raw_data(), size() }; }
         auto flags() const { return m_section_header.sh_flags; }
         bool is_writable() const { return flags() & SHF_WRITE; }
-        bool is_executable() const { return flags() & PF_X; }
+        bool is_executable() const { return flags() & SHF_EXECINSTR; }
 
     protected:
         friend class RelocationSection;
@@ -165,9 +165,9 @@ public:
         size_t offset() const { return m_rel.r_offset; }
         unsigned type() const
         {
-            return ELF64_R_TYPE(m_rel.r_info);
+            return ELF_R_TYPE(m_rel.r_info);
         }
-        unsigned symbol_index() const { return ELF64_R_SYM(m_rel.r_info); }
+        unsigned symbol_index() const { return ELF_R_SYM(m_rel.r_info); }
         Symbol symbol() const
         {
             return m_image.symbol(symbol_index());
@@ -221,7 +221,7 @@ public:
     bool is_dynamic() const { return header().e_type == ET_DYN; }
 
     VirtualAddress entry() const { return VirtualAddress(header().e_entry); }
-    Elf64_Quarter machine() const { return header().e_machine; }
+    Elf_Half machine() const { return header().e_machine; }
     FlatPtr base_address() const { return (FlatPtr)m_buffer; }
     size_t size() const { return m_size; }
 

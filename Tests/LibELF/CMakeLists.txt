@@ -41,6 +41,7 @@ endmacro()
 
 set(TEST_SOURCES
     TestDlOpen.cpp
+    TestNativeImage.cpp
     TestNativeValidation.cpp
     TestOrder.cpp
     TestTLS.cpp
@@ -59,6 +60,7 @@ foreach(source IN LISTS TEST_SOURCES)
 endforeach()
 
 target_link_libraries(TestNativeValidation PRIVATE LibELF)
+target_link_libraries(TestNativeImage PRIVATE LibELF)
 
 # test-elf.cpp
 if (NOT BUILD_LAGOM)

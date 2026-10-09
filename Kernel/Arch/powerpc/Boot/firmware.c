@@ -25,6 +25,7 @@ extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
 extern int powerpc_native_elf_header_test(void);
+extern int powerpc_native_elf_image_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
@@ -226,6 +227,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: ELF32 big-endian header passed\r\n");
         else
             serial_write("SerenityOS PowerPC: ELF32 big-endian header failed\r\n");
+        if (powerpc_native_elf_image_test())
+            serial_write("SerenityOS PowerPC: ELF32 big-endian image passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: ELF32 big-endian image failed\r\n");
         serial_write("SerenityOS PowerPC: 32-bit kernel base 0x");
         serial_write_hex(powerpc_kernel_mapping_base());
         serial_write("\r\n");
