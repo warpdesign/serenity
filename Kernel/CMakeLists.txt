@@ -623,6 +623,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         ${KERNEL_SOURCES}
         Arch/powerpc/CPUID.cpp
         Arch/powerpc/FPUState.S
+        Arch/powerpc/Processor.cpp
     )
 endif()
 

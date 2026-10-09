@@ -71,7 +71,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 ```
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
-`CPU features passed`,
+`CPU features passed`, `processor primitives passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
@@ -184,6 +184,11 @@ that provide it. PowerPC CPU identification now reads PVR and distinguishes
 the tested 750-family and AltiVec-capable G4 models; QEMU checks the selected
 features and the FPU-enable bit in MSR. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
+The single-core `Processor` path now identifies the boot CPU, tracks critical
+depth and scheduler state, controls external interrupts through MSR, and reads
+the 64-bit timebase. The QEMU probe checks these operations on the default CPU
+and a 750cxe. Full processor initialization, TLB and cache maintenance, trap
+entry, and context switching still require kernel integration.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved
 return address from the caller's frame. QEMU checks two GCC-generated nested
