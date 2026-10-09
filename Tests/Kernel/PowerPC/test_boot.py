@@ -30,6 +30,7 @@ def main():
         b"SerenityOS PowerPC: ELF32 relative relocations passed",
         b"SerenityOS PowerPC: PPC32 TLS layout passed",
         b"SerenityOS PowerPC: PPC32 static TLS lookup passed",
+        b"SerenityOS PowerPC: ELF32 entry transfer passed",
         b"SerenityOS PowerPC: 32-bit kernel base 0xc0000000",
         f"SerenityOS PowerPC: RAM {args.memory} MiB".encode(),
         b"SerenityOS PowerPC: program exception roundtrip passed",
