@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
- * Copyright (c) 2022, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -25,6 +25,8 @@
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/Timer.h>
 #    include <Kernel/Devices/Time/GoldfishRTC.h>
+#elif ARCH(POWERPC32)
+    // The PowerPC timer implementation lives in Arch/powerpc/Time.
 #else
 #    error Unknown architecture
 #endif
@@ -208,7 +210,7 @@ UNMAP_AFTER_INIT void TimeManagement::initialize([[maybe_unused]] u32 cpu)
         VERIFY(!s_the.is_initialized());
         s_the.ensure_instance();
     }
-#elif ARCH(RISCV64)
+#elif ARCH(RISCV64) || ARCH(POWERPC32)
     if (cpu == 0) {
         VERIFY(!s_the.is_initialized());
         s_the.ensure_instance();
@@ -251,6 +253,8 @@ UnixDateTime TimeManagement::boot_time()
     if (!rtc)
         return UnixDateTime::epoch();
     return rtc->boot_time();
+#elif ARCH(POWERPC32)
+    return UnixDateTime::epoch();
 #else
 #    error Unknown architecture
 #endif
@@ -296,6 +300,8 @@ UNMAP_AFTER_INIT TimeManagement::TimeManagement()
     if (rtc)
         m_epoch_time += boot_time().offset_to_epoch();
     probe_and_set_riscv64_hardware_timers();
+#elif ARCH(POWERPC32)
+    probe_and_set_powerpc_hardware_timers();
 #else
 #    error Unknown architecture
 #endif
@@ -486,6 +492,8 @@ UNMAP_AFTER_INIT bool TimeManagement::probe_and_set_riscv64_hardware_timers()
 
     return true;
 }
+#elif ARCH(POWERPC32)
+// Implemented in Arch/powerpc/Time/TimeManagement.cpp.
 #else
 #    error Unknown architecture
 #endif

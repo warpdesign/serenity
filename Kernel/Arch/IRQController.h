@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2022-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include <Kernel/Arch/aarch64/IRQController.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/IRQController.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/IRQController.h>
 #else
 #    error "Unknown architecture"
 #endif

@@ -634,6 +634,8 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Processor.cpp
         Arch/powerpc/SegmentRegisters.cpp
         Arch/powerpc/TLB.cpp
+        Arch/powerpc/Time/TimeManagement.cpp
+        Arch/powerpc/Time/Timer.cpp
         Arch/powerpc/VSIDAllocator.cpp
     )
 endif()

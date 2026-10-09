@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -26,6 +26,9 @@ enum class HardwareTimerType {
 
     // RISC-V
     RISCVTimer,
+
+    // PowerPC
+    PowerPCDecrementer,
 };
 
 template<typename InterruptHandlerType>

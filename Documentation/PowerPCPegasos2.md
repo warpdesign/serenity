@@ -92,7 +92,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `decrementer interrupt passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
-`HPT boot handoff passed`,
+`HPT and timebase boot handoff passed`,
 `HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `processor TLB maintenance passed`,
@@ -245,7 +245,13 @@ defines the decrementer exception and its vector. The boot probe temporarily
 masks both Pegasos 2 legacy 8259 controllers while CPU external interrupts are
 enabled, then restores their masks. QEMU otherwise delivers a device interrupt
 at the unimplemented `0x500` vector during the second tick. The full kernel
-still needs a device interrupt entry path and time manager integration.
+still needs a device interrupt entry path and timer callback dispatch in the
+full kernel.
+PowerPC boot information now has a validated timebase-frequency field, and the
+kernel timer object can use it to update the monotonic clock and rearm DEC.
+The standalone probe checks the handoff value and long-interval nanosecond
+conversion. The kernel timer objects compile with the PowerPC Serenity toolchain;
+they have not yet run through a full kernel exception dispatcher.
 The architecture memory fence interface uses `sync` for full, load, and store
 fences, so cached descriptor writes can be ordered before device access. The
 probe executes all three fences; DMA visibility still needs validation on real

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -90,6 +90,8 @@ private:
     bool probe_and_set_aarch64_hardware_timers();
 #elif ARCH(RISCV64)
     bool probe_and_set_riscv64_hardware_timers();
+#elif ARCH(POWERPC32)
+    bool probe_and_set_powerpc_hardware_timers();
 #else
 #    error Unknown architecture
 #endif
