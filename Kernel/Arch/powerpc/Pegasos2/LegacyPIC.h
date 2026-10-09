@@ -8,6 +8,7 @@
 
 #include <AK/Optional.h>
 #include <AK/Types.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 
 namespace Kernel::PowerPC::Pegasos2 {
 
@@ -15,9 +16,9 @@ namespace Kernel::PowerPC::Pegasos2 {
 // supplies mapped addresses, so the same operations work in real and paged mode.
 class LegacyPIC {
 public:
-    static constexpr u32 io_physical_base = 0xfe000000u;
-    static constexpr u32 intack_physical_base = 0xf1000000u;
-    static constexpr u32 intack_offset = 0xcb4u;
+    static constexpr u32 io_physical_base = PEGASOS2_PCI_IO_PHYSICAL_BASE;
+    static constexpr u32 intack_physical_base = PEGASOS2_INTACK_PHYSICAL_BASE;
+    static constexpr u32 intack_offset = PEGASOS2_INTACK_OFFSET;
     static constexpr u32 io_window_size = 0x10000u;
 
     LegacyPIC(volatile u8* io_ports, volatile u8* intack)

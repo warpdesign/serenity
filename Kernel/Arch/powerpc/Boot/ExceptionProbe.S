@@ -98,9 +98,33 @@ powerpc_external_interrupt_probe_handler:
     mfspr 0, 27
     stw 0, 196(1)
 
+    lis 12, powerpc_probe_use_high_irq_handler@ha
+    lwz 12, powerpc_probe_use_high_irq_handler@l(12)
+    cmpwi 12, 0
+    bne .Lenter_high_external_handler
+
+    addi 3, 1, 48
+    bl powerpc_external_irq_probe_dispatch
+    b .Lrestore_external_state
+
+.Lenter_high_external_handler:
+    lis 1, POWERPC_HPT_EXCEPTION_STACK_SEGMENT
+    ori 1, 1, 0x0f20     // Top of one page minus the 224-byte frame.
+    mfmsr 12
+    ori 12, 12, 0x32    // Supervisor IR | DR | RI, with EE disabled.
+    mtspr 27, 12
+    lis 12, powerpc_external_interrupt_high_handler@ha
+    addi 12, 12, powerpc_external_interrupt_high_handler@l
+    addis 12, 12, 0xc000
+    mtspr 26, 12
+    rfi
+
+.global powerpc_external_interrupt_high_handler
+powerpc_external_interrupt_high_handler:
     addi 3, 1, 48
     bl powerpc_external_irq_probe_dispatch
 
+.Lrestore_external_state:
     lwz 0, 176(1)
     mtcrf 255, 0
     lwz 0, 180(1)
@@ -204,9 +228,11 @@ powerpc_probe_read_only_store:
 .size powerpc_probe_read_only_store, .-powerpc_probe_read_only_store
 
 .section .bss, "aw", @nobits
-.balign 16
+.balign 4096
+.global powerpc_probe_exception_stack
 powerpc_probe_exception_stack:
     .space 4096
+.global powerpc_probe_exception_stack_top
 powerpc_probe_exception_stack_top:
 .balign 4096
 .global powerpc_probe_high_stack
@@ -214,3 +240,7 @@ powerpc_probe_high_stack:
     .space 4096
 .global powerpc_probe_high_stack_top
 powerpc_probe_high_stack_top:
+.balign 4
+.global powerpc_probe_use_high_irq_handler
+powerpc_probe_use_high_irq_handler:
+    .long 0

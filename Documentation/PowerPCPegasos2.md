@@ -96,6 +96,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `MMU high alias passed`, `translated external IRQ stack passed`,
 `HPT high alias passed`,
 `HPT external IRQ stack passed`,
+`HPT high IRQ handler passed`,
 `HPT and timebase boot handoff passed`,
 `HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -267,9 +268,15 @@ supervisor code through the boot probe's identity instruction BAT. A kernel
 entry must establish translated kernel mappings before it calls registered
 handlers and handle user-mode IRQs on the same safe stack.
 The HPT IRQ probe removes the high BAT, maps a dedicated high stack page in
-the hash table, and checks an external IRQ roundtrip on that stack. Its C
-handler still runs through the low physical code mapping; a kernel entry must
-switch to high translated code before calling normal kernel handlers.
+the hash table, and checks an external IRQ roundtrip on that stack. A further
+probe maps the text, exception stack, PIC I/O page, and interrupt-acknowledge
+page through the HPT. The physical vector saves the interrupted state, then
+uses `rfi` to enter the high mapped handler with translation enabled and EE
+disabled. That handler calls C code through its high alias and restores the
+original SRR state with a second `rfi`. QEMU checks the high return address
+and access to cache-inhibited, guarded PIC mappings. The full kernel still
+needs to install this entry path and dispatch to registered handlers, including
+interrupts taken from user mode.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond

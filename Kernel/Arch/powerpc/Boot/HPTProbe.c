@@ -8,6 +8,7 @@
 #include <Kernel/Arch/powerpc/Boot/ProbeAddresses.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
 #include <Kernel/Arch/powerpc/PhysicalPageArray.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
@@ -28,6 +29,9 @@ enum {
     QuickmapTestAddress = KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * PageSize,
     PhysicalArrayTestAddress = 0xc2400000u,
     IRQStackTestAddress = POWERPC_HPT_IRQ_STACK_ADDRESS,
+    ExceptionStackTestAddress = POWERPC_HPT_EXCEPTION_STACK_ADDRESS,
+    IntackTestAddress = POWERPC_HPT_INTACK_ADDRESS,
+    PICIOTestAddress = POWERPC_HPT_PIC_IO_ADDRESS,
     UserTestAddress = 0x10000000,
     UserProbeCodePage = 0x10010000,
     UserProbeDataPage = 0x10020000,
@@ -38,6 +42,7 @@ enum {
     CollisionCount = 9,
     CollisionGroupCapacity = 2 * PageTableEntriesPerGroup,
     KernelPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_SUPERVISOR_ONLY,
+    IOPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_CACHE_INHIBITED | POWERPC_HPT_GUARDED | POWERPC_HPT_SUPERVISOR_ONLY,
     UserPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_WRITE,
 };
 
@@ -98,6 +103,9 @@ extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top);
 extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
 extern unsigned char powerpc_probe_high_stack[];
+extern unsigned char powerpc_probe_exception_stack[];
+extern char __text_end[];
+extern volatile Word powerpc_probe_use_high_irq_handler;
 extern int powerpc_run_hpt_stack_external_irq_probe(Word timebase_frequency);
 
 static int map_high_page(Word effective_address, Word physical_address)
@@ -194,6 +202,87 @@ int powerpc_hpt_external_irq_stack_roundtrip(Word timebase_frequency)
     int unmapped = unmap_high_page(IRQStackTestAddress);
     __asm__ volatile("mfspr %0,530; mfspr %1,538" : "=r"(instruction_bat_high), "=r"(data_bat_high));
     return passed && unmapped && instruction_bat_high == 0 && data_bat_high == 0;
+}
+
+int powerpc_hpt_external_irq_high_handler_roundtrip(Word timebase_frequency)
+{
+    enum { TextStart = 0x00200000u, MaximumTextPages = 128 };
+    Word text_end = (Word)(__UINTPTR_TYPE__)__text_end;
+    Word high_stack = (Word)(__UINTPTR_TYPE__)powerpc_probe_high_stack;
+    Word exception_stack = (Word)(__UINTPTR_TYPE__)powerpc_probe_exception_stack;
+    Word instruction_bat_high;
+    Word data_bat_high;
+    __asm__ volatile("mfspr %0,530; mfspr %1,538" : "=r"(instruction_bat_high), "=r"(data_bat_high));
+    if (!timebase_frequency || text_end <= TextStart || text_end > TextStart + MaximumTextPages * PageSize
+        || (high_stack & (PageSize - 1)) || (exception_stack & (PageSize - 1))
+        || high_stack >= 0x01000000u - PageSize || exception_stack >= 0x01000000u - PageSize
+        || instruction_bat_high != 0 || data_bat_high != 0)
+        return 0;
+
+    Word text_pages = (text_end - TextStart + PageSize - 1) / PageSize;
+    unsigned char new_text_mapping[MaximumTextPages] = { 0 };
+    int high_stack_mapped = 0;
+    int exception_stack_mapped = 0;
+    int intack_mapped = 0;
+    int pic_io_mapped = 0;
+    int passed = 0;
+    int cleanup_ok = 1;
+
+    for (Word index = 0; index < text_pages; ++index) {
+        Word physical = TextStart + index * PageSize;
+        Word high = KERNEL_MAPPING_BASE + physical;
+        struct PowerPCHPTEntry* existing = find_high_page(high);
+        if (existing) {
+            if ((existing->lower & ~(Word)(PageSize - 1)) != physical)
+                goto cleanup;
+            continue;
+        }
+        if (!map_high_page(high, physical))
+            goto cleanup;
+        new_text_mapping[index] = 1;
+    }
+
+    if (!map_high_page(IRQStackTestAddress, high_stack))
+        goto cleanup;
+    high_stack_mapped = 1;
+    if (!map_high_page(ExceptionStackTestAddress, exception_stack))
+        goto cleanup;
+    exception_stack_mapped = 1;
+    if (!powerpc_hpt_map(&s_hpt, KernelVSID, IntackTestAddress, PEGASOS2_INTACK_PHYSICAL_BASE, IOPageFlags))
+        goto cleanup;
+    intack_mapped = 1;
+    if (!powerpc_hpt_map(&s_hpt, KernelVSID, PICIOTestAddress, PEGASOS2_PCI_IO_PHYSICAL_BASE, IOPageFlags))
+        goto cleanup;
+    pic_io_mapped = 1;
+    struct PowerPCHPTEntry* intack_entry = find_high_page(IntackTestAddress);
+    struct PowerPCHPTEntry* pic_io_entry = find_high_page(PICIOTestAddress);
+    Word required_io_flags = POWERPC_HPT_CACHE_INHIBITED | POWERPC_HPT_GUARDED;
+    if (!intack_entry || !pic_io_entry
+        || (intack_entry->lower & required_io_flags) != required_io_flags
+        || (pic_io_entry->lower & required_io_flags) != required_io_flags)
+        goto cleanup;
+
+    powerpc_probe_use_high_irq_handler = 1;
+    __asm__ volatile("sync" : : : "memory");
+    passed = powerpc_run_hpt_stack_external_irq_probe(timebase_frequency);
+    powerpc_probe_use_high_irq_handler = 0;
+    __asm__ volatile("sync" : : : "memory");
+
+cleanup:
+    if (pic_io_mapped && !unmap_high_page(PICIOTestAddress))
+        cleanup_ok = 0;
+    if (intack_mapped && !unmap_high_page(IntackTestAddress))
+        cleanup_ok = 0;
+    if (exception_stack_mapped && !unmap_high_page(ExceptionStackTestAddress))
+        cleanup_ok = 0;
+    if (high_stack_mapped && !unmap_high_page(IRQStackTestAddress))
+        cleanup_ok = 0;
+    for (Word index = 0; index < text_pages; ++index) {
+        if (new_text_mapping[index] && !unmap_high_page(KERNEL_MAPPING_BASE + TextStart + index * PageSize))
+            cleanup_ok = 0;
+    }
+    __asm__ volatile("mfspr %0,530; mfspr %1,538" : "=r"(instruction_bat_high), "=r"(data_bat_high));
+    return passed && cleanup_ok && instruction_bat_high == 0 && data_bat_high == 0;
 }
 
 int powerpc_hpt_duplicate_mapping_rejected(void)

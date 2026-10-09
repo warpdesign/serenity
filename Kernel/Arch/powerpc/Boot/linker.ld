@@ -10,6 +10,7 @@ SECTIONS
 {
     . = 0x00200000;
     .text : { KEEP(*(.text.first)) *(.text*) }
+    __text_end = .;
     .rodata : { *(.rodata*) }
     .data : { *(.data*) *(.sdata*) }
     .bss (NOLOAD) :

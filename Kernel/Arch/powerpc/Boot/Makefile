@@ -74,7 +74,7 @@ $(BUILD_DIR)/mmu_probe_asm.o: MMUProbe.S | $(BUILD_DIR)
 $(BUILD_DIR)/hash_page_table.o: ../HashPageTable.cpp ../HashPageTable.h ../TLB.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ProbeAddresses.h ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../PhysicalPageArray.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
+$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ProbeAddresses.h ../Pegasos2/HardwareAddresses.h ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../PhysicalPageArray.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
 $(BUILD_DIR)/physical_page_array.o: ../PhysicalPageArray.cpp ../PhysicalPageArray.h ../PageDirectoryBackend.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)
@@ -245,7 +245,7 @@ $(BUILD_DIR)/test_decrementer.o: ../../../../Tests/Kernel/PowerPC/TestDecremente
 $(BUILD_DIR)/test_legacy_pic.o: ../../../../Tests/Kernel/PowerPC/TestLegacyPIC.cpp ../Time/Timebase.h ../Pegasos2/LegacyPIC.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_external_irq.o: ../../../../Tests/Kernel/PowerPC/TestExternalIRQ.cpp ../Time/Timebase.h ../Pegasos2/LegacyPIC.h ../ExceptionState.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_external_irq.o: ../../../../Tests/Kernel/PowerPC/TestExternalIRQ.cpp ProbeAddresses.h ../Time/Timebase.h ../Pegasos2/LegacyPIC.h ../ExceptionState.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/runtime.o: Runtime.c | $(BUILD_DIR)
