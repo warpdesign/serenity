@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -15,6 +15,8 @@
 #    include <Kernel/Arch/aarch64/PageDirectory.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/PageDirectory.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/PageDirectory.h>
 #else
 #    error "Unknown architecture"
 #endif

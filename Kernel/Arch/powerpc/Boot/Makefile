@@ -25,7 +25,7 @@ CPU_TEST_OBJECTS := $(BUILD_DIR)/cpu_features.o $(BUILD_DIR)/test_cpu_features.o
 PROCESSOR_TEST_OBJECTS := $(BUILD_DIR)/processor.o $(BUILD_DIR)/test_processor.o
 MEMORY_FENCES_TEST_OBJECTS := $(BUILD_DIR)/test_memory_fences.o
 CACHE_TEST_OBJECTS := $(BUILD_DIR)/test_cache_maintenance.o
-TLB_TEST_OBJECTS := $(BUILD_DIR)/test_tlb_maintenance.o
+TLB_TEST_OBJECTS := $(BUILD_DIR)/tlb.o $(BUILD_DIR)/test_tlb_maintenance.o
 SEGMENT_REGISTER_OBJECTS := $(BUILD_DIR)/segment_registers.o
 PAGE_DIRECTORY_BACKEND_OBJECTS := $(BUILD_DIR)/page_directory_backend.o
 PAGE_MAPPING_TEST_OBJECTS := $(BUILD_DIR)/test_page_mapping.o
@@ -65,8 +65,8 @@ $(BUILD_DIR)/mmu_probe.o: MMUProbe.c ../MemoryLayout.h | $(BUILD_DIR)
 $(BUILD_DIR)/mmu_probe_asm.o: MMUProbe.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/hash_page_table.o: ../HashPageTable.c ../HashPageTable.h | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
+$(BUILD_DIR)/hash_page_table.o: ../HashPageTable.cpp ../HashPageTable.h ../TLB.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../SegmentRegisters.h ../VSIDAllocator.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
@@ -109,6 +109,9 @@ $(BUILD_DIR)/test_cache_maintenance.o: ../../../../Tests/Kernel/PowerPC/TestCach
 
 $(BUILD_DIR)/test_tlb_maintenance.o: ../../../../Tests/Kernel/PowerPC/TestTLBMaintenance.cpp ../Processor.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/tlb.o: ../TLB.cpp ../TLB.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/setjmp.o: ../../../../Userland/Libraries/LibC/arch/powerpc/setjmp.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@

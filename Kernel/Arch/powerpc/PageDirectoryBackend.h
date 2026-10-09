@@ -25,6 +25,7 @@ PowerPCVSIDWord powerpc_page_directory_backend_vsid_for(struct PowerPCPageDirect
 int powerpc_page_directory_backend_map(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_page_directory_backend_remap(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_page_directory_backend_unmap(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
+int powerpc_page_directory_backend_purge(struct PowerPCPageDirectoryBackend const*);
 int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend const*);
 
 #ifdef __cplusplus

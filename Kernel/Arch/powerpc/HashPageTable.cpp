@@ -5,9 +5,10 @@
  */
 
 #include <Kernel/Arch/powerpc/HashPageTable.h>
+#include <Kernel/Arch/powerpc/TLB.h>
 
-_Static_assert(sizeof(PowerPCHPTWord) == 4, "PowerPC HPT word size");
-_Static_assert(sizeof(struct PowerPCHPTEntry) == 8, "PowerPC HPT entry size");
+static_assert(sizeof(PowerPCHPTWord) == 4, "PowerPC HPT word size");
+static_assert(sizeof(PowerPCHPTEntry) == 8, "PowerPC HPT entry size");
 
 static int valid_table(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsid, PowerPCHPTWord effective_address)
 {
@@ -25,7 +26,7 @@ static PowerPCHPTWord primary_hash(PowerPCHPTWord vsid, PowerPCHPTWord effective
 static PowerPCHPTWord upper_word(PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord secondary)
 {
     return POWERPC_HPT_VALID | (vsid << 7) | ((effective_address >> 22) & 0x3fu)
-        | (secondary ? POWERPC_HPT_SECONDARY_HASH : 0);
+        | (secondary ? static_cast<PowerPCHPTWord>(POWERPC_HPT_SECONDARY_HASH) : 0u);
 }
 
 static struct PowerPCHPTEntry* group_for(struct PowerPCHashPageTable const* table, PowerPCHPTWord hash)
@@ -75,8 +76,7 @@ int powerpc_hpt_map(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsi
 static void invalidate_entry(PowerPCHPTWord effective_address, struct PowerPCHPTEntry* entry)
 {
     entry->upper = 0;
-    __asm__ volatile("sync" : : : "memory");
-    __asm__ volatile("tlbie %0; eieio; tlbsync; sync" : : "r"(effective_address) : "memory");
+    powerpc_flush_tlb_page(effective_address);
 }
 
 int powerpc_hpt_unmap(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsid, PowerPCHPTWord effective_address)
@@ -86,6 +86,34 @@ int powerpc_hpt_unmap(struct PowerPCHashPageTable const* table, PowerPCHPTWord v
         return 0;
     invalidate_entry(effective_address, entry);
     return 1;
+}
+
+int powerpc_hpt_purge_vsid_block(struct PowerPCHashPageTable const* table, PowerPCHPTWord first_vsid, PowerPCHPTWord vsid_count)
+{
+    if (!table || !table->entries || table->group_count == 0
+        || (table->group_count & (table->group_count - 1)) != 0
+        || table->group_count > 0xffffffffu / POWERPC_HPT_ENTRIES_PER_GROUP
+        || vsid_count == 0 || vsid_count > 0x01000000u
+        || first_vsid > 0x01000000u - vsid_count)
+        return -1;
+
+    int removed = 0;
+    PowerPCHPTWord entry_count = table->group_count * POWERPC_HPT_ENTRIES_PER_GROUP;
+    for (PowerPCHPTWord index = 0; index < entry_count; ++index) {
+        struct PowerPCHPTEntry* entry = &table->entries[index];
+        PowerPCHPTWord upper = entry->upper;
+        if ((upper & POWERPC_HPT_VALID) == 0)
+            continue;
+        PowerPCHPTWord vsid = (upper >> 7) & 0x00ffffffu;
+        if (vsid >= first_vsid && vsid - first_vsid < vsid_count) {
+            entry->upper = 0;
+            ++removed;
+        }
+    }
+
+    if (removed != 0)
+        powerpc_flush_entire_tlb();
+    return removed;
 }
 
 int powerpc_hpt_remap(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags)

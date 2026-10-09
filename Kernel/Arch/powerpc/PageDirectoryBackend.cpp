@@ -57,6 +57,13 @@ int powerpc_page_directory_backend_unmap(PowerPCPageDirectoryBackend const* dire
     return powerpc_hpt_unmap(directory->table, vsid, effective_address);
 }
 
+int powerpc_page_directory_backend_purge(PowerPCPageDirectoryBackend const* directory)
+{
+    if (!directory || !directory->table || !powerpc_user_vsid_base_valid(directory->user_vsid_base))
+        return -1;
+    return powerpc_hpt_purge_vsid_block(directory->table, directory->user_vsid_base, POWERPC_USER_SEGMENT_COUNT);
+}
+
 int powerpc_page_directory_backend_activate(PowerPCPageDirectoryBackend const* directory)
 {
     if (!directory || !directory->table)

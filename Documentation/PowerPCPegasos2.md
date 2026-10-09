@@ -141,7 +141,7 @@ removed alias then enters a probe-only data-storage exception vector at
 `0x300`; the check verifies the fault address in `DAR` and the missing-page
 status in `DSISR`. The vector skips that one load to resume the probe; it is
 not a general kernel page-fault handler. The map, lookup, remap, and unmap
-operations now live in `Kernel/Arch/powerpc/HashPageTable.c`, take an explicit
+operations now live in `Kernel/Arch/powerpc/HashPageTable.cpp`, take an explicit
 VSID, and reject a second mapping for the same virtual page. The boot image
 also maps a read-only page and confirms that a store faults without changing
 either the virtual or physical value. It then maps the same low virtual page
@@ -155,13 +155,18 @@ allocated VSIDs to different physical pages through a PowerPC page-directory
 backend. That backend binds an allocated VSID block to the shared HPT, maps,
 remaps, and unmaps user pages, and activates its segment registers. The probe
 remaps one user's virtual page to a third physical page and back while the
-other user's mapping stays intact. Integrating the backend with
-Serenity's generic `PageDirectory` and memory manager remains. Generic `Region`
+other user's mapping stays intact. A PowerPC `PageDirectory` now owns that
+backend and registers user directories by VSID. Destruction purges the
+directory's HPT entries; QEMU checks that purging one address space leaves the
+other address space accessible. Its boot-time shared HPT installation still
+needs to be connected to the Open Firmware kernel handoff. Generic `Region`
 mapping now passes a complete request to an architecture-selected mapping
 operation instead of mutating a PTE field by field. The existing hierarchical
 architectures use their PTEs; the PowerPC backend applies the same request to
 the HPT for user pages. QEMU checks the resulting physical page, permissions,
-and normal, noncacheable, and guarded I/O attributes. Early physical-page
+and normal, noncacheable, and guarded I/O attributes. Kernel-only activation
+selects reserved user-segment VSIDs while leaving SR12-SR15 intact; QEMU checks
+the register values. Early physical-page
 metadata mapping, quickmap, and kernel protection still require PowerPC
 implementations. The high kernel PTEs use supervisor-only protection with
 SR12's user key set. The probe

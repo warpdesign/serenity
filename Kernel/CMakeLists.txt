@@ -623,9 +623,13 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         ${KERNEL_SOURCES}
         Arch/powerpc/CPUID.cpp
         Arch/powerpc/FPUState.S
+        Arch/powerpc/HashPageTable.cpp
+        Arch/powerpc/PageDirectory.cpp
+        Arch/powerpc/PageDirectoryContext.cpp
         Arch/powerpc/PageDirectoryBackend.cpp
         Arch/powerpc/Processor.cpp
         Arch/powerpc/SegmentRegisters.cpp
+        Arch/powerpc/TLB.cpp
         Arch/powerpc/VSIDAllocator.cpp
     )
 endif()

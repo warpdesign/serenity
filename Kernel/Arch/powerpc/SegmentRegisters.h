@@ -20,6 +20,7 @@ enum {
 // kernel mapping, while segments 0-11 receive base + segment number.
 int powerpc_user_vsid_base_valid(PowerPCSegmentWord base);
 int powerpc_activate_user_segments(PowerPCSegmentWord base);
+void powerpc_activate_kernel_segments(void);
 PowerPCSegmentWord powerpc_read_segment_register(PowerPCSegmentWord segment);
 void powerpc_write_segment_register(PowerPCSegmentWord segment, PowerPCSegmentWord value);
 

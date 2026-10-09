@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/CPUID.h>
+#include <Kernel/Arch/powerpc/TLB.h>
 
 namespace Kernel {
 
@@ -105,14 +106,7 @@ void ProcessorBase::flush_tlb(Memory::PageDirectory const*, VirtualAddress vaddr
 
 void ProcessorBase::flush_entire_tlb_local()
 {
-    // The 750 and 74xx do not implement tlbia. EA bits 14-19 index all
-    // 64 instruction and data TLB sets.
-    asm volatile("sync" : : : "memory");
-    for (u32 index = 0; index < 64; ++index) {
-        u32 address = index << 14;
-        asm volatile("tlbie %0" : : "r"(address) : "memory");
-    }
-    asm volatile("eieio; tlbsync; sync" : : : "memory");
+    powerpc_flush_entire_tlb();
 }
 
 }

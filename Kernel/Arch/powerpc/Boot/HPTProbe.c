@@ -389,18 +389,27 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     powerpc_page_directory_backend_activate(&second_directory);
     Word second_again = *alias;
     *alias = 0x13579bdfu;
+    Word purged = powerpc_page_directory_backend_purge(&first_directory);
+    int first_mapping_gone = powerpc_hpt_find(&s_hpt, first_vsid, UserTestAddress) == 0;
+    Word second_after_purge = *alias;
     powerpc_disable_boot_translation();
     s_user_data_page[0] = 0;
+    powerpc_activate_kernel_segments();
+    int kernel_segments_match = powerpc_read_segment_register(12) == original_kernel_segment;
+    for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment) {
+        if (powerpc_read_segment_register(segment) != (0x20000000u | segment))
+            kernel_segments_match = 0;
+    }
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         powerpc_write_segment_register(segment, original_segments[segment]);
 
-    int unmapped = powerpc_page_directory_backend_unmap(&first_directory, UserTestAddress)
-        && powerpc_page_directory_backend_unmap(&second_directory, UserTestAddress);
-    return first_activated && second_activated && first_segments_match && second_segments_match
+    int unmapped = powerpc_page_directory_backend_unmap(&second_directory, UserTestAddress);
+    return first_activated && second_activated && first_segments_match && second_segments_match && kernel_segments_match
         && powerpc_read_segment_register(12) == original_kernel_segment
         && first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
         && first_physical_read == 0x11223344u && second_physical_read == 0x55667788u
         && first_again == 0x11223344u && second_again == 0x55667788u
+        && purged == 1 && first_mapping_gone && second_after_purge == 0x13579bdfu
         && remapped && restored && third_read == 0 && third_physical_read == 0xaabbccddu
         && first_after_remap == 0x11223344u
         && s_hpt_payload_word == 0x89abcdefu && s_hpt_replacement_word == 0x13579bdfu

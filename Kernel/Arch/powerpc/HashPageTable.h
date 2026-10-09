@@ -43,6 +43,7 @@ struct PowerPCHPTEntry* powerpc_hpt_find(struct PowerPCHashPageTable const*, Pow
 int powerpc_hpt_map(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_hpt_remap(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_hpt_unmap(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address);
+int powerpc_hpt_purge_vsid_block(struct PowerPCHashPageTable const*, PowerPCHPTWord first_vsid, PowerPCHPTWord vsid_count);
 
 #ifdef __cplusplus
 }
