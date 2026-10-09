@@ -10,13 +10,25 @@ programs.
 ## Build and run the probe
 
 Build SerenityOS's PowerPC bootstrap compiler and binutils, then run the probe.
-`qemu-system-ppc` is also required. The probe build remains separate from the
-normal superbuild until the complete PowerPC kernel and userland targets exist.
+`qemu-system-ppc` is also required. The probe has a standalone Makefile and an
+explicit target in the normal CMake build.
 
 ```sh
 env ARCH=powerpc MAKEJOBS=8 ./Toolchain/BuildGNU.sh --bootstrap-only
 make -C Kernel/Arch/powerpc/Boot check
 ```
+
+The CMake route uses the same probe and runs both QEMU configurations:
+
+```sh
+cmake -S Meta/CMake/Superbuild -B Build/superbuild-powerpc -DSERENITY_ARCH=powerpc
+cmake --build Build/superbuild-powerpc --target serenity-configure
+cmake --build Build/powerpc --target PowerPCBootProbeCheck
+```
+
+`PowerPCBootProbe` builds the ELF without running QEMU;
+`PowerPCBootProbeCheckQuick` runs the 256 MiB test. These targets do not build
+the full SerenityOS kernel.
 
 `CROSS_COMPILE` defaults to the resulting
 `Toolchain/Local/powerpc/bin/powerpc-serenity-` prefix. The bootstrap option
@@ -173,11 +185,10 @@ loader's PowerPC breakpoint hook. The kernel still needs a real syscall
 dispatcher and full user register state, including FPU state. `DynamicLinker.cpp` passes a
 PowerPC cross-compiler syntax check but has not run as a user process.
 
-The main build still cannot link Serenity's kernel for PowerPC. A normal
-PowerPC CMake configuration reaches `Kernel/EFIPrekernel` and then reports
-the missing `Arch/powerpc/Boot.cpp`; Pegasos 2 needs an Open Firmware boot
-path. `Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC
-target, and the kernel needs integrated page tables, CPU primitives, exception entry,
+The main build still cannot link Serenity's kernel for PowerPC. PowerPC CMake
+configuration now selects the Open Firmware probe target and leaves out the EFI
+prekernel. `Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC
+kernel target, and the kernel needs integrated page tables, CPU primitives, exception entry,
 and context switching before generic initialization can run. The current
 `0xC0000000` layout is a starting point for 256 and 512 MiB QEMU guests; its
 direct-map and high-memory limits need validation with the eventual MMU.

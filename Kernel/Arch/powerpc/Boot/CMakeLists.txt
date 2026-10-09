@@ -1,0 +1,36 @@
+# Copyright (c) 2026, SerenityOS developers.
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+find_program(POWERPC_BOOT_MAKE NAMES gmake make REQUIRED)
+string(REGEX REPLACE "gcc$" "" POWERPC_CROSS_COMPILE "${CMAKE_C_COMPILER}")
+
+set(POWERPC_BOOT_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/probe")
+set(POWERPC_BOOT_IMAGE "${POWERPC_BOOT_BUILD_DIR}/serenity-powerpc-boot.elf")
+
+add_custom_target(PowerPCBootProbe
+    COMMAND "${POWERPC_BOOT_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" all
+        "BUILD_DIR=${POWERPC_BOOT_BUILD_DIR}"
+        "CROSS_COMPILE=${POWERPC_CROSS_COMPILE}"
+    BYPRODUCTS "${POWERPC_BOOT_IMAGE}"
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(PowerPCBootProbeCheckQuick
+    COMMAND "${POWERPC_BOOT_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" check-quick
+        "BUILD_DIR=${POWERPC_BOOT_BUILD_DIR}"
+        "CROSS_COMPILE=${POWERPC_CROSS_COMPILE}"
+    DEPENDS PowerPCBootProbe
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(PowerPCBootProbeCheck
+    COMMAND "${POWERPC_BOOT_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" check
+        "BUILD_DIR=${POWERPC_BOOT_BUILD_DIR}"
+        "CROSS_COMPILE=${POWERPC_CROSS_COMPILE}"
+    DEPENDS PowerPCBootProbe
+    USES_TERMINAL
+    VERBATIM
+)

@@ -14,3 +14,5 @@ endif()
 if(NOT CMAKE_C_FLAGS MATCHES "(^| )-msecure-plt( |$)" OR NOT CMAKE_CXX_FLAGS MATCHES "(^| )-msecure-plt( |$)")
     message(FATAL_ERROR "PowerPC C and C++ must use the secure PLT ABI")
 endif()
+
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../../../Kernel/Arch/powerpc/Boot" "${CMAKE_CURRENT_BINARY_DIR}/BootProbe")
