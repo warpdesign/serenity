@@ -50,8 +50,7 @@ decrementer_exception_vector_start:
     mfspr 11, 272     // SPRG0: interrupt count.
     addi 11, 11, 1
     mtspr 272, 11
-    lis 11, 0x7fff
-    ori 11, 11, 0xffff
+    mfspr 11, 274     // SPRG2: probe period.
     mtdec 11
     mfspr 11, 275
     rfi

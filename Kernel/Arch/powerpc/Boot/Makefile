@@ -237,7 +237,7 @@ $(BUILD_DIR)/test_thread_registers.o: ../../../../Tests/Kernel/PowerPC/TestThrea
 $(BUILD_DIR)/test_stack_unwinder.o: ../../../../Tests/Kernel/PowerPC/TestStackUnwinder.cpp ../../../../AK/Arch/powerpc/StackUnwinder.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -fno-omit-frame-pointer -fno-optimize-sibling-calls -c $< -o $@
 
-$(BUILD_DIR)/test_decrementer.o: ../../../../Tests/Kernel/PowerPC/TestDecrementer.cpp ../Time/Timebase.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_decrementer.o: ../../../../Tests/Kernel/PowerPC/TestDecrementer.cpp ../Time/Timebase.h Pegasos2LegacyPIC.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/runtime.o: Runtime.c | $(BUILD_DIR)

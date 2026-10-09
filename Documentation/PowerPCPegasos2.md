@@ -238,11 +238,14 @@ the 64-bit timebase. The QEMU probe checks these operations on the default CPU
 and a 750cxe. Full processor initialization, TLB and cache maintenance, trap
 entry, and context switching still require kernel integration.
 The QEMU probe also reads `timebase-frequency` from the Open Firmware CPU node,
-programs a 10 ms decrementer interval, and checks the resulting exception at
+programs a 10 ms decrementer interval, and checks two resulting exceptions at
 vector `0x900` against elapsed timebase ticks. The
 [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
-defines the decrementer exception and its vector. The full kernel still needs
-an interrupt entry path and time manager integration.
+defines the decrementer exception and its vector. The boot probe temporarily
+masks both Pegasos 2 legacy 8259 controllers while CPU external interrupts are
+enabled, then restores their masks. QEMU otherwise delivers a device interrupt
+at the unimplemented `0x500` vector during the second tick. The full kernel
+still needs a device interrupt entry path and time manager integration.
 The architecture memory fence interface uses `sync` for full, load, and store
 fences, so cached descriptor writes can be ordered before device access. The
 probe executes all three fences; DMA visibility still needs validation on real
