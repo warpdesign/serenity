@@ -59,7 +59,7 @@ $(BUILD_DIR)/firmware.o: firmware.c ../OpenFirmwareMemoryMap.h ../../../../Kerne
 $(BUILD_DIR)/exception_probe.o: ExceptionProbe.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/exception_probe_vector.o: ExceptionProbe.S | $(BUILD_DIR)
+$(BUILD_DIR)/exception_probe_vector.o: ExceptionProbe.S ProbeAddresses.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/user_mode_probe.o: UserModeProbe.S | $(BUILD_DIR)
@@ -74,7 +74,7 @@ $(BUILD_DIR)/mmu_probe_asm.o: MMUProbe.S | $(BUILD_DIR)
 $(BUILD_DIR)/hash_page_table.o: ../HashPageTable.cpp ../HashPageTable.h ../TLB.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../PhysicalPageArray.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
+$(BUILD_DIR)/hpt_probe.o: HPTProbe.c ProbeAddresses.h ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../PhysicalPageArray.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
 $(BUILD_DIR)/physical_page_array.o: ../PhysicalPageArray.cpp ../PhysicalPageArray.h ../PageDirectoryBackend.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)

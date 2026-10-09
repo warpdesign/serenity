@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/ExceptionState.h>
+#include <Kernel/Arch/powerpc/Boot/ProbeAddresses.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
 #include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
@@ -26,6 +27,7 @@ enum {
     ReadOnlyPage = KERNEL_MAPPING_BASE + 0x00900000,
     QuickmapTestAddress = KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * PageSize,
     PhysicalArrayTestAddress = 0xc2400000u,
+    IRQStackTestAddress = POWERPC_HPT_IRQ_STACK_ADDRESS,
     UserTestAddress = 0x10000000,
     UserProbeCodePage = 0x10010000,
     UserProbeDataPage = 0x10020000,
@@ -95,6 +97,8 @@ extern Word powerpc_user_probe_after_first_syscall[];
 extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top);
 extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
+extern unsigned char powerpc_probe_high_stack[];
+extern int powerpc_run_hpt_stack_external_irq_probe(Word timebase_frequency);
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
@@ -169,6 +173,27 @@ int powerpc_hpt_high_alias_roundtrip(void)
         && exceptions_after == exceptions_before + 1 && (exception_status & 0x00020030u) == 0x00020030u
         && (translated_state & 0x30u) == 0x30u && installed_sdr1 == table_physical
         && instruction_bat_high == 0 && data_bat_high == 0 && (high_segment & 0x00ffffffu) == KernelVSID;
+}
+
+int powerpc_hpt_external_irq_stack_roundtrip(Word timebase_frequency)
+{
+    Word physical_stack = (Word)(__UINTPTR_TYPE__)powerpc_probe_high_stack;
+    Word sdr1;
+    Word instruction_bat_high;
+    Word data_bat_high;
+    __asm__ volatile("mfspr %0,25; mfspr %1,530; mfspr %2,538"
+        : "=r"(sdr1), "=r"(instruction_bat_high), "=r"(data_bat_high));
+    if (!timebase_frequency || (physical_stack & (PageSize - 1)) != 0
+        || physical_stack >= 0x01000000u - PageSize || sdr1 != powerpc_hpt_table_physical()
+        || instruction_bat_high != 0 || data_bat_high != 0)
+        return 0;
+
+    if (!map_high_page(IRQStackTestAddress, physical_stack))
+        return 0;
+    int passed = powerpc_run_hpt_stack_external_irq_probe(timebase_frequency);
+    int unmapped = unmap_high_page(IRQStackTestAddress);
+    __asm__ volatile("mfspr %0,530; mfspr %1,538" : "=r"(instruction_bat_high), "=r"(data_bat_high));
+    return passed && unmapped && instruction_bat_high == 0 && data_bat_high == 0;
 }
 
 int powerpc_hpt_duplicate_mapping_rejected(void)

@@ -75,7 +75,7 @@ static int run_external_irq_roundtrip(u32 timebase_frequency, u32 expected_trans
         && (s_saved_srr1 & 0x8000u) != 0 && (s_saved_srr1 & 0x30u) == expected_translation
         && s_saved_srr0 >= 0x200000u && s_saved_srr0 < 0x1000000u
         && s_saved_stack >= current_stack && s_saved_stack - current_stack < 512
-        && (expected_translation == 0 || (s_saved_stack >= 0xc0000000u && s_saved_stack < 0xc1000000u));
+        && (expected_translation == 0 || s_saved_stack >= 0xc0000000u);
 }
 
 extern "C" int powerpc_external_irq_roundtrip(u32 timebase_frequency)

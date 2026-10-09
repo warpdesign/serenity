@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "ProbeAddresses.h"
+
 // These templates are copied to physical vector slots after the last Open
 // Firmware call. Each must fit in one slot and retain a valid branch target.
 .section .text.data_storage_exception_probe, "ax"
@@ -149,6 +151,35 @@ powerpc_run_high_stack_external_irq_probe:
     blr
 .size powerpc_run_high_stack_external_irq_probe, .-powerpc_run_high_stack_external_irq_probe
 
+.global powerpc_run_hpt_stack_external_irq_probe
+.type powerpc_run_hpt_stack_external_irq_probe, @function
+powerpc_run_hpt_stack_external_irq_probe:
+    stwu 1, -64(1)
+    mflr 0
+    stw 0, 68(1)
+    stw 30, 56(1)
+    stw 31, 60(1)
+    mr 30, 3
+    mr 31, 1
+    bl powerpc_enable_boot_translation
+    lis 1, POWERPC_HPT_IRQ_STACK_SEGMENT // HPT stack, no high BAT.
+    ori 1, 1, 0x0ff0
+    li 0, 0
+    stw 0, 0(1)
+    mr 3, 30
+    bl powerpc_external_irq_high_stack_body
+    mr 30, 3
+    mr 1, 31
+    bl powerpc_disable_boot_translation
+    mr 3, 30
+    lwz 30, 56(1)
+    lwz 31, 60(1)
+    lwz 0, 68(1)
+    mtlr 0
+    addi 1, 1, 64
+    blr
+.size powerpc_run_hpt_stack_external_irq_probe, .-powerpc_run_hpt_stack_external_irq_probe
+
 .global trigger_program_exception
 .type trigger_program_exception, @function
 trigger_program_exception:
@@ -177,7 +208,9 @@ powerpc_probe_read_only_store:
 powerpc_probe_exception_stack:
     .space 4096
 powerpc_probe_exception_stack_top:
-.balign 16
+.balign 4096
+.global powerpc_probe_high_stack
 powerpc_probe_high_stack:
     .space 4096
+.global powerpc_probe_high_stack_top
 powerpc_probe_high_stack_top:

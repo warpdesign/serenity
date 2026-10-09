@@ -95,6 +95,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `translated external IRQ stack passed`,
 `HPT high alias passed`,
+`HPT external IRQ stack passed`,
 `HPT and timebase boot handoff passed`,
 `HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -265,6 +266,10 @@ restores both the high stack and the translation bits. This still runs
 supervisor code through the boot probe's identity instruction BAT. A kernel
 entry must establish translated kernel mappings before it calls registered
 handlers and handle user-mode IRQs on the same safe stack.
+The HPT IRQ probe removes the high BAT, maps a dedicated high stack page in
+the hash table, and checks an external IRQ roundtrip on that stack. Its C
+handler still runs through the low physical code mapping; a kernel entry must
+switch to high translated code before calling normal kernel handlers.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond
