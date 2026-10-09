@@ -54,6 +54,7 @@ extern int powerpc_thread_registers_test(void);
 extern int powerpc_stack_unwinder_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_decrementer_exception_roundtrip(Cell);
+extern int powerpc_legacy_pic_irq0_roundtrip(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_hpt_quickmap_roundtrip(void);
@@ -357,6 +358,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: decrementer interrupt passed\r\n");
         else
             serial_write("SerenityOS PowerPC: decrementer interrupt failed\r\n");
+        if (powerpc_legacy_pic_irq0_roundtrip(timebase_frequency))
+            serial_write("SerenityOS PowerPC: legacy PIC IRQ0 acknowledge passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: legacy PIC IRQ0 acknowledge failed\r\n");
         if (powerpc_elf_breakpoint_test())
             serial_write("SerenityOS PowerPC: loader breakpoint passed\r\n");
         else
