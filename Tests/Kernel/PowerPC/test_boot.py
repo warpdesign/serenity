@@ -35,6 +35,7 @@ def main():
         b"SerenityOS PowerPC: HPT VSID switch passed",
         b"SerenityOS PowerPC: HPT kernel protection passed",
         b"SerenityOS PowerPC: user-mode page protection passed",
+        b"SerenityOS PowerPC: user-mode stack passed",
     )
 
     with tempfile.TemporaryDirectory(prefix="serenity-pegasos2-") as directory:

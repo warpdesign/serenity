@@ -53,8 +53,8 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
 `HPT read-only fault passed`, `HPT VSID switch passed`,
-`HPT kernel protection passed`, and `user-mode page protection passed` on the
-terminal.
+`HPT kernel protection passed`, `user-mode page protection passed`, and
+`user-mode stack passed` on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -105,14 +105,14 @@ each VSID reaches a distinct physical page while the kernel's SR12 mapping
 remains accessible. The high kernel PTEs use supervisor-only protection with
 SR12's user key set. The probe temporarily selects the protected key for
 supervisor access and checks that the high page faults, then restores access.
-A small problem-state probe fetches from a user HPT page, writes and reads a
-separate user data page, then attempts to read the protected kernel page. It
-checks the data-storage protection fault and returns through the low `0xc00`
-system-call vector. This probe uses no user stack and saves no complete thread
-state; full user-mode entry and process context switching remain. The main
-kernel build does not yet use this code. General allocation, an eviction
-policy when both hash groups fill, per-process VSID allocation, and a complete
-kernel address space remain.
+A small problem-state probe fetches from a user HPT page, uses a mapped user
+stack, writes and reads a separate user data page, then attempts to read the
+protected kernel page. It checks the data-storage protection fault and returns
+through the low `0xc00` system-call vector, which restores the supervisor
+stack. The probe does not save a complete thread context; process context
+switching remains. The main kernel build does not yet use this code. General
+allocation, an eviction policy when both hash groups fill, per-process VSID
+allocation, and a complete kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.

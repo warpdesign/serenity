@@ -9,6 +9,8 @@
 .global system_call_probe_vector_start
 .global system_call_probe_vector_end
 system_call_probe_vector_start:
+    lis 12, powerpc_user_probe_observed_user_stack@ha
+    stw 1, powerpc_user_probe_observed_user_stack@l(12)
     mfspr 11, 26
     lis 12, powerpc_user_probe_observed_srr0@ha
     stw 11, powerpc_user_probe_observed_srr0@l(12)
@@ -21,6 +23,8 @@ system_call_probe_vector_start:
     lis 12, powerpc_user_probe_resume_address@ha
     lwz 11, powerpc_user_probe_resume_address@l(12)
     mtspr 26, 11
+    lis 12, powerpc_user_probe_saved_supervisor_stack@ha
+    lwz 1, powerpc_user_probe_saved_supervisor_stack@l(12)
     rfi
 system_call_probe_vector_end:
 
@@ -40,6 +44,9 @@ powerpc_enter_user_probe:
     ori 12, 12, 0x4030  // PR | IR | DR
     mtspr 27, 12
     mtspr 26, 3
+    lis 11, powerpc_user_probe_saved_supervisor_stack@ha
+    stw 1, powerpc_user_probe_saved_supervisor_stack@l(11)
+    mr 1, 7
     li 3, 0
     rfi
 powerpc_user_probe_supervisor_resume:
@@ -47,16 +54,19 @@ powerpc_user_probe_supervisor_resume:
     blr
 .size powerpc_enter_user_probe, .-powerpc_enter_user_probe
 
-// The probe uses no user stack yet. It writes and reads a user data page,
-// then the high kernel load must fault and be skipped before sc returns.
+// Use a mapped user stack and data page, then fault on the high kernel load.
 .section .text.user_mode_probe, "ax"
 .balign 4096
 .global powerpc_user_probe_start
 .global powerpc_user_probe_end
 powerpc_user_probe_start:
-    stw 6, 0(5)
+    stwu 1, -16(1)
+    stw 6, 8(1)
+    lwz 3, 8(1)
+    stw 3, 0(5)
     lwz 3, 0(5)
     lwz 3, 0(4)
+    addi 1, 1, 16
     sc
 1:
     b 1b
