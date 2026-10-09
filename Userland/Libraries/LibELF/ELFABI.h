@@ -1,6 +1,7 @@
 /*	$OpenBSD: exec_elf.h,v 1.83 2019/01/22 23:23:18 jsg Exp $	*/
 /*
  * Copyright (c) 1995, 1996 Erik Theisen.  All rights reserved.
+ * Copyright (c) 2026, SerenityOS developers.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -39,9 +40,25 @@
 #    include <AK/Types.h>
 #endif
 
-#define ElfW(type) Elf64_##type
+#ifndef ELFSIZE
+#    ifdef ARCH_ELFSIZE
+#        define ELFSIZE ARCH_ELFSIZE
+#    elif __SIZEOF_POINTER__ == 4
+#        define ELFSIZE 32
+#    elif __SIZEOF_POINTER__ == 8
+#        define ELFSIZE 64
+#    else
+#        error Unsupported ELF pointer size
+#    endif
+#endif
 
-#define ELFSIZE 64
+#if ELFSIZE == 32
+#    define ElfW(type) Elf32_##type
+#elif ELFSIZE == 64
+#    define ElfW(type) Elf64_##type
+#else
+#    error Unsupported ELF class
+#endif
 
 typedef uint8_t Elf_Byte;
 
@@ -106,6 +123,14 @@ typedef uint16_t Elf64_Quarter;
 #define ELFDATA2LSB 1 /* Little-Endian */
 #define ELFDATA2MSB 2 /* Big-Endian */
 #define ELFDATANUM 3  /* number of data encode defines */
+
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#    define ELFDATA ELFDATA2LSB
+#elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#    define ELFDATA ELFDATA2MSB
+#else
+#    error Unsupported ELF byte order
+#endif
 
 /* e_ident[] Operating System/ABI */
 #define ELFOSABI_SYSV 0   /* UNIX System V ABI */
@@ -746,10 +771,6 @@ struct elf_args {
     u_long arg_phnum;     /* Number of program headers */
 };
 
-#endif
-
-#if !defined(ELFSIZE) && defined(ARCH_ELFSIZE)
-#    define ELFSIZE ARCH_ELFSIZE
 #endif
 
 #if defined(ELFSIZE)

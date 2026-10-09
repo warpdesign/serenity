@@ -41,6 +41,7 @@ endmacro()
 
 set(TEST_SOURCES
     TestDlOpen.cpp
+    TestNativeValidation.cpp
     TestOrder.cpp
     TestTLS.cpp
     TestWeakSymbolResolution.cpp
@@ -56,6 +57,8 @@ foreach(source IN LISTS TEST_SOURCES)
         set_tests_properties(${test_name} PROPERTIES ENVIRONMENT LD_LIBRARY_PATH=${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
     endif()
 endforeach()
+
+target_link_libraries(TestNativeValidation PRIVATE LibELF)
 
 # test-elf.cpp
 if (NOT BUILD_LAGOM)

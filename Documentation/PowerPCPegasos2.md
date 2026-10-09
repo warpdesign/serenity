@@ -53,6 +53,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
+`ELF32 big-endian header passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -167,7 +168,7 @@ targets include:
 | Area | Finding to investigate |
 | --- | --- |
 | AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. Other AK data representations still need review. |
-| ELF and loader | `LibELF/Validation.cpp` currently expects ELF64 little-endian, while `ELFBuild.cpp` writes that format. PowerPC needs ELF32 big-endian validation, loading, relocation, and output. |
+| ELF and loader | LibELF now selects native ELF32 big-endian header types on PowerPC. QEMU runs header validation for the correct class, byte order, and machine and rejects mismatches. `Image`, the dynamic loader, relocations, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
 

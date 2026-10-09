@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020, Andrew Kaster <akaster@serenityos.org>
- * Copyright (c) 2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2021-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -26,17 +26,17 @@ bool validate_elf_header(Elf_Ehdr const& elf_header, size_t file_size, bool verb
         return false;
     }
 
-    auto expected_class = ELFCLASS64;
-    auto expected_bitness = 64;
+    auto expected_class = ELFCLASS;
+    auto expected_bitness = ELFSIZE;
     if (expected_class != elf_header.e_ident[EI_CLASS]) {
         if (verbose)
             dbgln("File is not a {}-bit ELF file.", expected_bitness);
         return false;
     }
 
-    if (ELFDATA2LSB != elf_header.e_ident[EI_DATA]) {
+    if (ELFDATA != elf_header.e_ident[EI_DATA]) {
         if (verbose)
-            dbgln("File is not a little endian ELF file.");
+            dbgln("File is not a {} endian ELF file.", ELFDATA == ELFDATA2MSB ? "big" : "little");
         return false;
     }
 
@@ -59,13 +59,20 @@ bool validate_elf_header(Elf_Ehdr const& elf_header, size_t file_size, bool verb
         return false;
     }
 
-    auto expected_machines = Array { EM_X86_64, EM_AARCH64, EM_RISCV };
-    auto expected_machine_names = Array { "x86-64"sv, "aarch64"sv, "riscv64"sv };
-
-    if (!expected_machines.span().contains_slow(elf_header.e_machine)) {
-        if (verbose)
-            dbgln("File has unknown machine ({}), expected {} ({})!", elf_header.e_machine, expected_machine_names.span(), expected_machines.span());
-        return false;
+    if constexpr (ELFSIZE == 32) {
+        if (elf_header.e_machine != EM_PPC) {
+            if (verbose)
+                dbgln("File has unknown ELF32 machine ({}), expected PowerPC ({})!", elf_header.e_machine, EM_PPC);
+            return false;
+        }
+    } else {
+        auto expected_machines = Array { EM_X86_64, EM_AARCH64, EM_RISCV };
+        auto expected_machine_names = Array { "x86-64"sv, "aarch64"sv, "riscv64"sv };
+        if (!expected_machines.span().contains_slow(elf_header.e_machine)) {
+            if (verbose)
+                dbgln("File has unknown machine ({}), expected {} ({})!", elf_header.e_machine, expected_machine_names.span(), expected_machines.span());
+            return false;
+        }
     }
 
     if (ET_EXEC != elf_header.e_type && ET_DYN != elf_header.e_type && ET_REL != elf_header.e_type && ET_CORE != elf_header.e_type) {
