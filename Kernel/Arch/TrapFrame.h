@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Gunnar Beutner <gbeutner@serenityos.org>
+ * Copyright (c) 2022-2026, Gunnar Beutner <gbeutner@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -24,7 +24,7 @@ struct TrapFrame {
     TrapFrame& operator=(TrapFrame&&) = delete;
 };
 
-#define TRAP_FRAME_SIZE (2 * 8)
+#define TRAP_FRAME_SIZE (2 * __SIZEOF_POINTER__)
 
 static_assert(AssertSize<TrapFrame, TRAP_FRAME_SIZE>());
 

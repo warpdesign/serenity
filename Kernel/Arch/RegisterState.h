@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, James Mintram <me@jamesrm.com>
+ * Copyright (c) 2018-2026, James Mintram <me@jamesrm.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include <Kernel/Arch/aarch64/RegisterState.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/RegisterState.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/RegisterState.h>
 #else
 #    error "Unknown architecture"
 #endif

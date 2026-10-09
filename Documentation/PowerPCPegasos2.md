@@ -77,8 +77,9 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
 `HPT read-only fault passed`, `HPT VSID switch passed`,
 `HPT kernel protection passed`, `user-mode page protection passed`,
-`user-mode stack passed`, `user-mode syscall resume passed`, and
-`user-mode exception frame passed` on the terminal.
+`user-mode stack passed`, `user-mode syscall resume passed`,
+`user-mode exception frame passed`, and `register state from user trap passed`
+on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -157,9 +158,11 @@ handler to physical address `0x700`, synchronizes the data and instruction
 caches, selects low exception vectors, and executes a trap instruction. The
 handler records the trap status, advances `SRR0` past that instruction, and
 returns with `rfi`. The QEMU regression checks the exception count and status
-before reporting success. This covers one exception path; the kernel still
-needs the complete vector table and register-state handling. The
-[MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+before reporting success. PowerPC's 32-bit integer `RegisterState` now uses
+the captured frame layout; QEMU checks its mode, stack, instruction pointer,
+syscall arguments, and ptrace conversion against a real user trap. The kernel
+still needs a complete exception entry and return path, thread FPU state, and
+context switching. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
 
 LibSystem now invokes PowerPC system calls with `sc`. The chosen Serenity
@@ -167,12 +170,14 @@ PowerPC syscall ABI puts the function number in r0, up to four arguments in
 r3-r6, and the result in r3. A temporary QEMU trap handler checks all five
 LibSystem wrappers and their returned values; the probe also checks the
 loader's PowerPC breakpoint hook. The kernel still needs a real syscall
-dispatcher and complete user register state. `DynamicLinker.cpp` passes a
+dispatcher and full user register state, including FPU state. `DynamicLinker.cpp` passes a
 PowerPC cross-compiler syntax check but has not run as a user process.
 
-The main build still cannot link Serenity's kernel for PowerPC:
-`Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC target,
-and the kernel needs PowerPC page tables, CPU primitives, exception entry,
+The main build still cannot link Serenity's kernel for PowerPC. A normal
+PowerPC CMake configuration reaches `Kernel/EFIPrekernel` and then reports
+the missing `Arch/powerpc/Boot.cpp`; Pegasos 2 needs an Open Firmware boot
+path. `Meta/serenity.sh` and `Kernel/CMakeLists.txt` have no complete PowerPC
+target, and the kernel needs integrated page tables, CPU primitives, exception entry,
 and context switching before generic initialization can run. The current
 `0xC0000000` layout is a starting point for 256 and 512 MiB QEMU guests; its
 direct-map and high-memory limits need validation with the eventual MMU.
