@@ -855,6 +855,14 @@ struct elf_args {
 #define R_386_TLS_TPOFF32 37
 #define R_386_IRELATIVE 42 /* PLT entry resolved indirectly at runtime */
 
+/* 32-bit PowerPC ELF relocation numbers. */
+#define R_PPC_NONE 0
+#define R_PPC_ADDR32 1
+#define R_PPC_COPY 19
+#define R_PPC_GLOB_DAT 20
+#define R_PPC_JMP_SLOT 21
+#define R_PPC_RELATIVE 22
+
 #define R_X86_64_NONE 0
 #define R_X86_64_64 1
 #define R_X86_64_COPY 5

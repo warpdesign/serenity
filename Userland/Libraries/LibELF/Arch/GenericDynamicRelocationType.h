@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2024-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include <Userland/Libraries/LibELF/Arch/riscv64/GenericDynamicRelocationType.h>
 #elif ARCH(X86_64)
 #    include <Userland/Libraries/LibELF/Arch/x86_64/GenericDynamicRelocationType.h>
+#elif ARCH(POWERPC32)
+#    include <Userland/Libraries/LibELF/Arch/powerpc/GenericDynamicRelocationType.h>
 #else
 #    error Unknown architecture
 #endif

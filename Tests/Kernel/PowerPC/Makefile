@@ -24,6 +24,8 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only TestELFHeader.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries -fsyntax-only TestELFImage.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/Validation.cpp
+	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/Relocation.cpp
+	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only TestRelativeRelocations.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -fsyntax-only TestLibCHeaders.cpp
 	$(CC) $(CFLAGS) -c ../../../Userland/Libraries/LibC/arch/powerpc/setjmp.S -o $(BUILD_DIR)/setjmp.o
 	$(CC) $(CFLAGS) -O0 -I../../../Userland/Libraries/LibC -I../../.. -c TestSetjmp.c -o $(BUILD_DIR)/TestSetjmp.o

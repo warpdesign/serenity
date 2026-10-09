@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Gunnar Beutner <gbeutner@serenityos.org>
+ * Copyright (c) 2021-2026, Gunnar Beutner <gbeutner@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -47,12 +47,16 @@ namespace ELF {
 
     for (unsigned i = 0; i < relocation_count; ++i) {
         size_t offset_in_section = i * relocation_entry_size;
-        auto* relocation = (Elf_Rela*)(relocation_section_addr + offset_in_section);
-        VERIFY(static_cast<GenericDynamicRelocationType>(ELF64_R_TYPE(relocation->r_info)) == GenericDynamicRelocationType::RELATIVE);
-        auto* patch_address = (FlatPtr*)(base_address + relocation->r_offset);
+        auto* relocation_bytes = reinterpret_cast<void const*>(relocation_section_addr + offset_in_section);
+        Elf_Rel relocation;
+        __builtin_memcpy(&relocation, relocation_bytes, sizeof(relocation));
+        VERIFY(static_cast<GenericDynamicRelocationType>(ELF_R_TYPE(relocation.r_info)) == GenericDynamicRelocationType::RELATIVE);
+        auto* patch_address = (FlatPtr*)(base_address + relocation.r_offset);
         FlatPtr relocated_address;
         if (use_addend) {
-            relocated_address = runtime_base_address + relocation->r_addend;
+            Elf_Rela relocation_with_addend;
+            __builtin_memcpy(&relocation_with_addend, relocation_bytes, sizeof(relocation_with_addend));
+            relocated_address = runtime_base_address + relocation_with_addend.r_addend;
         } else {
             __builtin_memcpy(&relocated_address, patch_address, sizeof(relocated_address));
             relocated_address += runtime_base_address;

@@ -65,6 +65,8 @@ target_link_libraries(TestNativeImage PRIVATE LibELF)
 # test-elf.cpp
 if (NOT BUILD_LAGOM)
     serenity_test(test-elf.cpp LibELF)
+    serenity_test(TestRelativeRelocations.cpp LibELF)
+    target_link_libraries(TestRelativeRelocations PRIVATE LibELF)
 endif()
 
 # TestDlOpen.cpp
