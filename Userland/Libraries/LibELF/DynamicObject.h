@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2019-2020, Andrew Kaster <akaster@serenityos.org>
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2019-2026, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -68,9 +68,9 @@ public:
         unsigned index() const { return m_index; }
         unsigned type() const
         {
-            return ELF64_ST_TYPE(m_sym.st_info);
+            return ELF_ST_TYPE(m_sym.st_info);
         }
-        unsigned bind() const { return ELF64_ST_BIND(m_sym.st_info); }
+        unsigned bind() const { return ELF_ST_BIND(m_sym.st_info); }
 
         bool is_undefined() const
         {
@@ -168,9 +168,9 @@ public:
         unsigned offset() const { return m_rel.r_offset; }
         unsigned type() const
         {
-            return ELF64_R_TYPE(m_rel.r_info);
+            return ELF_R_TYPE(m_rel.r_info);
         }
-        unsigned symbol_index() const { return ELF64_R_SYM(m_rel.r_info); }
+        unsigned symbol_index() const { return ELF_R_SYM(m_rel.r_info); }
         unsigned addend() const
         {
             VERIFY(m_addend_used);

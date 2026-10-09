@@ -157,8 +157,12 @@ direct-map and high-memory limits need validation with the eventual MMU.
 selected out for the Open Firmware build. A single-ABI libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
 LibC still needs PowerPC floating-point environment support, signal-context
-handling, and the rest of its architecture assembly before user processes can
-run.
+handling, thread-local storage, and the rest of its architecture assembly
+before user processes can run. The cross compiler emits local-exec TLS accesses
+relative to r2. The [32-bit Power Architecture ABI supplement](https://www.polyomino.org.uk/publications/2011/Power-Arch-32-bit-ABI-supp-1.0-Unified.pdf)
+places the thread pointer 0x7000 bytes past the start of the first TLS block
+and defines a 0x8000-byte DTV pointer bias. LibELF's PowerPC TLS layout and
+loader formulas must account for both before dynamic TLS can run.
 
 ## Big-endian audit
 
@@ -170,7 +174,7 @@ targets include:
 | Area | Finding to investigate |
 | --- | --- |
 | AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. Other AK data representations still need review. |
-| ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, and applies REL, RELA, and RELR relative relocations. Symbol resolution, the dynamic loader, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
+| ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, and applies REL, RELA, and RELR relative relocations. `DynamicObject` now decodes native symbol and relocation fields, but symbol resolution, the TLS layout, PLT handling, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
 
