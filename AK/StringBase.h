@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Dan Klishch <danilklishch@gmail.com>
+ * Copyright (c) 2023-2026, Dan Klishch <danilklishch@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -17,23 +17,30 @@ class StringData;
 static constexpr size_t MAX_SHORT_STRING_BYTE_COUNT = sizeof(StringData*) - 1;
 
 struct ShortString {
+    // The flag overlays the least significant pointer byte in the union.
+    static constexpr size_t flag_byte_offset = HostIsLittleEndian ? 0 : MAX_SHORT_STRING_BYTE_COUNT;
+    static constexpr size_t storage_byte_offset = HostIsLittleEndian ? 1 : 0;
+
+    constexpr u8& flag() { return raw[flag_byte_offset]; }
+    constexpr u8 const& flag() const { return raw[flag_byte_offset]; }
+    constexpr u8* storage() { return raw + storage_byte_offset; }
+    constexpr u8 const* storage() const { return raw + storage_byte_offset; }
+
     ReadonlyBytes bytes() const;
     size_t byte_count() const;
 
-    // NOTE: This is the byte count shifted left 1 step and or'ed with a 1 (the SHORT_STRING_FLAG)
-    u8 byte_count_and_short_string_flag { 0 };
-    u8 storage[MAX_SHORT_STRING_BYTE_COUNT] = { 0 };
+    // The flag byte stores the byte count shifted left once, with bit zero set.
+    u8 raw[sizeof(StringData*)] = { 0 };
 };
 
-static_assert(HostIsLittleEndian, "Order of fields in ShortString assumes LE.");
-static_assert(sizeof(ShortString) >= sizeof(StringData*));
-static_assert(__builtin_offsetof(ShortString, byte_count_and_short_string_flag) == 0);
+static_assert(sizeof(ShortString) == sizeof(StringData*));
+static_assert(__builtin_offsetof(ShortString, raw) == 0);
 
 class StringBase {
 public:
     // Creates an empty (zero-length) String.
     constexpr StringBase()
-        : StringBase(ShortString { SHORT_STRING_FLAG, {} })
+        : StringBase(empty_short_string())
     {
     }
 
@@ -43,7 +50,7 @@ public:
         : m_short_string(other.m_short_string)
     {
         other.m_short_string = ShortString {};
-        other.m_short_string.byte_count_and_short_string_flag = SHORT_STRING_FLAG;
+        other.m_short_string.flag() = SHORT_STRING_FLAG;
     }
 
     StringBase& operator=(StringBase&&);
@@ -58,7 +65,7 @@ public:
     // NOTE: This is primarily interesting to unit tests.
     [[nodiscard]] constexpr bool is_short_string() const
     {
-        return (m_short_string.byte_count_and_short_string_flag & SHORT_STRING_FLAG) != 0;
+        return (m_short_string.flag() & SHORT_STRING_FLAG) != 0;
     }
 
     // Returns the underlying UTF-8 encoded bytes.
@@ -100,6 +107,13 @@ private:
     // NOTE: If the least significant bit of the pointer is set, this is a short string.
     static constexpr uintptr_t SHORT_STRING_FLAG = 1;
 
+    static constexpr ShortString empty_short_string()
+    {
+        ShortString string {};
+        string.flag() = SHORT_STRING_FLAG;
+        return string;
+    }
+
     explicit StringBase(NonnullRefPtr<Detail::StringData const>);
 
     explicit constexpr StringBase(ShortString short_string)
@@ -115,8 +129,8 @@ private:
         VERIFY(byte_count <= MAX_SHORT_STRING_BYTE_COUNT);
 
         m_short_string = ShortString {};
-        m_short_string.byte_count_and_short_string_flag = (byte_count << 1) | SHORT_STRING_FLAG;
-        return { m_short_string.storage, byte_count };
+        m_short_string.flag() = (byte_count << 1) | SHORT_STRING_FLAG;
+        return { m_short_string.storage(), byte_count };
     }
 
     void destroy_string();

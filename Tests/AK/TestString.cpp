@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2022, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2022-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Tim Flynn <trflynn89@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -85,6 +85,32 @@ TEST_CASE(short_strings)
     EXPECT_EQ(string2.bytes().size(), 3u);
     EXPECT_EQ(string2, string1);
 #endif
+}
+
+TEST_CASE(short_string_copy_move_and_heap_transition)
+{
+    StringView short_text = sizeof(void*) == 8 ? "abcdefg"sv : "abc"sv;
+    auto original = MUST(String::from_utf8(short_text));
+    EXPECT(original.is_short_string());
+
+    auto copy = original;
+    EXPECT(copy.is_short_string());
+    EXPECT_EQ(copy.bytes_as_string_view(), short_text);
+
+    String moved = move(copy);
+    EXPECT(moved.is_short_string());
+    EXPECT_EQ(moved.bytes_as_string_view(), short_text);
+    EXPECT(copy.is_short_string());
+    EXPECT(copy.is_empty());
+
+    auto long_string = MUST(String::from_utf8("abcdefgh"sv));
+    moved = move(long_string);
+    EXPECT(!moved.is_short_string());
+    EXPECT_EQ(moved.bytes_as_string_view(), "abcdefgh"sv);
+
+    moved = original;
+    EXPECT(moved.is_short_string());
+    EXPECT_EQ(moved.bytes_as_string_view(), short_text);
 }
 
 TEST_CASE(long_strings)
