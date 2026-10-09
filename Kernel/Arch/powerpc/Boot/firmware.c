@@ -31,6 +31,7 @@ extern int powerpc_hpt_unmapped_fault_observed(void);
 extern int powerpc_hpt_read_only_fault_roundtrip(void);
 extern int powerpc_hpt_vsid_switch_roundtrip(void);
 extern int powerpc_hpt_kernel_protection_roundtrip(void);
+extern int powerpc_hpt_user_mode_roundtrip(void);
 
 static int is_pegasos2(void)
 {
@@ -253,5 +254,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT kernel protection passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT kernel protection failed\r\n");
+        if (powerpc_hpt_user_mode_roundtrip())
+            serial_write("SerenityOS PowerPC: user-mode page protection passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: user-mode page protection failed\r\n");
     }
 }

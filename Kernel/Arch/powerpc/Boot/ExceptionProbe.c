@@ -9,6 +9,7 @@ typedef unsigned int Word;
 enum {
     DataStorageExceptionVector = 0x300,
     ProgramExceptionVector = 0x700,
+    SystemCallExceptionVector = 0xc00,
     VectorSlotSize = 0x100,
     CacheLineSize = 32,
     MSRExternalInterruptEnable = 0x8000,
@@ -22,6 +23,8 @@ extern Word program_exception_vector_start[];
 extern Word program_exception_vector_end[];
 extern Word data_storage_exception_vector_start[];
 extern Word data_storage_exception_vector_end[];
+extern Word system_call_probe_vector_start[];
+extern Word system_call_probe_vector_end[];
 extern void trigger_program_exception(void);
 
 static int install_probe_vector(Word address, Word* start, Word* end)
@@ -54,7 +57,8 @@ int powerpc_program_exception_roundtrip(void)
         return 0; // Require supervisor real mode for direct low-memory vectors.
 
     if (!install_probe_vector(DataStorageExceptionVector, data_storage_exception_vector_start, data_storage_exception_vector_end)
-        || !install_probe_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_end))
+        || !install_probe_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_end)
+        || !install_probe_vector(SystemCallExceptionVector, system_call_probe_vector_start, system_call_probe_vector_end))
         return 0;
 
     Word zero = 0;

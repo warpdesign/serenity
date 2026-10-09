@@ -52,8 +52,9 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
-`HPT read-only fault passed`, `HPT VSID switch passed`, and
-`HPT kernel protection passed` on the terminal.
+`HPT read-only fault passed`, `HPT VSID switch passed`,
+`HPT kernel protection passed`, and `user-mode page protection passed` on the
+terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
 
@@ -104,10 +105,14 @@ each VSID reaches a distinct physical page while the kernel's SR12 mapping
 remains accessible. The high kernel PTEs use supervisor-only protection with
 SR12's user key set. The probe temporarily selects the protected key for
 supervisor access and checks that the high page faults, then restores access.
-These checks run in supervisor mode; process context switching and user-mode
-entry still need implementation. The main kernel build does not yet use this
-code. General allocation, an eviction policy when both hash groups fill,
-per-process VSID allocation, and a complete kernel address space remain.
+A small problem-state probe fetches from a user HPT page, writes and reads a
+separate user data page, then attempts to read the protected kernel page. It
+checks the data-storage protection fault and returns through the low `0xc00`
+system-call vector. This probe uses no user stack and saves no complete thread
+state; full user-mode entry and process context switching remain. The main
+kernel build does not yet use this code. General allocation, an eviction
+policy when both hash groups fill, per-process VSID allocation, and a complete
+kernel address space remain.
 Physical Pegasos 2 hardware must also validate cache and TLB ordering.
 The [MPC750 BAT format](https://www.nxp.com/docs/en/application-note/AN1809.pdf)
 defines the block-length, cache, and protection fields used here.
@@ -116,7 +121,7 @@ describes the HPT entry and hash layout.
 The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 defines the data-storage vector and missing-PTE status used by the fault check.
 The [PowerPC Programming Environments manual](https://www.nxp.com/docs/en/user-guide/MPCFPE.pdf)
-defines the PTE protection bits, including the read-only encoding.
+defines the PTE protection bits and the system-call exception state.
 
 After its last Open Firmware call, the probe copies a program-exception
 handler to physical address `0x700`, synchronizes the data and instruction
