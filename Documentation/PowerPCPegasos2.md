@@ -90,7 +90,8 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT read-only fault passed`, `HPT VSID switch passed`,
 `HPT kernel protection passed`, `user-mode page protection passed`,
 `user-mode stack passed`, `user-mode syscall resume passed`,
-`user-mode exception frame passed`, and `register state from user trap passed`
+`user-mode exception frame passed`, `register state from user trap passed`,
+and `stack backchain unwinder passed`
 on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
 `pegasos2-vof.log`.
@@ -177,6 +178,13 @@ still needs a complete exception entry and return path, thread FPU state, and
 context switching. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
 
+AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved
+return address from the caller's frame. QEMU checks two GCC-generated nested
+calls; the little-endian host frame-record path also passes a native check.
+A leaf function may retain its return address only in LR, so walking from that
+frame needs an initial LR value that the current frame-pointer API does not
+accept.
+
 LibSystem now invokes PowerPC system calls with `sc`. The chosen Serenity
 PowerPC syscall ABI puts the function number in r0, up to four arguments in
 r3-r6, and the result in r3. A temporary QEMU trap handler checks all five
@@ -204,9 +212,9 @@ places the thread pointer 0x7000 bytes past the start of the first TLS block
 and defines a 0x8000-byte DTV pointer bias. LibELF now calculates this layout
 and sets r2; the QEMU probe checks TCB placement, TLS alignment, and an r2
 roundtrip. The probe also runs LibC's `__tls_get_addr()` against a static TLS
-block using the PowerPC DTV and TP biases. The generic dynamic loader still
-requires a PowerPC PLT path and end-to-end relocation testing before user
-processes can run.
+block using the PowerPC DTV and TP biases. The PowerPC secure PLT path is
+exercised with a test resolver; full loader symbol resolution and end-to-end
+relocation testing remain before user processes can run.
 
 ## Big-endian audit
 
@@ -217,7 +225,7 @@ targets include:
 
 | Area | Finding to investigate |
 | --- | --- |
-| AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. Other AK data representations still need review. |
+| AK | The short-string tag and float parser's eight-digit byte packing handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. The stack unwinder now follows the PowerPC backchain while preserving the existing frame layouts. Other AK data representations still need review. |
 | ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, applies REL, RELA, and RELR relative relocations, and checks the PowerPC TLS layout, r2 accessor, static `__tls_get_addr()` lookup, entry transfer, and secure PLT first and second calls using a test resolver. `DynamicObject` decodes native symbol and relocation fields; full loader symbol resolution, dynamic TLS relocation application, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |

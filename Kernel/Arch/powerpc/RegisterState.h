@@ -26,8 +26,9 @@ struct RegisterState : PowerPCExceptionState {
     FlatPtr ip() const { return srr0; }
     void set_ip(FlatPtr value) { srr0 = value; }
 
-    FlatPtr bp() const { return gpr[31]; }
-    void set_bp(FlatPtr value) { gpr[31] = value; }
+    // PowerPC stack unwinding follows the r1 backchain rather than r31.
+    FlatPtr bp() const { return gpr[1]; }
+    void set_bp(FlatPtr value) { gpr[1] = value; }
 
     ExecutionMode previous_mode() const
     {

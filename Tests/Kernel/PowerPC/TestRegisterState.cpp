@@ -28,12 +28,13 @@ extern "C" int powerpc_register_state_test()
     if (registers.previous_mode() != Kernel::ExecutionMode::User
         || registers.userspace_sp() != 0x10030ff0u
         || registers.ip() < 0x10010000u || registers.ip() >= 0x10011000u
-        || registers.bp() != powerpc_user_probe_frame.gpr[31])
+        || registers.bp() != registers.userspace_sp())
         return 0;
 
     PtraceRegisters ptrace {};
     Kernel::copy_kernel_registers_into_ptrace_registers(ptrace, registers);
     if (ptrace.pc != registers.ip() || ptrace.gpr[1] != registers.userspace_sp()
+        || ptrace.bp() != registers.userspace_sp()
         || ptrace.gpr[3] != registers.gpr[3] || ptrace.msr != registers.srr1)
         return 0;
 
