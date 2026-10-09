@@ -865,6 +865,12 @@ add_executable(Kernel ${SOURCES})
 add_dependencies(Kernel generate_EscapeSequenceStateMachine.h generate_version_header)
 target_link_libraries(Kernel PUBLIC GenericClangPlugin)
 
+if("${SERENITY_ARCH}" STREQUAL "powerpc")
+    # Select the 32-bit kernel address space and Open Firmware boot layout
+    # before any generic kernel header is parsed.
+    target_compile_options(Kernel PRIVATE "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/Arch/powerpc/MemoryLayout.h")
+endif()
+
 if("${SERENITY_ARCH}" STREQUAL "aarch64")
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/linker.ld

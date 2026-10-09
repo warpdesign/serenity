@@ -10,6 +10,8 @@
 #include <Kernel/Boot/BootInfo.h>
 
 static_assert(ARCH(POWERPC32));
+static_assert(KERNEL_HAS_EFI_BOOT == 0);
+static_assert(KERNEL_MAPPING_BASE == 0xc0000000u);
 static_assert(sizeof(FlatPtr) == 4);
 static_assert(sizeof(decltype(Kernel::BootInfo::kernel_mapping_base)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::open_firmware_entry)) == 4);

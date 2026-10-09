@@ -227,6 +227,10 @@ kernel target, and the kernel needs integrated page tables, CPU primitives, exce
 and context switching before generic initialization can run. The current
 `0xC0000000` layout is a starting point for 256 and 512 MiB QEMU guests; its
 direct-map and high-memory limits need validation with the eventual MMU.
+The PowerPC kernel CMake target now applies its 32-bit layout header to every
+source before other kernel headers, so generic objects do not accidentally
+select 64-bit EFI structures. This is a compile prerequisite, not a linked
+kernel.
 `Kernel/Memory/MemoryManager.cpp` also has EFI-specific paths that must be
 selected out for the Open Firmware build. A single-ABI libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
