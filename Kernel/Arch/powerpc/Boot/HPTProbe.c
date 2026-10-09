@@ -157,6 +157,40 @@ int powerpc_hpt_duplicate_mapping_rejected(void)
     return observed == 0x89abcdefu;
 }
 
+static void replace_test_mapping_without_tlb_flush(struct PowerPCHPTEntry* entry, Word upper, Word lower)
+{
+    entry->upper = 0;
+    __asm__ volatile("sync" : : : "memory");
+    entry->lower = lower;
+    __asm__ volatile("eieio" : : : "memory");
+    entry->upper = upper;
+    __asm__ volatile("sync" : : : "memory");
+}
+
+int powerpc_hpt_processor_tlb_test(void (*flush_page)(Word), void (*flush_all)(void))
+{
+    struct PowerPCHPTEntry* entry = find_high_page(HighDataPage);
+    Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
+    if (!entry || !flush_page || !flush_all || (replacement_physical & (PageSize - 1)) != 0)
+        return 0;
+
+    Word original_upper = entry->upper;
+    Word original_lower = entry->lower;
+    powerpc_enable_boot_translation();
+    volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    int passed = *alias == s_hpt_payload_word;
+
+    replace_test_mapping_without_tlb_flush(entry, original_upper, replacement_physical | (original_lower & (PageSize - 1)));
+    flush_page(HighDataPage);
+    passed = passed && *alias == s_hpt_replacement_word;
+
+    replace_test_mapping_without_tlb_flush(entry, original_upper, original_lower);
+    flush_all();
+    passed = passed && *alias == s_hpt_payload_word;
+    powerpc_disable_boot_translation();
+    return passed;
+}
+
 int powerpc_hpt_mapping_lifecycle(void)
 {
     Word payload_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;

@@ -25,6 +25,7 @@ extern int powerpc_cpu_features_test(void);
 extern int powerpc_processor_test(void);
 extern int powerpc_memory_fences_test(void);
 extern int powerpc_cache_maintenance_test(void);
+extern int powerpc_tlb_maintenance_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
@@ -337,6 +338,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT duplicate mapping rejected\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT duplicate mapping accepted\r\n");
+        if (powerpc_tlb_maintenance_test())
+            serial_write("SerenityOS PowerPC: processor TLB maintenance passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: processor TLB maintenance failed\r\n");
         if (powerpc_hpt_mapping_lifecycle())
             serial_write("SerenityOS PowerPC: HPT remap and secondary hash passed\r\n");
         else

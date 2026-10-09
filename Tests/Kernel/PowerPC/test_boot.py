@@ -46,6 +46,7 @@ def main():
         b"SerenityOS PowerPC: MMU high alias passed",
         b"SerenityOS PowerPC: HPT high alias passed",
         b"SerenityOS PowerPC: HPT duplicate mapping rejected",
+        b"SerenityOS PowerPC: processor TLB maintenance passed",
         b"SerenityOS PowerPC: HPT remap and secondary hash passed",
         b"SerenityOS PowerPC: HPT group reuse passed",
         b"SerenityOS PowerPC: HPT unmapped fault passed",

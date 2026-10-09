@@ -80,4 +80,39 @@ void ProcessorBase::flush_instruction_cache(VirtualAddress vaddr, size_t byte_co
     asm volatile("sync; isync" : : : "memory");
 }
 
+void ProcessorBase::flush_tlb_local(VirtualAddress vaddr, size_t page_count)
+{
+    if (page_count == 0)
+        return;
+
+    u64 first_page = vaddr.get() & ~(static_cast<u64>(PAGE_SIZE) - 1);
+    u64 end = first_page + static_cast<u64>(page_count) * PAGE_SIZE;
+    VERIFY(end <= 0x1'0000'0000ull);
+
+    asm volatile("sync" : : : "memory");
+    for (u64 page = first_page; page < end; page += PAGE_SIZE) {
+        auto address = static_cast<FlatPtr>(page);
+        asm volatile("tlbie %0" : : "r"(address) : "memory");
+    }
+    asm volatile("eieio; tlbsync; sync" : : : "memory");
+}
+
+void ProcessorBase::flush_tlb(Memory::PageDirectory const*, VirtualAddress vaddr, size_t page_count)
+{
+    // Pegasos 2 bring-up currently runs one processor.
+    flush_tlb_local(vaddr, page_count);
+}
+
+void ProcessorBase::flush_entire_tlb_local()
+{
+    // The 750 and 74xx do not implement tlbia. EA bits 14-19 index all
+    // 64 instruction and data TLB sets.
+    asm volatile("sync" : : : "memory");
+    for (u32 index = 0; index < 64; ++index) {
+        u32 address = index << 14;
+        asm volatile("tlbie %0" : : "r"(address) : "memory");
+    }
+    asm volatile("eieio; tlbsync; sync" : : : "memory");
+}
+
 }

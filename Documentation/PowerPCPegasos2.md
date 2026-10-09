@@ -89,6 +89,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
+`processor TLB maintenance passed`,
 `HPT group reuse passed`, `HPT unmapped fault passed`,
 `HPT read-only fault passed`, `HPT VSID switch passed`,
 `HPT kernel protection passed`, `user-mode page protection passed`,
@@ -199,6 +200,10 @@ instruction blocks over unaligned ranges using the 32-byte block size of the
 supported 750 and G4 CPUs. QEMU runs code copied across a block boundary,
 changes its return value, flushes the instruction cache, and checks the new
 result. Physical hardware still needs to validate cache coherency with DMA.
+The processor TLB interface now invalidates a page range or all 64 TLB sets.
+The HPT probe changes a live mapping without implicit invalidation and checks
+that both targeted and full flushes reveal the new physical page. Disabling
+those flushes makes the QEMU regression fail on a stale translation.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved
 return address from the caller's frame. QEMU checks two GCC-generated nested
