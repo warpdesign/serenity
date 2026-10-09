@@ -23,7 +23,9 @@ make -C Kernel/Arch/powerpc/Boot check
 builds GCC and libgcc for freestanding kernel code; the complete PowerPC LibC
 and dynamic loader are later userland milestones. The single-ABI libstdc++
 build succeeds with the current target headers. PowerPC multilibs are disabled,
-so the toolchain builds only the big-endian 32-bit ABI needed here.
+so the toolchain builds only the big-endian 32-bit hardware-float ABI needed
+here. The boot probe enables the FPU before entering C code and now uses that
+ABI to link the full AK float parser with Serenity's PowerPC `libgcc`.
 
 Both `check` and `check-quick` run the PowerPC toolchain tests under
 `Tests/Toolchain/PowerPC` and the Pegasos 2 QEMU tests under
@@ -50,6 +52,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
+`big-endian float parser passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -163,7 +166,7 @@ targets include:
 
 | Area | Finding to investigate |
 | --- | --- |
-| AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both representations, and the full float parser cross-compiles; its PowerPC runtime path still needs testing. |
+| AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. Other AK data representations still need review. |
 | ELF and loader | `LibELF/Validation.cpp` currently expects ELF64 little-endian, while `ELFBuild.cpp` writes that format. PowerPC needs ELF32 big-endian validation, loading, relocation, and output. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
