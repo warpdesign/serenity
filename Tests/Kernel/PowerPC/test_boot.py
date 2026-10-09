@@ -26,6 +26,7 @@ def main():
         b"SerenityOS PowerPC: processor primitives passed",
         b"SerenityOS PowerPC: memory fences passed",
         b"SerenityOS PowerPC: VSID allocator passed",
+        b"SerenityOS PowerPC: page mapping transaction passed",
         b"SerenityOS PowerPC: cache maintenance passed",
         b"SerenityOS PowerPC: big-endian short string passed",
         b"SerenityOS PowerPC: big-endian float digits passed",

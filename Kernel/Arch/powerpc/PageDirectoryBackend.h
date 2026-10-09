@@ -29,4 +29,10 @@ int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend c
 
 #ifdef __cplusplus
 }
+
+#    include <AK/Optional.h>
+#    include <Kernel/Memory/PageMapping.h>
+
+bool powerpc_page_directory_backend_apply_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const&);
+Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
 #endif

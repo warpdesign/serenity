@@ -18,6 +18,7 @@ check-quick:
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -fsyntax-only Test32BitLayout.c
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/SegmentRegisters.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/PageDirectoryBackend.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only TestPageMapping.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/VSIDAllocator.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only TestVSIDAllocator.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestBootInfo.cpp
