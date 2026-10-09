@@ -1,0 +1,31 @@
+/*
+ * Copyright (c) 2026, SerenityOS developers.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#pragma once
+
+#include <Kernel/Arch/powerpc/HashPageTable.h>
+#include <Kernel/Arch/powerpc/VSIDAllocator.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// All address spaces share SDR1's HPT. Each user directory owns a unique
+// block of VSIDs; callers serialize updates to the shared HPT.
+struct PowerPCPageDirectoryBackend {
+    struct PowerPCHashPageTable const* table;
+    PowerPCVSIDWord user_vsid_base;
+};
+
+int powerpc_page_directory_backend_initialize(struct PowerPCPageDirectoryBackend*, struct PowerPCHashPageTable const*, struct PowerPCVSIDAllocator*);
+PowerPCVSIDWord powerpc_page_directory_backend_vsid_for(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
+int powerpc_page_directory_backend_map(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
+int powerpc_page_directory_backend_unmap(struct PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
+int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend const*);
+
+#ifdef __cplusplus
+}
+#endif

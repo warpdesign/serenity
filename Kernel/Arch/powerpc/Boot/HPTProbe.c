@@ -7,6 +7,7 @@
 #include <Kernel/Arch/powerpc/ExceptionState.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
+#include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
 #include <Kernel/Arch/powerpc/VSIDAllocator.h>
 
@@ -324,10 +325,15 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     struct PowerPCVSIDAllocator allocator;
     powerpc_vsid_allocator_initialize(&allocator);
-    Word first_base = powerpc_vsid_allocator_allocate(&allocator);
-    Word second_base = powerpc_vsid_allocator_allocate(&allocator);
-    Word first_vsid = first_base + 1;
-    Word second_vsid = second_base + 1;
+    struct PowerPCPageDirectoryBackend first_directory;
+    struct PowerPCPageDirectoryBackend second_directory;
+    if (!powerpc_page_directory_backend_initialize(&first_directory, &s_hpt, &allocator)
+        || !powerpc_page_directory_backend_initialize(&second_directory, &s_hpt, &allocator))
+        return 0;
+    Word first_base = first_directory.user_vsid_base;
+    Word second_base = second_directory.user_vsid_base;
+    Word first_vsid = powerpc_page_directory_backend_vsid_for(&first_directory, UserTestAddress);
+    Word second_vsid = powerpc_page_directory_backend_vsid_for(&second_directory, UserTestAddress);
 
     if (powerpc_user_vsid_base_valid(0)
         || powerpc_user_vsid_base_valid(first_vsid)
@@ -335,6 +341,8 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
         || !powerpc_user_vsid_base_valid(first_base)
         || !powerpc_user_vsid_base_valid(second_base)
         || second_base - first_base != POWERPC_VSID_BLOCK_SIZE
+        || first_vsid != first_base + 1 || second_vsid != second_base + 1
+        || powerpc_page_directory_backend_vsid_for(&first_directory, HighDataPage) != 0
         || !powerpc_user_vsid_base_valid(0x00fffff0u)
         || powerpc_activate_user_segments(first_vsid)
         || powerpc_read_segment_register(1) != original_segments[1])
@@ -342,13 +350,14 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
     Word second_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
-    if (!powerpc_hpt_map(&s_hpt, first_vsid, UserTestAddress, first_physical, UserPageFlags)
-        || !powerpc_hpt_map(&s_hpt, second_vsid, UserTestAddress, second_physical, UserPageFlags))
+    if (powerpc_page_directory_backend_map(&first_directory, HighDataPage, first_physical, UserPageFlags)
+        || !powerpc_page_directory_backend_map(&first_directory, UserTestAddress, first_physical, UserPageFlags)
+        || !powerpc_page_directory_backend_map(&second_directory, UserTestAddress, second_physical, UserPageFlags))
         return 0;
 
     volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)UserTestAddress;
     powerpc_enable_boot_translation();
-    int first_activated = powerpc_activate_user_segments(first_base);
+    int first_activated = powerpc_page_directory_backend_activate(&first_directory);
     int first_segments_match = user_segments_match(first_base)
         && powerpc_read_segment_register(12) == original_kernel_segment;
     Word first_read = *alias;
@@ -356,7 +365,7 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     __asm__ volatile("sync" : : : "memory");
     Word first_physical_read = s_hpt_payload_word;
 
-    int second_activated = powerpc_activate_user_segments(second_base);
+    int second_activated = powerpc_page_directory_backend_activate(&second_directory);
     int second_segments_match = user_segments_match(second_base)
         && powerpc_read_segment_register(12) == original_kernel_segment;
     Word second_read = *alias;
@@ -365,18 +374,18 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     __asm__ volatile("sync" : : : "memory");
     Word second_physical_read = s_hpt_replacement_word;
 
-    powerpc_activate_user_segments(first_base);
+    powerpc_page_directory_backend_activate(&first_directory);
     Word first_again = *alias;
     *alias = 0x89abcdefu;
-    powerpc_activate_user_segments(second_base);
+    powerpc_page_directory_backend_activate(&second_directory);
     Word second_again = *alias;
     *alias = 0x13579bdfu;
     powerpc_disable_boot_translation();
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         powerpc_write_segment_register(segment, original_segments[segment]);
 
-    int unmapped = powerpc_hpt_unmap(&s_hpt, first_vsid, UserTestAddress)
-        && powerpc_hpt_unmap(&s_hpt, second_vsid, UserTestAddress);
+    int unmapped = powerpc_page_directory_backend_unmap(&first_directory, UserTestAddress)
+        && powerpc_page_directory_backend_unmap(&second_directory, UserTestAddress);
     return first_activated && second_activated && first_segments_match && second_segments_match
         && powerpc_read_segment_register(12) == original_kernel_segment
         && first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
