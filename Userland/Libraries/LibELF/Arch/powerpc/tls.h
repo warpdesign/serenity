@@ -25,6 +25,13 @@ static constexpr FlatPtr TLS_TP_STATIC_TLS_BLOCK_OFFSET = static_cast<FlatPtr>(-
 static constexpr size_t TLS_TP_BIAS = 0x7000;
 static constexpr size_t TLS_MINIMUM_BLOCK_OFFSET = 16;
 
+inline FlatPtr get_thread_pointer_register()
+{
+    FlatPtr value;
+    __asm__ volatile("mr %0,2" : "=r"(value));
+    return value;
+}
+
 // [padding][8-byte TCB][static TLS...]
 //                     ^first block            r2 = first block + 0x7000
 inline size_t calculate_static_tls_region_size(size_t tls_template_size, size_t tls_alignment)

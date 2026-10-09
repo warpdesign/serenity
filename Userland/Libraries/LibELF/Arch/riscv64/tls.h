@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2024-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -23,6 +23,11 @@ struct ThreadControlBlock {
 static constexpr size_t TLS_VARIANT = 1;
 static constexpr size_t TLS_DTV_OFFSET = 0x800;
 static constexpr size_t TLS_TP_STATIC_TLS_BLOCK_OFFSET = 0;
+
+inline FlatPtr get_thread_pointer_register()
+{
+    return bit_cast<FlatPtr>(__builtin_thread_pointer());
+}
 
 // RISC-V ELF TLS Layout
 // The padding is needed so tp is correctly aligned.

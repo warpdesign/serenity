@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Daniel Bertalan <dani@danielbertalan.dev>
+ * Copyright (c) 2023-2026, Daniel Bertalan <dani@danielbertalan.dev>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -22,6 +22,6 @@ extern "C" {
 // changed if we support dynamically allocated TLS blocks.
 void* __tls_get_addr(__tls_index* index)
 {
-    return reinterpret_cast<void*>(reinterpret_cast<FlatPtr>(__builtin_thread_pointer()) + index->ti_module + index->ti_offset + ELF::TLS_DTV_OFFSET);
+    return reinterpret_cast<void*>(ELF::get_thread_pointer_register() + index->ti_module + index->ti_offset + ELF::TLS_DTV_OFFSET);
 }
 }

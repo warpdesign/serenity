@@ -862,6 +862,10 @@ struct elf_args {
 #define R_PPC_GLOB_DAT 20
 #define R_PPC_JMP_SLOT 21
 #define R_PPC_RELATIVE 22
+#define R_PPC_DTPMOD32 68
+#define R_PPC_TPREL32 73
+#define R_PPC_DTPREL32 78
+#define R_PPC_IRELATIVE 248
 
 #define R_X86_64_NONE 0
 #define R_X86_64_64 1

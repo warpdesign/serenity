@@ -57,6 +57,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `ELF32 big-endian image passed`,
 `ELF32 relative relocations passed`,
 `PPC32 TLS layout passed`,
+`PPC32 static TLS lookup passed`,
 `RAM 256 MiB`, `program exception roundtrip passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -164,8 +165,10 @@ relative to r2. The [32-bit Power Architecture ABI supplement](https://www.polyo
 places the thread pointer 0x7000 bytes past the start of the first TLS block
 and defines a 0x8000-byte DTV pointer bias. LibELF now calculates this layout
 and sets r2; the QEMU probe checks TCB placement, TLS alignment, and an r2
-roundtrip. Dynamic TLS relocations and the complete loader path still need
-PowerPC testing before user processes can run.
+roundtrip. The probe also runs LibC's `__tls_get_addr()` against a static TLS
+block using the PowerPC DTV and TP biases. The generic dynamic loader still
+requires a PowerPC PLT path and end-to-end relocation testing before user
+processes can run.
 
 ## Big-endian audit
 
@@ -177,7 +180,7 @@ targets include:
 | Area | Finding to investigate |
 | --- | --- |
 | AK | The short-string tag and float parser's eight-digit byte packing now handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. Other AK data representations still need review. |
-| ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, applies REL, RELA, and RELR relative relocations, and checks the PowerPC TLS layout and r2 setter. `DynamicObject` decodes native symbol and relocation fields, but symbol resolution, dynamic TLS relocations, PLT handling, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
+| ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, applies REL, RELA, and RELR relative relocations, and checks the PowerPC TLS layout, r2 accessor, and static `__tls_get_addr()` lookup. `DynamicObject` decodes native symbol and relocation fields, but symbol resolution, dynamic TLS relocation application, PLT handling, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
 | Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
 

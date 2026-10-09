@@ -20,6 +20,12 @@ enum class GenericDynamicRelocationType : unsigned {
     GLOB_DAT = R_PPC_GLOB_DAT,
     JUMP_SLOT = R_PPC_JMP_SLOT,
     RELATIVE = R_PPC_RELATIVE,
+    TLS_DTPMOD = R_PPC_DTPMOD32,
+    TLS_TPREL = R_PPC_TPREL32,
+    TLS_DTPREL = R_PPC_DTPREL32,
+    IRELATIVE = R_PPC_IRELATIVE,
+    // PowerPC32 has no TLSDESC relocation. Keep this outside the ELF32 relocation range.
+    TLSDESC = 0xffffffffu,
 };
 
 }
