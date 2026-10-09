@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,7 @@
 #include <Kernel/Locking/Spinlock.h>
 #include <Kernel/Memory/AllocationStrategy.h>
 #include <Kernel/Memory/MemorySections.h>
+#include <Kernel/Memory/PageMapping.h>
 #include <Kernel/Memory/PhysicalRAMPage.h>
 #include <Kernel/Memory/PhysicalRegion.h>
 #include <Kernel/Memory/Region.h>
@@ -280,6 +281,9 @@ private:
 
     PageTableEntry* pte(PageDirectory&, VirtualAddress);
     PageTableEntry* ensure_pte(PageDirectory&, VirtualAddress);
+    bool map_page(PageDirectory&, VirtualAddress, PageMappingRequest const&);
+    void unmap_page(PageDirectory&, VirtualAddress, bool release_empty_table);
+    Optional<PageMappingInfo> query_page(PageDirectory&, VirtualAddress);
     enum class IsLastPTERelease {
         Yes,
         No

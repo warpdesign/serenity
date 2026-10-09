@@ -73,6 +73,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `CPU features passed`, `processor primitives passed`, `memory fences passed`,
 `VSID allocator passed`,
+`page mapping transaction passed`,
 `cache maintenance passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
@@ -155,10 +156,22 @@ backend. That backend binds an allocated VSID block to the shared HPT, maps,
 remaps, and unmaps user pages, and activates its segment registers. The probe
 remaps one user's virtual page to a third physical page and back while the
 other user's mapping stays intact. Integrating the backend with
-Serenity's generic `PageDirectory` and memory manager remains. The high kernel
-PTEs use supervisor-only protection with SR12's user key set. The probe
+Serenity's generic `PageDirectory` and memory manager remains. Generic `Region`
+mapping now passes a complete request to an architecture-selected mapping
+operation instead of mutating a PTE field by field. The existing hierarchical
+architectures use their PTEs; the PowerPC backend applies the same request to
+the HPT for user pages. QEMU checks the resulting physical page, permissions,
+and normal, noncacheable, and guarded I/O attributes. Early physical-page
+metadata mapping, quickmap, and kernel protection still require PowerPC
+implementations. The high kernel PTEs use supervisor-only protection with
+SR12's user key set. The probe
 temporarily selects the protected key for supervisor access and checks that
 the high page faults, then restores access.
+The current SR12 key pair cannot express a supervisor read-only page that is
+also inaccessible to user mode with an HPT PP value. Kernel text protection
+therefore needs a separate BAT or segment layout before the generic image
+protection code can be enabled. The [PowerPC page-protection table](https://www.nxp.com/assets/documents/data/en/supporting-information/TPQ2CH09.pdf)
+shows the key and PP combinations.
 A small problem-state probe fetches from a user HPT page, uses a mapped user
 stack, writes and reads a separate user data page, then attempts to read the
 protected kernel page. It checks the data-storage protection fault and returns
@@ -247,8 +260,13 @@ The PowerPC kernel CMake target now applies its 32-bit layout header to every
 source before other kernel headers, so generic objects do not accidentally
 select 64-bit EFI structures. This is a compile prerequisite, not a linked
 kernel.
-`Kernel/Memory/MemoryManager.cpp` also has EFI-specific paths that must be
-selected out for the Open Firmware build. A single-ABI libstdc++ build now
+The shared memory manager now delegates PTE mapping, boot page-table setup,
+and quickmap to an architecture-selected hierarchical implementation. The
+PowerPC HPT backend accepts complete page-mapping requests, but a PowerPC
+`PageDirectory`, physical-page array mapping, quickmap, and Open Firmware RAM
+handoff are still needed before generic memory initialization can run. EFI
+memory-map parsing is disabled by the PowerPC boot-layout setting. A single-ABI
+libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
 LibC now has PowerPC floating-point environment operations; QEMU checks actual
 rounding results, exception flags, and environment save/restore. LibC still

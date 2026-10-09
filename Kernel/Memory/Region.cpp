@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -244,26 +244,19 @@ bool Region::map_individual_page_impl(size_t page_index, PhysicalAddress paddr, 
         PANIC("About to map mmap'ed page at a kernel address");
     }
 
-    auto* pte = MM.ensure_pte(*m_page_directory, page_vaddr);
-    if (!pte)
-        return false;
-
     if (!readable && !writable) {
-        pte->clear();
+        MM.unmap_page(*m_page_directory, page_vaddr, false);
         return true;
     }
 
     bool is_writable = writable && !(should_cow(page_index) || should_dirty_on_write(page_index, should_lock_vmobject));
-
-    pte->set_memory_type(m_memory_type);
-    pte->set_physical_page_base(paddr.get());
-    pte->set_present(true);
-    pte->set_writable(is_writable);
-    if (Processor::current().has_nx())
-        pte->set_execute_disabled(!is_executable());
-    pte->set_user_allowed(user_allowed);
-
-    return true;
+    return MM.map_page(*m_page_directory, page_vaddr, PageMappingRequest {
+        .physical_page_base = paddr.get(),
+        .memory_type = m_memory_type,
+        .writable = is_writable,
+        .user_allowed = user_allowed,
+        .execute_disabled = Processor::current().has_nx() && !is_executable(),
+    });
 }
 
 bool Region::map_individual_page_impl(size_t page_index, ShouldLockVMObject should_lock_vmobject, bool readable, bool writeable)
@@ -304,7 +297,7 @@ void Region::unmap_with_locks_held(ShouldFlushTLB should_flush_tlb, SpinlockLock
     size_t count = page_count();
     for (size_t i = 0; i < count; ++i) {
         auto vaddr = vaddr_from_page_index(i);
-        MM.release_pte(*m_page_directory, vaddr, i == count - 1 ? MemoryManager::IsLastPTERelease::Yes : MemoryManager::IsLastPTERelease::No);
+        MM.unmap_page(*m_page_directory, vaddr, i == count - 1);
     }
     if (should_flush_tlb == ShouldFlushTLB::Yes)
         MemoryManager::flush_tlb(m_page_directory, vaddr(), page_count());
@@ -499,37 +492,37 @@ PageFaultResponse Region::handle_fault(PageFault const& fault)
 
     {
         SpinlockLocker locker(m_page_directory->get_lock());
-        auto* page_table_entry = MM.pte(*m_page_directory, fault.vaddr());
+        auto page_mapping = MM.query_page(*m_page_directory, fault.vaddr());
 
-        auto error = [&fault, page_table_entry](StringView message) {
+        auto error = [&fault, &page_mapping](StringView message) {
             dbgln("BUG! Unhandled page fault at {}: {}", fault.vaddr(), message);
 
-            if (page_table_entry) {
+            if (page_mapping.has_value()) {
                 dbgln("Associated page table entry:");
-                dbgln("     - Physical address: {:p}", page_table_entry->physical_page_base());
-                dbgln("     - Points to lazy committed page? {}", page_table_entry->physical_page_base() == MM.lazy_committed_page().paddr().get());
-                dbgln("     - Points to shared zero page? {}", page_table_entry->physical_page_base() == MM.shared_zero_page().paddr().get());
+                dbgln("     - Physical address: {:p}", page_mapping->physical_page_base);
+                dbgln("     - Points to lazy committed page? {}", page_mapping->physical_page_base == MM.lazy_committed_page().paddr().get());
+                dbgln("     - Points to shared zero page? {}", page_mapping->physical_page_base == MM.shared_zero_page().paddr().get());
             }
 
             PANIC("Unhandled page fault");
         };
 
-        if (page_table_entry == nullptr)
+        if (!page_mapping.has_value())
             error("Page table not present"sv);
 
-        if (!page_table_entry->is_present())
+        if (!page_mapping->present)
             error("Page table entry not present"sv);
 
-        if (!page_table_entry->is_writable() && fault.is_write())
+        if (!page_mapping->writable && fault.is_write())
             error("Page table entry not writable"sv);
 
-        if (page_table_entry->is_execute_disabled() && fault.is_instruction_fetch())
+        if (page_mapping->execute_disabled && fault.is_instruction_fetch())
             error("Page table entry not executable"sv);
 
-        if (!page_table_entry->is_user_allowed() && fault.is_user())
+        if (!page_mapping->user_allowed && fault.is_user())
             error("Page table entry not user-accessible"sv);
 
-        if (page_table_entry->is_user_allowed() && fault.is_kernel() && !fault.was_smap_disabled())
+        if (page_mapping->user_allowed && fault.is_kernel() && !fault.was_smap_disabled())
             error("Page table entry user-accessible and SMAP enabled"sv);
     }
 

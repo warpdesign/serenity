@@ -71,7 +71,7 @@ $(BUILD_DIR)/hash_page_table.o: ../HashPageTable.c ../HashPageTable.h | $(BUILD_
 $(BUILD_DIR)/hpt_probe.o: HPTProbe.c ../ExceptionState.h ../HashPageTable.h ../MemoryLayout.h ../PageDirectoryBackend.h ../SegmentRegisters.h ../VSIDAllocator.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/page_directory_backend.o: ../PageDirectoryBackend.cpp ../PageDirectoryBackend.h ../HashPageTable.h ../SegmentRegisters.h ../VSIDAllocator.h | $(BUILD_DIR)
+$(BUILD_DIR)/page_directory_backend.o: ../PageDirectoryBackend.cpp ../PageDirectoryBackend.h ../HashPageTable.h ../SegmentRegisters.h ../VSIDAllocator.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_page_mapping.o: ../../../../Tests/Kernel/PowerPC/TestPageMapping.cpp ../PageDirectoryBackend.h ../../../../Kernel/Memory/PageMapping.h | $(BUILD_DIR)

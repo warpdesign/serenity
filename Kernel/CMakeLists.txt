@@ -630,6 +630,13 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
     )
 endif()
 
+if("${SERENITY_ARCH}" STREQUAL "x86_64" OR "${SERENITY_ARCH}" STREQUAL "aarch64" OR "${SERENITY_ARCH}" STREQUAL "riscv64")
+    list(APPEND KERNEL_SOURCES
+        Arch/Hierarchical/MemoryManager.cpp
+        Arch/Hierarchical/MemoryManagerMapping.cpp
+    )
+endif()
+
 set(AK_SOURCES
     ../AK/DOSPackedTime.cpp
     ../AK/GenericLexer.cpp
