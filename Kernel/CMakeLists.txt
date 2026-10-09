@@ -621,6 +621,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "riscv64")
 elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
     set(KERNEL_SOURCES
         ${KERNEL_SOURCES}
+        Arch/powerpc/CPUID.cpp
         Arch/powerpc/FPUState.S
     )
 endif()

@@ -22,6 +22,7 @@ def main():
     serial_expected = (
         b"SerenityOS PowerPC: serial online",
         b"SerenityOS PowerPC: setjmp roundtrip passed",
+        b"SerenityOS PowerPC: CPU features passed",
         b"SerenityOS PowerPC: big-endian short string passed",
         b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: big-endian float parser passed",

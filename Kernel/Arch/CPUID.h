@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2023-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include <Kernel/Arch/aarch64/CPUID.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/CPUID.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/CPUID.h>
 #else
 #    error "Unknown architecture"
 #endif

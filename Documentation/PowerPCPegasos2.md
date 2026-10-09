@@ -71,6 +71,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 ```
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
+`CPU features passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
@@ -179,7 +180,9 @@ still needs a complete exception entry and return path and context switching.
 PowerPC's `FPUState` now saves all 32 scalar registers and FPSCR, and QEMU
 checks a state roundtrip with different rounding modes. The kernel still needs
 to call those routines during thread switches and handle vector state on CPUs
-that provide it. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
+that provide it. PowerPC CPU identification now reads PVR and distinguishes
+the tested 750-family and AltiVec-capable G4 models; QEMU checks the selected
+features and the FPU-enable bit in MSR. The [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 documents the `0x700` vector and program-exception state.
 
 AK now unwinds PowerPC32 frames through the r1 backchain and reads the saved

@@ -17,6 +17,8 @@ check-quick:
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -DTEST_POWERPC_LAYOUT -fsyntax-only Test32BitLayout.c
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -fsyntax-only Test32BitLayout.c
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestBootInfo.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestCPUFeatures.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only ../../../Kernel/Arch/powerpc/CPUID.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestRegisterState.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestFPUState.cpp
 	$(CC) $(CFLAGS) -c ../../../Kernel/Arch/powerpc/FPUState.S -o $(BUILD_DIR)/FPUState.o

@@ -21,6 +21,8 @@ static volatile unsigned char* s_uart;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
+extern int powerpc_cpu_features_test(void);
+extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
@@ -222,6 +224,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: setjmp roundtrip passed\r\n");
         else
             serial_write("SerenityOS PowerPC: setjmp roundtrip failed\r\n");
+        if (powerpc_cpu_features_test())
+            serial_write("SerenityOS PowerPC: CPU features passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: CPU features failed PVR 0x");
+            serial_write_hex(powerpc_cpu_pvr());
+            serial_write("\r\n");
+        }
         if (powerpc_short_string_layout_test())
             serial_write("SerenityOS PowerPC: big-endian short string passed\r\n");
         else

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2022, James Mintram <me@jamesrm.com>
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, James Mintram <me@jamesrm.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -22,6 +22,8 @@
 #    include <Kernel/Arch/aarch64/CPU.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/CPU.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/CPU.h>
 #else
 #    error "Unknown architecture"
 #endif
