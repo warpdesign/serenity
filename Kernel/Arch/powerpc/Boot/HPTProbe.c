@@ -7,6 +7,7 @@
 #include <Kernel/Arch/powerpc/ExceptionState.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
+#include <Kernel/Arch/powerpc/SegmentRegisters.h>
 
 typedef unsigned int Word;
 typedef int (*MarkerFunction)(void);
@@ -301,17 +302,35 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
         && (fault_status & 0x0a000000u) == 0x0a000000u && (fault_status & 0x40000000u) == 0;
 }
 
-static void select_user_segment(Word vsid)
+static int user_segments_match(Word vsid_base)
 {
-    __asm__ volatile("mtsr 1,%0; isync" : : "r"(vsid) : "memory");
+    for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment) {
+        if (powerpc_read_segment_register(segment) != vsid_base + segment)
+            return 0;
+    }
+    return 1;
 }
 
 int powerpc_hpt_vsid_switch_roundtrip(void)
 {
     Word machine_state;
-    Word original_segment;
-    __asm__ volatile("mfmsr %0; mfsr %1,1" : "=r"(machine_state), "=r"(original_segment));
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
     if ((machine_state & 0x30u) != 0)
+        return 0;
+
+    Word original_segments[POWERPC_USER_SEGMENT_COUNT];
+    for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
+        original_segments[segment] = powerpc_read_segment_register(segment);
+    Word original_kernel_segment = powerpc_read_segment_register(12);
+
+    if (powerpc_user_vsid_base_valid(0)
+        || powerpc_user_vsid_base_valid(FirstUserVSID)
+        || powerpc_user_vsid_base_valid(0x01000000u)
+        || !powerpc_user_vsid_base_valid(FirstUserVSID & ~0xfu)
+        || !powerpc_user_vsid_base_valid(SecondUserVSID & ~0xfu)
+        || !powerpc_user_vsid_base_valid(0x00fffff0u)
+        || powerpc_activate_user_segments(FirstUserVSID)
+        || powerpc_read_segment_register(1) != original_segments[1])
         return 0;
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
@@ -322,31 +341,38 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
 
     volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)UserTestAddress;
     powerpc_enable_boot_translation();
-    select_user_segment(FirstUserVSID);
+    int first_activated = powerpc_activate_user_segments(FirstUserVSID & ~0xfu);
+    int first_segments_match = user_segments_match(FirstUserVSID & ~0xfu)
+        && powerpc_read_segment_register(12) == original_kernel_segment;
     Word first_read = *alias;
     *alias = 0x11223344u;
     __asm__ volatile("sync" : : : "memory");
     Word first_physical_read = s_hpt_payload_word;
 
-    select_user_segment(SecondUserVSID);
+    int second_activated = powerpc_activate_user_segments(SecondUserVSID & ~0xfu);
+    int second_segments_match = user_segments_match(SecondUserVSID & ~0xfu)
+        && powerpc_read_segment_register(12) == original_kernel_segment;
     Word second_read = *alias;
     Word kernel_read = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
     *alias = 0x55667788u;
     __asm__ volatile("sync" : : : "memory");
     Word second_physical_read = s_hpt_replacement_word;
 
-    select_user_segment(FirstUserVSID);
+    powerpc_activate_user_segments(FirstUserVSID & ~0xfu);
     Word first_again = *alias;
     *alias = 0x89abcdefu;
-    select_user_segment(SecondUserVSID);
+    powerpc_activate_user_segments(SecondUserVSID & ~0xfu);
     Word second_again = *alias;
     *alias = 0x13579bdfu;
     powerpc_disable_boot_translation();
-    select_user_segment(original_segment);
+    for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
+        powerpc_write_segment_register(segment, original_segments[segment]);
 
     int unmapped = powerpc_hpt_unmap(&s_hpt, FirstUserVSID, UserTestAddress)
         && powerpc_hpt_unmap(&s_hpt, SecondUserVSID, UserTestAddress);
-    return first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
+    return first_activated && second_activated && first_segments_match && second_segments_match
+        && powerpc_read_segment_register(12) == original_kernel_segment
+        && first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
         && first_physical_read == 0x11223344u && second_physical_read == 0x55667788u
         && first_again == 0x11223344u && second_again == 0x55667788u
         && s_hpt_payload_word == 0x89abcdefu && s_hpt_replacement_word == 0x13579bdfu
@@ -386,7 +412,8 @@ int powerpc_hpt_user_mode_roundtrip(void)
 {
     Word machine_state;
     Word original_segment;
-    __asm__ volatile("mfmsr %0; mfsr %1,1" : "=r"(machine_state), "=r"(original_segment));
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
+    original_segment = powerpc_read_segment_register(1);
     if ((machine_state & 0x4030u) != 0)
         return 0;
 
@@ -416,7 +443,7 @@ int powerpc_hpt_user_mode_roundtrip(void)
     powerpc_user_probe_observed_srr1 = 0;
     powerpc_user_probe_observed_user_stack = 0;
     powerpc_user_probe_syscall_count = 0;
-    select_user_segment(0x20000000u | UserProbeVSID); // Kp=1 for problem-state accesses.
+    powerpc_write_segment_register(1, 0x20000000u | UserProbeVSID); // Kp=1 for problem-state accesses.
     Word fault_count_before;
     Word supervisor_stack_before;
     __asm__ volatile("mfspr %0,272" : "=r"(fault_count_before));
@@ -447,7 +474,7 @@ int powerpc_hpt_user_mode_roundtrip(void)
     Word user_stack_value = s_user_stack[(PageSize - 24) / sizeof(Word)];
     s_user_stack[(PageSize - 32) / sizeof(Word)] = 0;
     s_user_stack[(PageSize - 24) / sizeof(Word)] = 0;
-    select_user_segment(original_segment);
+    powerpc_write_segment_register(1, original_segment);
     int unmapped = powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage)
         && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage)
         && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeStackPage);

@@ -142,9 +142,11 @@ operations now live in `Kernel/Arch/powerpc/HashPageTable.c`, take an explicit
 VSID, and reject a second mapping for the same virtual page. The boot image
 also maps a read-only page and confirms that a store faults without changing
 either the virtual or physical value. It then maps the same low virtual page
-under two VSIDs, changes SR1 while translation is enabled, and checks that
-each VSID reaches a distinct physical page while the kernel's SR12 mapping
-remains accessible. The high kernel PTEs use supervisor-only protection with
+under two VSIDs, switches all 12 user segment registers while translation is
+enabled, and checks that each VSID reaches a distinct physical page while the
+kernel's SR12 mapping remains accessible. The segment switch accepts aligned
+16-VSID blocks and preserves SR12-SR15; per-process VSID allocation remains to
+be implemented. The high kernel PTEs use supervisor-only protection with
 SR12's user key set. The probe temporarily selects the protected key for
 supervisor access and checks that the high page faults, then restores access.
 A small problem-state probe fetches from a user HPT page, uses a mapped user
