@@ -32,7 +32,7 @@ extern int powerpc_cache_maintenance_test(void);
 extern int powerpc_tlb_maintenance_test(void);
 extern int powerpc_vsid_allocator_test(void);
 extern int powerpc_firmware_memory_map_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
-extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
+extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell);
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
@@ -373,10 +373,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
-        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes))
-            serial_write("SerenityOS PowerPC: HPT boot handoff passed\r\n");
+        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency))
+            serial_write("SerenityOS PowerPC: HPT and timebase boot handoff passed\r\n");
         else
-            serial_write("SerenityOS PowerPC: HPT boot handoff failed\r\n");
+            serial_write("SerenityOS PowerPC: HPT and timebase boot handoff failed\r\n");
         if (powerpc_hpt_quickmap_roundtrip())
             serial_write("SerenityOS PowerPC: HPT quickmap alias passed\r\n");
         else

@@ -10,6 +10,8 @@
 
 namespace Kernel::PowerPC {
 
+constexpr u32 default_decrementer_interrupts_per_second = 250;
+
 inline u64 read_timebase()
 {
     u32 high_before;
@@ -33,6 +35,20 @@ inline u32 decrementer_interval(u32 timebase_frequency, u32 interrupts_per_secon
     auto ticks = timebase_frequency / interrupts_per_second;
     // A positive signed DEC value is needed for a future zero crossing.
     return ticks > 0 && ticks <= 0x7fffffff ? ticks : 0;
+}
+
+inline u64 timebase_ticks_to_nanoseconds(u64 ticks, u32 timebase_frequency)
+{
+    if (timebase_frequency == 0)
+        return 0;
+    constexpr u64 nanoseconds_per_second = 1'000'000'000ull;
+    constexpr u64 maximum = ~0ull;
+    auto whole_seconds = ticks / timebase_frequency;
+    if (whole_seconds > maximum / nanoseconds_per_second)
+        return maximum;
+    auto nanoseconds = whole_seconds * nanoseconds_per_second;
+    auto fraction = (ticks % timebase_frequency) * nanoseconds_per_second / timebase_frequency;
+    return fraction > maximum - nanoseconds ? maximum : nanoseconds + fraction;
 }
 
 }

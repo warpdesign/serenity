@@ -5,8 +5,17 @@
  */
 
 #include <Kernel/Arch/powerpc/BootHandoff.h>
+#include <Kernel/Arch/powerpc/Time/Timebase.h>
 
 namespace Kernel::PowerPC {
+
+Optional<u32> boot_timebase_frequency(BootInfo const& boot_info)
+{
+    if (boot_info.boot_method != BootMethod::FirmwareMemoryMap
+        || !decrementer_interval(boot_info.arch_specific.timebase_frequency_hz, default_decrementer_interrupts_per_second))
+        return {};
+    return boot_info.arch_specific.timebase_frequency_hz;
+}
 
 bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& table)
 {

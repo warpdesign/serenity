@@ -19,6 +19,7 @@ struct ArchSpecificBootInfo {
     FlatPtr hpt_virtual_address { 0 };
     PhysicalAddress hpt_physical_address { 0 };
     u32 hpt_group_count { 0 };
+    u32 timebase_frequency_hz { 0 };
 };
 
 }

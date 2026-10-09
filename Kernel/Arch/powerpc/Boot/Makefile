@@ -96,10 +96,10 @@ $(BUILD_DIR)/open_firmware_memory_map.o: ../OpenFirmwareMemoryMap.cpp ../OpenFir
 $(BUILD_DIR)/test_firmware_memory_map.o: ../../../../Tests/Kernel/PowerPC/TestFirmwareMemoryMap.c ../OpenFirmwareMemoryMap.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
+$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_vsid_allocator.o: ../../../../Tests/Kernel/PowerPC/TestVSIDAllocator.cpp ../VSIDAllocator.h | $(BUILD_DIR)

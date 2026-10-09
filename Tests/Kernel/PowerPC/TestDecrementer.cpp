@@ -54,5 +54,7 @@ extern "C" int powerpc_decrementer_exception_roundtrip(unsigned int timebase_fre
     asm volatile("mtspr 272,%0; mtspr 274,%1" : : "r"(original_sprg0), "r"(original_sprg2));
     Pegasos2::write_legacy_port(Pegasos2::slave_pic_mask_port, slave_mask);
     Pegasos2::write_legacy_port(Pegasos2::master_pic_mask_port, master_mask);
-    return interrupts >= 2 && elapsed >= static_cast<u64>(interval) * 2 && elapsed < static_cast<u64>(timebase_frequency) / 2;
+    auto elapsed_nanoseconds = timebase_ticks_to_nanoseconds(elapsed, timebase_frequency);
+    return interrupts >= 2 && elapsed >= static_cast<u64>(interval) * 2
+        && elapsed_nanoseconds >= 18'000'000 && elapsed_nanoseconds < 500'000'000;
 }
