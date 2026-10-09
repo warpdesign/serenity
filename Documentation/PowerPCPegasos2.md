@@ -27,6 +27,11 @@ so the toolchain builds only the big-endian 32-bit hardware-float ABI needed
 here. The boot probe enables the FPU before entering C code and now uses that
 ABI to link the full AK float parser with Serenity's PowerPC `libgcc`.
 
+The PowerPC GNU CMake toolchain selects `-msecure-plt` for C and C++. This
+produces writable PLT pointer slots and a data GOT instead of the legacy BSS
+PLT code stubs. Direct cross-compiler commands need the same option. The loader
+still needs to bind those slots and provide a PowerPC entry path.
+
 Both `check` and `check-quick` run the PowerPC toolchain tests under
 `Tests/Toolchain/PowerPC` and the Pegasos 2 QEMU tests under
 `Tests/Kernel/PowerPC`. The quick target checks the default CPU with 256 MiB;

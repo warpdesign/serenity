@@ -5,6 +5,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 
@@ -38,11 +39,24 @@ def main():
         header = subprocess.check_output([args.readelf, "-h", str(object_file)], text=True)
         link_plan = subprocess.run([args.compiler, "-###", str(source), "-o", str(Path(directory) / "abi")], capture_output=True, text=True, check=True).stderr
 
+        plt_source = Path(directory) / "plt.c"
+        plt_image = Path(directory) / "plt.so"
+        plt_source.write_text("extern int imported_function(int);\nint call_imported_function(int value) { return imported_function(value); }\n")
+        subprocess.run([args.compiler, "-msecure-plt", "-msdata=none", "-fPIC", "-shared", "-nostdlib", str(plt_source), "-o", str(plt_image)], check=True)
+        plt_sections = subprocess.check_output([args.readelf, "-W", "-S", str(plt_image)], text=True)
+        plt_dynamic = subprocess.check_output([args.readelf, "-W", "-d", "-r", str(plt_image)], text=True)
+
     for field in ("ELF32", "big endian", "PowerPC"):
         if field not in header:
             raise SystemExit(f"Compiled object is missing {field}: {header}")
     if "-dynamic-linker /usr/lib/Loader.so" not in link_plan:
         raise SystemExit(f"Wrong default runtime loader: {link_plan}")
+    if not any(".plt" in line and "PROGBITS" in line for line in plt_sections.splitlines()):
+        raise SystemExit(f"PowerPC secure PLT must contain pointer slots: {plt_sections}")
+    if not any(re.search(r"\]\s+\.got\s+PROGBITS\s", line) and re.search(r"\sWA\s+\d+\s+\d+\s+\d+\s*$", line) for line in plt_sections.splitlines()):
+        raise SystemExit(f"PowerPC secure PLT must have a data GOT: {plt_sections}")
+    if "PPC_GOT" not in plt_dynamic or "R_PPC_JMP_SLOT" not in plt_dynamic:
+        raise SystemExit(f"PowerPC secure PLT metadata is missing: {plt_dynamic}")
     print("powerpc-serenity toolchain passed")
 
 
