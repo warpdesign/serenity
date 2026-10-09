@@ -62,6 +62,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
+`FPSCR environment passed`,
 `ELF32 big-endian header passed`,
 `ELF32 big-endian image passed`,
 `ELF32 relative relocations passed`,
@@ -178,9 +179,10 @@ direct-map and high-memory limits need validation with the eventual MMU.
 `Kernel/Memory/MemoryManager.cpp` also has EFI-specific paths that must be
 selected out for the Open Firmware build. A single-ABI libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
-LibC still needs PowerPC floating-point environment support, signal-context
-handling, thread-local storage, and the rest of its architecture assembly
-before user processes can run. The cross compiler emits local-exec TLS accesses
+LibC now has PowerPC floating-point environment operations; QEMU checks actual
+rounding results, exception flags, and environment save/restore. LibC still
+needs signal-context handling and the rest of its architecture assembly before
+user processes can run. The cross compiler emits local-exec TLS accesses
 relative to r2. The [32-bit Power Architecture ABI supplement](https://www.polyomino.org.uk/publications/2011/Power-Arch-32-bit-ABI-supp-1.0-Unified.pdf)
 places the thread pointer 0x7000 bytes past the start of the first TLS block
 and defines a 0x8000-byte DTV pointer bias. LibELF now calculates this layout

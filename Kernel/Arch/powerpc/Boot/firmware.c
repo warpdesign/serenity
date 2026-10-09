@@ -24,6 +24,7 @@ extern int powerpc_setjmp_self_test(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
+extern int powerpc_fenv_test(void);
 extern int powerpc_native_elf_header_test(void);
 extern int powerpc_native_elf_image_test(void);
 extern int powerpc_relative_relocations_test(void);
@@ -230,6 +231,14 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: big-endian float parser passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian float parser failed\r\n");
+        int fenv_result = powerpc_fenv_test();
+        if (fenv_result == 1)
+            serial_write("SerenityOS PowerPC: FPSCR environment passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: FPSCR environment failed 0x");
+            serial_write_hex(fenv_result);
+            serial_write("\r\n");
+        }
         if (powerpc_native_elf_header_test())
             serial_write("SerenityOS PowerPC: ELF32 big-endian header passed\r\n");
         else

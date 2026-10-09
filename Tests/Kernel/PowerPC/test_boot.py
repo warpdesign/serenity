@@ -25,6 +25,7 @@ def main():
         b"SerenityOS PowerPC: big-endian short string passed",
         b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: big-endian float parser passed",
+        b"SerenityOS PowerPC: FPSCR environment passed",
         b"SerenityOS PowerPC: ELF32 big-endian header passed",
         b"SerenityOS PowerPC: ELF32 big-endian image passed",
         b"SerenityOS PowerPC: ELF32 relative relocations passed",

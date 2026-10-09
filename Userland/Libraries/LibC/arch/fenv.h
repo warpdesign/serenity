@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Dan Klishch <danilklishch@gmail.com>
+ * Copyright (c) 2024-2026, Dan Klishch <danilklishch@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,6 +12,8 @@
 #    include <arch/aarch64/fenv.h>
 #elif defined(__riscv) && __riscv_xlen == 64
 #    include <arch/riscv64/fenv.h>
+#elif (defined(__powerpc__) || defined(_ARCH_PPC)) && __SIZEOF_POINTER__ == 4
+#    include <arch/powerpc/fenv.h>
 #else
 #    error Unknown architecture
 #endif
