@@ -50,6 +50,7 @@ def main():
         b"SerenityOS PowerPC: loader breakpoint passed",
         b"SerenityOS PowerPC: syscall register ABI passed",
         b"SerenityOS PowerPC: MMU high alias passed",
+        b"SerenityOS PowerPC: translated external IRQ stack passed",
         b"SerenityOS PowerPC: HPT high alias passed",
         b"SerenityOS PowerPC: HPT and timebase boot handoff passed",
         b"SerenityOS PowerPC: HPT quickmap alias passed",

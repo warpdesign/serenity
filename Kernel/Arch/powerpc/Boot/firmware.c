@@ -56,6 +56,7 @@ extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_decrementer_exception_roundtrip(Cell);
 extern int powerpc_legacy_pic_irq0_roundtrip(Cell);
 extern int powerpc_external_irq_roundtrip(Cell);
+extern int powerpc_run_high_stack_external_irq_probe(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_hpt_quickmap_roundtrip(void);
@@ -379,6 +380,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: MMU high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: MMU high alias failed\r\n");
+        if (powerpc_run_high_stack_external_irq_probe(timebase_frequency))
+            serial_write("SerenityOS PowerPC: translated external IRQ stack passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: translated external IRQ stack failed\r\n");
         if (powerpc_hpt_high_alias_roundtrip())
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else

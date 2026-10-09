@@ -32,14 +32,14 @@ extern "C" void powerpc_external_irq_probe_dispatch(PowerPCExceptionState const*
     pic.set_masks(0xff, 0xff);
 }
 
-extern "C" int powerpc_external_irq_roundtrip(u32 timebase_frequency)
+static int run_external_irq_roundtrip(u32 timebase_frequency, u32 expected_translation)
 {
     using Kernel::PowerPC::Pegasos2::LegacyPIC;
     using Kernel::PowerPC::read_timebase;
 
     u32 original_msr;
     asm volatile("mfmsr %0" : "=r"(original_msr));
-    if ((original_msr & (0x8000u | 0x4000u | 0x30u)) || !timebase_frequency
+    if ((original_msr & (0x8000u | 0x4000u)) || (original_msr & 0x30u) != expected_translation || !timebase_frequency
         || !powerpc_install_external_interrupt_probe_vector())
         return 0;
 
@@ -72,7 +72,18 @@ extern "C" int powerpc_external_irq_roundtrip(u32 timebase_frequency)
     asm volatile("mr %0,1" : "=r"(current_stack));
     return s_interrupt_count == 1 && s_irq == 0
         && guard_r14 == 0x13579bdf && guard_r15 == 0x2468ace0
-        && (s_saved_srr1 & 0x8000u) != 0 && (s_saved_srr1 & 0x30u) == 0
-        && s_saved_srr0 >= 0x200000u && s_saved_srr0 < 0x300000u
-        && s_saved_stack >= current_stack && s_saved_stack - current_stack < 512;
+        && (s_saved_srr1 & 0x8000u) != 0 && (s_saved_srr1 & 0x30u) == expected_translation
+        && s_saved_srr0 >= 0x200000u && s_saved_srr0 < 0x1000000u
+        && s_saved_stack >= current_stack && s_saved_stack - current_stack < 512
+        && (expected_translation == 0 || (s_saved_stack >= 0xc0000000u && s_saved_stack < 0xc1000000u));
+}
+
+extern "C" int powerpc_external_irq_roundtrip(u32 timebase_frequency)
+{
+    return run_external_irq_roundtrip(timebase_frequency, 0);
+}
+
+extern "C" int powerpc_external_irq_high_stack_body(u32 timebase_frequency)
+{
+    return run_external_irq_roundtrip(timebase_frequency, 0x30u);
 }

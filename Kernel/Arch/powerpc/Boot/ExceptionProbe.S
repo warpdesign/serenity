@@ -66,13 +66,23 @@ decrementer_exception_vector_end:
 .section .text, "ax"
 .type powerpc_external_interrupt_probe_handler, @function
 powerpc_external_interrupt_probe_handler:
-    // Supervisor-only real-mode probe. Keep the ABI linkage and parameter
-    // area separate from the saved PowerPCExceptionState at r1 + 48.
-    stwu 1, -224(1)
-    stw 0, 48(1)
-    stmw 2, 56(1)
-    addi 0, 1, 224
-    stw 0, 52(1)
+    // Hardware enters with IR/DR clear. The interrupted r1 may be a high
+    // virtual address, so switch to a physical stack before the first store.
+    mtspr 275, 11
+    mtspr 274, 12
+    lis 11, powerpc_probe_exception_stack_top@ha
+    addi 11, 11, powerpc_probe_exception_stack_top@l
+    addi 11, 11, -224
+    stw 0, 48(11)
+    stw 1, 52(11)
+    stmw 2, 56(11)
+    mfspr 0, 275
+    stw 0, 92(11)     // Original r11.
+    mfspr 0, 274
+    stw 0, 96(11)     // Original r12.
+    li 0, 0
+    stw 0, 0(11)      // End the backchain at the exception stack.
+    mr 1, 11
     mfcr 0
     stw 0, 176(1)
     mfctr 0
@@ -107,6 +117,38 @@ powerpc_external_interrupt_probe_handler:
     rfi
 .size powerpc_external_interrupt_probe_handler, .-powerpc_external_interrupt_probe_handler
 
+.global powerpc_run_high_stack_external_irq_probe
+.type powerpc_run_high_stack_external_irq_probe, @function
+powerpc_run_high_stack_external_irq_probe:
+    stwu 1, -64(1)
+    mflr 0
+    stw 0, 68(1)
+    stw 30, 56(1)
+    stw 31, 60(1)
+    mr 30, 3
+    mr 31, 1
+    bl powerpc_install_boot_bats
+    bl powerpc_enable_boot_translation
+    lis 1, powerpc_probe_high_stack_top@ha
+    addi 1, 1, powerpc_probe_high_stack_top@l
+    addis 1, 1, 0xc000
+    addi 1, 1, -16
+    li 0, 0
+    stw 0, 0(1)
+    mr 3, 30
+    bl powerpc_external_irq_high_stack_body
+    mr 30, 3
+    mr 1, 31
+    bl powerpc_disable_boot_translation
+    mr 3, 30
+    lwz 30, 56(1)
+    lwz 31, 60(1)
+    lwz 0, 68(1)
+    mtlr 0
+    addi 1, 1, 64
+    blr
+.size powerpc_run_high_stack_external_irq_probe, .-powerpc_run_high_stack_external_irq_probe
+
 .global trigger_program_exception
 .type trigger_program_exception, @function
 trigger_program_exception:
@@ -129,3 +171,13 @@ powerpc_probe_read_only_store:
     stw 4, 0(3)       // The data-storage handler skips this exact instruction.
     blr
 .size powerpc_probe_read_only_store, .-powerpc_probe_read_only_store
+
+.section .bss, "aw", @nobits
+.balign 16
+powerpc_probe_exception_stack:
+    .space 4096
+powerpc_probe_exception_stack_top:
+.balign 16
+powerpc_probe_high_stack:
+    .space 4096
+powerpc_probe_high_stack_top:

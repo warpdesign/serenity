@@ -93,7 +93,8 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `legacy PIC IRQ0 acknowledge passed`,
 `external IRQ0 roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
-`MMU high alias passed`, `HPT high alias passed`,
+`MMU high alias passed`, `translated external IRQ stack passed`,
+`HPT high alias passed`,
 `HPT and timebase boot handoff passed`,
 `HPT quickmap alias passed`, `HPT physical metadata array passed`,
 `HPT duplicate mapping rejected`, `HPT remap and secondary hash passed`,
@@ -257,9 +258,13 @@ PowerPC; the kernel exception vector has not yet dispatched an IRQ to them.
 The probe now copies a `0x500` vector that saves all integer registers and
 SRR0/SRR1, calls a C PIC dispatcher, then restores the state with `rfi`. QEMU
 observes one external interrupt from PIT channel 0 and checks that the saved
-state returns to the interrupted code. This probe uses its supervisor stack
-in real mode. A kernel entry must switch stacks before handling user IRQs and
-establish translated kernel mappings before it calls the registered handlers.
+state returns to the interrupted code. A second probe enables BAT translation
+and runs with a high virtual stack. The low vector switches to a separate
+physical exception stack before its first store, and QEMU checks that `rfi`
+restores both the high stack and the translation bits. This still runs
+supervisor code through the boot probe's identity instruction BAT. A kernel
+entry must establish translated kernel mappings before it calls registered
+handlers and handle user-mode IRQs on the same safe stack.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond
