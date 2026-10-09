@@ -33,6 +33,7 @@ extern int powerpc_hpt_vsid_switch_roundtrip(void);
 extern int powerpc_hpt_kernel_protection_roundtrip(void);
 extern int powerpc_hpt_user_mode_roundtrip(void);
 extern int powerpc_user_stack_observed(void);
+extern int powerpc_user_syscall_resume_observed(void);
 
 static int is_pegasos2(void)
 {
@@ -263,5 +264,9 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: user-mode stack passed\r\n");
         else
             serial_write("SerenityOS PowerPC: user-mode stack failed\r\n");
+        if (powerpc_user_syscall_resume_observed())
+            serial_write("SerenityOS PowerPC: user-mode syscall resume passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: user-mode syscall resume failed\r\n");
     }
 }
