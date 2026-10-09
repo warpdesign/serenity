@@ -72,6 +72,7 @@ qemu-system-ppc -M pegasos2 -m 256 \
 
 The native console reports `serial online`, `setjmp roundtrip passed`,
 `CPU features passed`, `processor primitives passed`, `memory fences passed`,
+`VSID allocator passed`,
 `cache maintenance passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
@@ -146,10 +147,14 @@ either the virtual or physical value. It then maps the same low virtual page
 under two VSIDs, switches all 12 user segment registers while translation is
 enabled, and checks that each VSID reaches a distinct physical page while the
 kernel's SR12 mapping remains accessible. The segment switch accepts aligned
-16-VSID blocks and preserves SR12-SR15; per-process VSID allocation remains to
-be implemented. The high kernel PTEs use supervisor-only protection with
-SR12's user key set. The probe temporarily selects the protected key for
-supervisor access and checks that the high page faults, then restores access.
+16-VSID blocks and preserves SR12-SR15. A monotonic allocator now provides
+unique blocks for user address spaces and reports exhaustion without reusing a
+block while old HPT entries may remain. The QEMU isolation test maps two
+allocated VSIDs to different physical pages. Connecting that allocator to
+`PageDirectory` creation remains. The high kernel PTEs use supervisor-only
+protection with SR12's user key set. The probe temporarily selects the
+protected key for supervisor access and checks that the high page faults, then
+restores access.
 A small problem-state probe fetches from a user HPT page, uses a mapped user
 stack, writes and reads a separate user data page, then attempts to read the
 protected kernel page. It checks the data-storage protection fault and returns

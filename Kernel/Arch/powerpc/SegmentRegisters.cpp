@@ -5,10 +5,12 @@
  */
 
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
+#include <Kernel/Arch/powerpc/VSIDAllocator.h>
 
 int powerpc_user_vsid_base_valid(PowerPCSegmentWord base)
 {
-    return base >= 0x100u && base <= 0x00fffff0u && (base & 0xfu) == 0;
+    return base >= POWERPC_FIRST_USER_VSID_BASE && base <= POWERPC_LAST_USER_VSID_BASE
+        && (base & (POWERPC_VSID_BLOCK_SIZE - 1)) == 0;
 }
 
 PowerPCSegmentWord powerpc_read_segment_register(PowerPCSegmentWord segment)

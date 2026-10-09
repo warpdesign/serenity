@@ -26,6 +26,7 @@ extern int powerpc_processor_test(void);
 extern int powerpc_memory_fences_test(void);
 extern int powerpc_cache_maintenance_test(void);
 extern int powerpc_tlb_maintenance_test(void);
+extern int powerpc_vsid_allocator_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
@@ -244,6 +245,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: memory fences passed\r\n");
         else
             serial_write("SerenityOS PowerPC: memory fences failed\r\n");
+        if (powerpc_vsid_allocator_test())
+            serial_write("SerenityOS PowerPC: VSID allocator passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: VSID allocator failed\r\n");
         if (powerpc_cache_maintenance_test())
             serial_write("SerenityOS PowerPC: cache maintenance passed\r\n");
         else

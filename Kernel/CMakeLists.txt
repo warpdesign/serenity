@@ -625,6 +625,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/FPUState.S
         Arch/powerpc/Processor.cpp
         Arch/powerpc/SegmentRegisters.cpp
+        Arch/powerpc/VSIDAllocator.cpp
     )
 endif()
 

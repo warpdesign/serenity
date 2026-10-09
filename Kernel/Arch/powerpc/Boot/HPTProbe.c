@@ -8,6 +8,7 @@
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/MemoryLayout.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
+#include <Kernel/Arch/powerpc/VSIDAllocator.h>
 
 typedef unsigned int Word;
 typedef int (*MarkerFunction)(void);
@@ -21,8 +22,6 @@ enum {
     HighDataPage = KERNEL_MAPPING_BASE + 0x00800000,
     ReadOnlyPage = KERNEL_MAPPING_BASE + 0x00900000,
     UserTestAddress = 0x10000000,
-    FirstUserVSID = 0x101,
-    SecondUserVSID = 0x201,
     UserProbeCodePage = 0x10010000,
     UserProbeDataPage = 0x10020000,
     UserProbeStackPage = 0x10030000,
@@ -323,34 +322,42 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
         original_segments[segment] = powerpc_read_segment_register(segment);
     Word original_kernel_segment = powerpc_read_segment_register(12);
 
+    struct PowerPCVSIDAllocator allocator;
+    powerpc_vsid_allocator_initialize(&allocator);
+    Word first_base = powerpc_vsid_allocator_allocate(&allocator);
+    Word second_base = powerpc_vsid_allocator_allocate(&allocator);
+    Word first_vsid = first_base + 1;
+    Word second_vsid = second_base + 1;
+
     if (powerpc_user_vsid_base_valid(0)
-        || powerpc_user_vsid_base_valid(FirstUserVSID)
+        || powerpc_user_vsid_base_valid(first_vsid)
         || powerpc_user_vsid_base_valid(0x01000000u)
-        || !powerpc_user_vsid_base_valid(FirstUserVSID & ~0xfu)
-        || !powerpc_user_vsid_base_valid(SecondUserVSID & ~0xfu)
+        || !powerpc_user_vsid_base_valid(first_base)
+        || !powerpc_user_vsid_base_valid(second_base)
+        || second_base - first_base != POWERPC_VSID_BLOCK_SIZE
         || !powerpc_user_vsid_base_valid(0x00fffff0u)
-        || powerpc_activate_user_segments(FirstUserVSID)
+        || powerpc_activate_user_segments(first_vsid)
         || powerpc_read_segment_register(1) != original_segments[1])
         return 0;
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
     Word second_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
-    if (!powerpc_hpt_map(&s_hpt, FirstUserVSID, UserTestAddress, first_physical, UserPageFlags)
-        || !powerpc_hpt_map(&s_hpt, SecondUserVSID, UserTestAddress, second_physical, UserPageFlags))
+    if (!powerpc_hpt_map(&s_hpt, first_vsid, UserTestAddress, first_physical, UserPageFlags)
+        || !powerpc_hpt_map(&s_hpt, second_vsid, UserTestAddress, second_physical, UserPageFlags))
         return 0;
 
     volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)UserTestAddress;
     powerpc_enable_boot_translation();
-    int first_activated = powerpc_activate_user_segments(FirstUserVSID & ~0xfu);
-    int first_segments_match = user_segments_match(FirstUserVSID & ~0xfu)
+    int first_activated = powerpc_activate_user_segments(first_base);
+    int first_segments_match = user_segments_match(first_base)
         && powerpc_read_segment_register(12) == original_kernel_segment;
     Word first_read = *alias;
     *alias = 0x11223344u;
     __asm__ volatile("sync" : : : "memory");
     Word first_physical_read = s_hpt_payload_word;
 
-    int second_activated = powerpc_activate_user_segments(SecondUserVSID & ~0xfu);
-    int second_segments_match = user_segments_match(SecondUserVSID & ~0xfu)
+    int second_activated = powerpc_activate_user_segments(second_base);
+    int second_segments_match = user_segments_match(second_base)
         && powerpc_read_segment_register(12) == original_kernel_segment;
     Word second_read = *alias;
     Word kernel_read = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
@@ -358,18 +365,18 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
     __asm__ volatile("sync" : : : "memory");
     Word second_physical_read = s_hpt_replacement_word;
 
-    powerpc_activate_user_segments(FirstUserVSID & ~0xfu);
+    powerpc_activate_user_segments(first_base);
     Word first_again = *alias;
     *alias = 0x89abcdefu;
-    powerpc_activate_user_segments(SecondUserVSID & ~0xfu);
+    powerpc_activate_user_segments(second_base);
     Word second_again = *alias;
     *alias = 0x13579bdfu;
     powerpc_disable_boot_translation();
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
         powerpc_write_segment_register(segment, original_segments[segment]);
 
-    int unmapped = powerpc_hpt_unmap(&s_hpt, FirstUserVSID, UserTestAddress)
-        && powerpc_hpt_unmap(&s_hpt, SecondUserVSID, UserTestAddress);
+    int unmapped = powerpc_hpt_unmap(&s_hpt, first_vsid, UserTestAddress)
+        && powerpc_hpt_unmap(&s_hpt, second_vsid, UserTestAddress);
     return first_activated && second_activated && first_segments_match && second_segments_match
         && powerpc_read_segment_register(12) == original_kernel_segment
         && first_read == 0x89abcdefu && second_read == 0x13579bdfu && kernel_read == 0x11223344u
