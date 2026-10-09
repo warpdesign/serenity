@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2024-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -14,6 +14,8 @@
 #    include <Kernel/Arch/aarch64/ArchSpecificThreadData.h>
 #elif ARCH(RISCV64)
 #    include <Kernel/Arch/riscv64/ArchSpecificThreadData.h>
+#elif ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/ArchSpecificThreadData.h>
 #else
 #    error Unknown architecture
 #endif

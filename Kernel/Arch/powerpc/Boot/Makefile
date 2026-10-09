@@ -27,7 +27,7 @@ MEMORY_FENCES_TEST_OBJECTS := $(BUILD_DIR)/test_memory_fences.o
 CACHE_TEST_OBJECTS := $(BUILD_DIR)/test_cache_maintenance.o
 TLB_TEST_OBJECTS := $(BUILD_DIR)/test_tlb_maintenance.o
 SEGMENT_REGISTER_OBJECTS := $(BUILD_DIR)/segment_registers.o
-REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o
+REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o
 STACK_TEST_OBJECTS := $(BUILD_DIR)/test_stack_unwinder.o
 
 .PHONY: all check check-quick clean
@@ -192,6 +192,9 @@ $(BUILD_DIR)/test_elf_breakpoint.o: ../../../../Tests/Kernel/PowerPC/TestELFBrea
 	$(CXX) $(PARSER_CXXFLAGS) -I../../../../Userland/Libraries -c $< -o $@
 
 $(BUILD_DIR)/test_register_state.o: ../../../../Tests/Kernel/PowerPC/TestRegisterState.cpp ../../../../Kernel/Arch/powerpc/RegisterState.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/test_thread_registers.o: ../../../../Tests/Kernel/PowerPC/TestThreadRegisters.cpp ../ThreadRegisters.h ../ArchSpecificThreadData.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_stack_unwinder.o: ../../../../Tests/Kernel/PowerPC/TestStackUnwinder.cpp ../../../../AK/Arch/powerpc/StackUnwinder.h | $(BUILD_DIR)

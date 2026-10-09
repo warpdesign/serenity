@@ -95,6 +95,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `HPT kernel protection passed`, `user-mode page protection passed`,
 `user-mode stack passed`, `user-mode syscall resume passed`,
 `user-mode exception frame passed`, `register state from user trap passed`,
+`thread register setup passed`,
 and `stack backchain unwinder passed`
 on the terminal.
 Stop QEMU after those messages appear; firmware messages are in
@@ -181,6 +182,10 @@ before reporting success. PowerPC's 32-bit integer `RegisterState` now uses
 the captured frame layout; QEMU checks its mode, stack, instruction pointer,
 syscall arguments, and ptrace conversion against a real user trap. The kernel
 still needs a complete exception entry and return path and context switching.
+PowerPC `ThreadRegisters` now uses that frame for startup and exec register
+setup, including r1 stack state, r3 entry data, r2 thread-pointer reset, and
+SRR1 privilege bits. It retains the page directory selected for the thread;
+the context switch still needs to activate that directory's user VSIDs.
 PowerPC's `FPUState` now saves all 32 scalar registers and FPSCR, and QEMU
 checks a state roundtrip with different rounding modes. The kernel still needs
 to call those routines during thread switches and handle vector state on CPUs

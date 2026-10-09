@@ -42,6 +42,7 @@ extern int powerpc_secure_plt_test(void);
 extern int powerpc_elf_breakpoint_test(void);
 extern int powerpc_syscall_invoke_test(void);
 extern int powerpc_register_state_test(void);
+extern int powerpc_thread_registers_test(void);
 extern int powerpc_stack_unwinder_test(void);
 extern int powerpc_program_exception_roundtrip(void);
 extern int powerpc_mmu_high_alias_roundtrip(void);
@@ -386,6 +387,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: register state from user trap passed\r\n");
         else
             serial_write("SerenityOS PowerPC: register state from user trap failed\r\n");
+        if (powerpc_thread_registers_test())
+            serial_write("SerenityOS PowerPC: thread register setup passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: thread register setup failed\r\n");
         if (powerpc_stack_unwinder_test())
             serial_write("SerenityOS PowerPC: stack backchain unwinder passed\r\n");
         else
