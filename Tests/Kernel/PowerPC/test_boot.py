@@ -46,6 +46,7 @@ def main():
         b"SerenityOS PowerPC: program exception roundtrip passed",
         b"SerenityOS PowerPC: decrementer interrupt passed",
         b"SerenityOS PowerPC: legacy PIC IRQ0 acknowledge passed",
+        b"SerenityOS PowerPC: external IRQ0 roundtrip passed",
         b"SerenityOS PowerPC: loader breakpoint passed",
         b"SerenityOS PowerPC: syscall register ABI passed",
         b"SerenityOS PowerPC: MMU high alias passed",

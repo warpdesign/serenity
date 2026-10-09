@@ -8,6 +8,7 @@ typedef unsigned int Word;
 
 enum {
     DataStorageExceptionVector = 0x300,
+    ExternalInterruptVector = 0x500,
     ProgramExceptionVector = 0x700,
     DecrementerExceptionVector = 0x900,
     SystemCallExceptionVector = 0xc00,
@@ -24,6 +25,8 @@ extern Word program_exception_vector_start[];
 extern Word program_exception_vector_end[];
 extern Word data_storage_exception_vector_start[];
 extern Word data_storage_exception_vector_end[];
+extern Word external_interrupt_vector_start[];
+extern Word external_interrupt_vector_end[];
 extern Word decrementer_exception_vector_start[];
 extern Word decrementer_exception_vector_end[];
 extern Word system_call_probe_vector_start[];
@@ -55,6 +58,11 @@ static int install_probe_vector(Word address, Word* start, Word* end)
 int powerpc_install_decrementer_probe_vector(void)
 {
     return install_probe_vector(DecrementerExceptionVector, decrementer_exception_vector_start, decrementer_exception_vector_end);
+}
+
+int powerpc_install_external_interrupt_probe_vector(void)
+{
+    return install_probe_vector(ExternalInterruptVector, external_interrupt_vector_start, external_interrupt_vector_end);
 }
 
 int powerpc_program_exception_roundtrip(void)

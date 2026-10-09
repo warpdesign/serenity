@@ -91,6 +91,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `program exception roundtrip passed`,
 `decrementer interrupt passed`,
 `legacy PIC IRQ0 acknowledge passed`,
+`external IRQ0 roundtrip passed`,
 `loader breakpoint passed`, `syscall register ABI passed`,
 `MMU high alias passed`, `HPT high alias passed`,
 `HPT and timebase boot handoff passed`,
@@ -253,6 +254,12 @@ window. The same register logic runs in the real-mode probe: it programs PIT
 channel 0, acknowledges IRQ0 through the bridge, checks edge EOI, and checks
 slave cascade mask changes. The controller and handler table compile for
 PowerPC; the kernel exception vector has not yet dispatched an IRQ to them.
+The probe now copies a `0x500` vector that saves all integer registers and
+SRR0/SRR1, calls a C PIC dispatcher, then restores the state with `rfi`. QEMU
+observes one external interrupt from PIT channel 0 and checks that the saved
+state returns to the interrupted code. This probe uses its supervisor stack
+in real mode. A kernel entry must switch stacks before handling user IRQs and
+establish translated kernel mappings before it calls the registered handlers.
 PowerPC boot information now has a validated timebase-frequency field, and the
 kernel timer object can use it to update the monotonic clock and rearm DEC.
 The standalone probe checks the handoff value and long-interval nanosecond

@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-// These position-independent templates are copied to physical vector slots
-// after the last Open Firmware call. Each must fit in one vector slot.
+// These templates are copied to physical vector slots after the last Open
+// Firmware call. Each must fit in one slot and retain a valid branch target.
 .section .text.data_storage_exception_probe, "ax"
 .global data_storage_exception_vector_start
 .global data_storage_exception_vector_end
@@ -24,6 +24,13 @@ data_storage_exception_vector_start:
     mfspr 11, 275
     rfi
 data_storage_exception_vector_end:
+
+.section .text.external_interrupt_probe, "ax"
+.global external_interrupt_vector_start
+.global external_interrupt_vector_end
+external_interrupt_vector_start:
+    ba powerpc_external_interrupt_probe_handler
+external_interrupt_vector_end:
 
 .section .text.exception_probe, "ax"
 .global program_exception_vector_start
@@ -57,6 +64,49 @@ decrementer_exception_vector_start:
 decrementer_exception_vector_end:
 
 .section .text, "ax"
+.type powerpc_external_interrupt_probe_handler, @function
+powerpc_external_interrupt_probe_handler:
+    // Supervisor-only real-mode probe. Keep the ABI linkage and parameter
+    // area separate from the saved PowerPCExceptionState at r1 + 48.
+    stwu 1, -224(1)
+    stw 0, 48(1)
+    stmw 2, 56(1)
+    addi 0, 1, 224
+    stw 0, 52(1)
+    mfcr 0
+    stw 0, 176(1)
+    mfctr 0
+    stw 0, 180(1)
+    mfxer 0
+    stw 0, 184(1)
+    mflr 0
+    stw 0, 188(1)
+    mfspr 0, 26
+    stw 0, 192(1)
+    mfspr 0, 27
+    stw 0, 196(1)
+
+    addi 3, 1, 48
+    bl powerpc_external_irq_probe_dispatch
+
+    lwz 0, 176(1)
+    mtcrf 255, 0
+    lwz 0, 180(1)
+    mtctr 0
+    lwz 0, 184(1)
+    mtxer 0
+    lwz 0, 188(1)
+    mtlr 0
+    lwz 0, 192(1)
+    mtspr 26, 0
+    lwz 0, 196(1)
+    mtspr 27, 0
+    lmw 2, 56(1)
+    lwz 0, 48(1)
+    lwz 1, 52(1)
+    rfi
+.size powerpc_external_interrupt_probe_handler, .-powerpc_external_interrupt_probe_handler
+
 .global trigger_program_exception
 .type trigger_program_exception, @function
 trigger_program_exception:
