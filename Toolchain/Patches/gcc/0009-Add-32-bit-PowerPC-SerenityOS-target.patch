@@ -1,10 +1,11 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Codex <codex@openai.com>
-Date: Fri, 9 Oct 2026 01:00:00 +0200
-Subject: [PATCH] Add 32-bit PowerPC SerenityOS target
+Date: Fri, 9 Oct 2026 10:10:42 +0200
+Subject: [PATCH] Add 32-bit PowerPC SerenityOS target with secure PLT
 
 Teach the target toolchain to produce big-endian ELF32 PowerPC
-objects for SerenityOS.
+objects for SerenityOS. Default to secure PLT in both the compiler and
+linker so startup objects use the same PLT ABI as userland libraries.
 ---
 diff --git a/gcc/config.gcc b/gcc/config.gcc
 --- a/gcc/config.gcc
@@ -14,13 +15,29 @@ diff --git a/gcc/config.gcc b/gcc/config.gcc
  	tmake_file="${tmake_file} riscv/t-riscv"
  	;;
 +powerpc-*-serenity*)
-+	tm_file="${tm_file} elfos.h gnu-user.h freebsd-spec.h glibc-stdint.h rs6000/sysv4.h serenity.h"
++	tm_file="${tm_file} elfos.h gnu-user.h freebsd-spec.h glibc-stdint.h rs6000/secureplt.h rs6000/sysv4.h serenity.h rs6000/serenity.h"
 +	extra_options="${extra_options} rs6000/sysv4.opt"
 +	tmake_file="${tmake_file} rs6000/t-fprules rs6000/t-ppcgas rs6000/t-ppccomm"
 +	;;
  aarch64*-*-elf | aarch64*-*-fuchsia* | aarch64*-*-rtems*)
  	tm_file="${tm_file} elfos.h newlib-stdint.h"
  	tm_file="${tm_file} aarch64/aarch64-elf.h aarch64/aarch64-errata.h aarch64/aarch64-elf-raw.h"
+diff --git a/gcc/config/rs6000/serenity.h b/gcc/config/rs6000/serenity.h
+new file mode 100644
+--- /dev/null
++++ b/gcc/config/rs6000/serenity.h
+@@ -0,0 +1,11 @@
++/* PowerPC SerenityOS target defaults.
++   Copyright (C) 2026 SerenityOS developers.
++   SPDX-License-Identifier: GPL-3.0-or-later */
++
++/* The generic Serenity header overrides the rs6000 SysV specs. Restore
++   secure PLT after it, including the link step used for crtbeginS.o. */
++#undef CC1_SPEC
++#define CC1_SPEC "-fno-semantic-interposition %{!mbss-plt:%{!msecure-plt:-msecure-plt}}"
++
++#undef LINK_SPEC
++#define LINK_SPEC "%{shared:-shared} %{static:-static} %{!static: %{rdynamic:-export-dynamic} -dynamic-linker /usr/lib/Loader.so %{!mbss-plt:--secure-plt}}"
 diff --git a/libgcc/config.host b/libgcc/config.host
 --- a/libgcc/config.host
 +++ b/libgcc/config.host

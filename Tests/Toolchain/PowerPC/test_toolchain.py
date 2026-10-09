@@ -41,10 +41,19 @@ def main():
 
         plt_source = Path(directory) / "plt.c"
         plt_image = Path(directory) / "plt.so"
+        crtbegin = subprocess.check_output([args.compiler, "-print-file-name=crtbeginS.o"], text=True).strip()
+        crtend = subprocess.check_output([args.compiler, "-print-file-name=crtendS.o"], text=True).strip()
         plt_source.write_text("extern int imported_function(int);\nint call_imported_function(int value) { return imported_function(value); }\n")
-        subprocess.run([args.compiler, "-msecure-plt", "-msdata=none", "-fPIC", "-shared", "-nostdlib", str(plt_source), "-o", str(plt_image)], check=True)
+        subprocess.run([args.compiler, "-msdata=none", "-fPIC", "-shared", "-nostdlib", crtbegin, str(plt_source), crtend, "-o", str(plt_image)], check=True)
         plt_sections = subprocess.check_output([args.readelf, "-W", "-S", str(plt_image)], text=True)
         plt_dynamic = subprocess.check_output([args.readelf, "-W", "-d", "-r", str(plt_image)], text=True)
+
+        resolver_source = Path(directory) / "resolver.c"
+        trampoline_image = Path(directory) / "trampoline.so"
+        trampoline_source = Path(__file__).resolve().parents[3] / "Userland/Libraries/LibELF/Arch/powerpc/plt_trampoline.S"
+        resolver_source.write_text("unsigned _fixup_plt_entry(void* object, unsigned offset) { return (unsigned long)object + offset; }\n")
+        subprocess.run([args.compiler, "-msdata=none", "-fPIC", "-shared", "-nostdlib", crtbegin, str(resolver_source), str(trampoline_source), crtend, "-o", str(trampoline_image)], check=True)
+        trampoline_dynamic = subprocess.check_output([args.readelf, "-W", "-d", "-r", str(trampoline_image)], text=True)
 
     for field in ("ELF32", "big endian", "PowerPC"):
         if field not in header:
@@ -57,6 +66,8 @@ def main():
         raise SystemExit(f"PowerPC secure PLT must have a data GOT: {plt_sections}")
     if "PPC_GOT" not in plt_dynamic or "R_PPC_JMP_SLOT" not in plt_dynamic:
         raise SystemExit(f"PowerPC secure PLT metadata is missing: {plt_dynamic}")
+    if "TEXTREL" in trampoline_dynamic or "R_PPC_REL24" in trampoline_dynamic:
+        raise SystemExit(f"PowerPC PLT trampoline needs a text relocation: {trampoline_dynamic}")
     print("powerpc-serenity toolchain passed")
 
 

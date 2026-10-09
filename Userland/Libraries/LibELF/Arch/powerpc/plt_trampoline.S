@@ -7,6 +7,7 @@
 .p2align 2
 .globl _plt_trampoline
 .hidden _plt_trampoline
+.hidden _fixup_plt_entry
 .type _plt_trampoline,@function
 
 /* Secure PLT glink supplies DynamicObject* in r12 and the .rela.plt byte

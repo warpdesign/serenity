@@ -27,10 +27,10 @@ so the toolchain builds only the big-endian 32-bit hardware-float ABI needed
 here. The boot probe enables the FPU before entering C code and now uses that
 ABI to link the full AK float parser with Serenity's PowerPC `libgcc`.
 
-The PowerPC GNU CMake toolchain selects `-msecure-plt` for C and C++. This
-produces writable PLT pointer slots and a data GOT instead of the legacy BSS
-PLT code stubs. Direct cross-compiler commands need the same option. LibELF
-now installs the PowerPC secure PLT resolver in the architecture's GOT slots.
+The PowerPC GNU target now defaults to secure PLT, including its `crtbeginS.o`
+startup object; the CMake toolchain also selects `-msecure-plt` explicitly.
+This produces writable PLT pointer slots and a data GOT instead of the legacy
+BSS PLT code stubs. LibELF installs the PowerPC resolver in those GOT slots.
 The QEMU probe uses a GCC-linked shared object to test the first lazy call and
 the patched second call, with a test resolver in place of the full loader.
 LibELF's PowerPC entry transfer also has a QEMU call test. A user process has
