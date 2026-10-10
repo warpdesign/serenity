@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,6 +13,7 @@
 #include <AK/Traits.h>
 #include <AK/Types.h>
 #include <AK/Vector.h>
+#include <Kernel/Bus/PCI/OpenFirmwareAddress.h>
 #include <Kernel/Debug.h>
 #include <Kernel/Locking/Spinlock.h>
 #include <Kernel/Locking/SpinlockProtected.h>
@@ -109,52 +110,6 @@ static constexpr u32 MSIX_TABLE_OFFSET_MASK = 0xffff'fff8;
 static constexpr u16 MSIX_CONTROL_ENABLE = 0x8000;
 static constexpr u8 MSIX_CONTROL_OFFSET = 2;
 static constexpr u8 MSIX_TABLE_OFFSET_OFFSET = 4;
-
-// 2.2.1.1. Numerical Representation, https://www.devicetree.org/open-firmware/bindings/pci/pci2_1.pdf
-struct OpenFirmwareAddress {
-    enum class SpaceType : u32 {
-        ConfigurationSpace = 0,
-        IOSpace = 1,
-        Memory32BitSpace = 2,
-        Memory64BitSpace = 3,
-    };
-
-    // phys.hi cell
-    SpaceType space_type : 2; // s
-    u32 : 3;                  // 0
-    u32 aliased : 1;          // t
-    u32 prefetchable : 1;     // p
-    u32 non_relocatable : 1;  // n
-    u32 bus : 8;              // b
-    u32 function : 3;         // f
-    u32 device : 5;           // d
-    u32 register_ : 8;        // r
-
-    // phys.mid and phys.lo cell
-    BigEndian<u64> io_or_memory_space_address; // h+l
-
-    constexpr OpenFirmwareAddress operator&(OpenFirmwareAddress other) const
-    {
-        return OpenFirmwareAddress {
-            .space_type = static_cast<SpaceType>(to_underlying(space_type) & to_underlying(other.space_type)),
-            .aliased = static_cast<u32>(aliased & other.aliased),
-            .prefetchable = static_cast<u32>(prefetchable & other.prefetchable),
-            .non_relocatable = static_cast<u32>(non_relocatable & other.non_relocatable),
-            .bus = static_cast<u32>(bus & other.bus),
-            .function = static_cast<u32>(function & other.function),
-            .device = static_cast<u32>(device & other.device),
-            .register_ = static_cast<u32>(register_ & other.register_),
-            .io_or_memory_space_address = static_cast<u32>(io_or_memory_space_address & other.io_or_memory_space_address),
-        };
-    }
-
-    constexpr OpenFirmwareAddress& operator&=(OpenFirmwareAddress const& other)
-    {
-        *this = *this & other;
-        return *this;
-    }
-};
-static_assert(AssertSize<OpenFirmwareAddress, 3 * sizeof(u32)>());
 
 // Taken from https://pcisig.com/sites/default/files/files/PCI_Code-ID_r_1_11__v24_Jan_2019.pdf
 enum class ClassID {

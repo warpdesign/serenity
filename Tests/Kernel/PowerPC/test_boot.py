@@ -31,6 +31,8 @@ def main():
         b"SerenityOS PowerPC: big-endian short string passed",
         b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: big-endian float parser passed",
+        b"SerenityOS PowerPC: PCI Open Firmware address passed",
+        b"SerenityOS PowerPC: PCI 64-bit address assignment passed",
         b"SerenityOS PowerPC: FPSCR environment passed",
         b"SerenityOS PowerPC: FPU state roundtrip passed",
         b"SerenityOS PowerPC: ELF32 big-endian header passed",

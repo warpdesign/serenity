@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2023-2025, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2023-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/NumericLimits.h>
 #include <Kernel/Bus/PCI/Access.h>
 #include <Kernel/Bus/PCI/Controller/HostController.h>
 #include <Kernel/Bus/PCI/DeviceTreeHelpers.h>
@@ -78,7 +79,7 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
 {
     FlatPtr pci_32bit_mmio_base = 0;
     u32 pci_32bit_mmio_size = 0;
-    FlatPtr pci_64bit_mmio_base = 0;
+    u64 pci_64bit_mmio_base = 0;
     u64 pci_64bit_mmio_size = 0;
     FlatPtr pci_io_base = 0;
     u64 pci_io_size = 0;
@@ -113,25 +114,27 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
                 cpu_physical_address + range_size,
                 pci_address.io_or_memory_space_address,
                 pci_address.io_or_memory_space_address + range_size,
-                space_type_names[to_underlying(pci_address.space_type)],
-                !!pci_address.prefetchable,
-                !pci_address.non_relocatable);
+                space_type_names[to_underlying(pci_address.space_type())],
+                !!pci_address.prefetchable(),
+                !pci_address.non_relocatable());
 
-            if (pci_address.space_type == OpenFirmwareAddress::SpaceType::Memory32BitSpace) {
+            if (pci_address.space_type() == OpenFirmwareAddress::SpaceType::Memory32BitSpace) {
                 TRY(host_controller.add_memory_space_window(HostController::Window {
                     .host_address = PhysicalAddress { cpu_physical_address },
                     .bus_address = pci_address.io_or_memory_space_address,
                     .size = range_size,
                 }));
 
-                if (pci_address.prefetchable)
+                if (pci_address.prefetchable())
                     continue; // We currently only use non-prefetchable 32-bit regions, since 64-bit regions are always prefetchable - TODO: Use 32-bit prefetchable regions if only they are available
                 if (pci_32bit_mmio_size >= range_size)
                     continue; // We currently only use the single largest region - TODO: Use all available regions if needed
 
+                if (static_cast<u64>(pci_address.io_or_memory_space_address) > NumericLimits<FlatPtr>::max())
+                    return EINVAL;
                 pci_32bit_mmio_base = pci_address.io_or_memory_space_address;
                 pci_32bit_mmio_size = range_size;
-            } else if (pci_address.space_type == OpenFirmwareAddress::SpaceType::Memory64BitSpace) {
+            } else if (pci_address.space_type() == OpenFirmwareAddress::SpaceType::Memory64BitSpace) {
                 TRY(host_controller.add_memory_space_window(HostController::Window {
                     .host_address = PhysicalAddress { cpu_physical_address },
                     .bus_address = pci_address.io_or_memory_space_address,
@@ -143,7 +146,7 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
 
                 pci_64bit_mmio_base = pci_address.io_or_memory_space_address;
                 pci_64bit_mmio_size = range_size;
-            } else if (pci_address.space_type == OpenFirmwareAddress::SpaceType::IOSpace) {
+            } else if (pci_address.space_type() == OpenFirmwareAddress::SpaceType::IOSpace) {
                 TRY(host_controller.add_io_space_window(HostController::Window {
                     .host_address = PhysicalAddress { cpu_physical_address },
                     .bus_address = pci_address.io_or_memory_space_address,
@@ -153,10 +156,12 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
                 if (pci_io_size >= range_size)
                     continue; // We currently only use the single largest region - TODO: Use all available regions if needed
 
+                if (static_cast<u64>(pci_address.io_or_memory_space_address) > NumericLimits<FlatPtr>::max())
+                    return EINVAL;
                 pci_io_base = pci_address.io_or_memory_space_address;
                 pci_io_size = range_size;
             } else {
-                dbgln("PCI: Unexpected address space type in 'ranges' property: {}", to_underlying(pci_address.space_type));
+                dbgln("PCI: Unexpected address space type in 'ranges' property: {}", to_underlying(pci_address.space_type()));
             }
         }
     }
@@ -197,12 +202,12 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
 
         // The "interrupt-map-mask" constraints from https://github.com/devicetree-org/dt-schema/blob/main/dtschema/schemas/pci/pci-bus-common.yaml
         // only allow the function and device mask fields to be non-zero and the interrupt specifier mask to be between 0 and 7.
-        if (pci_address_mask.register_ != 0
-            || pci_address_mask.bus != 0
-            || pci_address_mask.space_type != static_cast<OpenFirmwareAddress::SpaceType>(0)
-            || pci_address_mask.aliased != 0
-            || pci_address_mask.prefetchable != 0
-            || pci_address_mask.non_relocatable != 0
+        if (pci_address_mask.register_() != 0
+            || pci_address_mask.bus() != 0
+            || pci_address_mask.space_type() != static_cast<OpenFirmwareAddress::SpaceType>(0)
+            || pci_address_mask.aliased() != 0
+            || pci_address_mask.prefetchable() != 0
+            || pci_address_mask.non_relocatable() != 0
             || pci_address_mask.io_or_memory_space_address != 0) {
             return EINVAL;
         }
@@ -213,9 +218,9 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
 
         interrupt_mask = PCIInterruptSpecifier {
             .interrupt_pin = static_cast<u8>(pin_mask),
-            .function = pci_address_mask.function,
-            .device = pci_address_mask.device,
-            .bus = pci_address_mask.bus,
+            .function = pci_address_mask.function(),
+            .device = pci_address_mask.device(),
+            .bus = pci_address_mask.bus(),
         };
         auto map_stream = maybe_interrupt_map.value().as_stream();
         while (!map_stream.is_eof()) {
@@ -254,22 +259,26 @@ ErrorOr<void> configure_devicetree_host_controller(HostController& host_controll
             masked_interrupt_mapping.set(
                 PCIInterruptSpecifier {
                     .interrupt_pin = static_cast<u8>(pin),
-                    .function = pci_address.function,
-                    .device = pci_address.device,
-                    .bus = pci_address.bus,
+                    .function = pci_address.function(),
+                    .device = pci_address.device(),
+                    .bus = pci_address.bus(),
                 },
                 interrupt_number);
         }
     }
 
     if (pci_32bit_mmio_size != 0 || pci_64bit_mmio_size != 0) {
+        if (pci_32bit_mmio_size > NumericLimits<FlatPtr>::max() - pci_32bit_mmio_base
+            || pci_64bit_mmio_size > NumericLimits<u64>::max() - pci_64bit_mmio_base
+            || pci_io_size > NumericLimits<FlatPtr>::max() - pci_io_base)
+            return EINVAL;
         PCIConfiguration config {
             pci_32bit_mmio_base,
             pci_32bit_mmio_base + pci_32bit_mmio_size,
             pci_64bit_mmio_base,
             pci_64bit_mmio_base + pci_64bit_mmio_size,
             pci_io_base,
-            pci_io_base + pci_io_size,
+            static_cast<FlatPtr>(pci_io_base + pci_io_size),
             move(masked_interrupt_mapping),
             interrupt_mask,
         };

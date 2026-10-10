@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -63,8 +63,8 @@ struct PCIConfiguration {
     FlatPtr mmio_32bit_base { 0 };
     FlatPtr mmio_32bit_end { 0 };
 
-    FlatPtr mmio_64bit_base { 0 };
-    FlatPtr mmio_64bit_end { 0 };
+    u64 mmio_64bit_base { 0 };
+    u64 mmio_64bit_end { 0 };
 
     FlatPtr io_base { 0 };
     FlatPtr io_end { 0 };

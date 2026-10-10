@@ -78,6 +78,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian short string passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
+`PCI Open Firmware address passed`, `PCI 64-bit address assignment passed`,
 `FPSCR environment passed`,
 `FPU state roundtrip passed`,
 `ELF32 big-endian header passed`,
@@ -333,9 +334,9 @@ and quickmap to an architecture-selected hierarchical implementation. The
 PowerPC HPT backend accepts complete page-mapping requests, and a PowerPC
 `PageDirectory` can install the validated HPT from BootInfo. PowerPC now has
 HPT-backed physical-page metadata initialization and a quickmap path, including
-data-cache invalidation before a RAM page becomes noncacheable. These compile
-only with a temporary time-interface shim until the PowerPC time and interrupt
-interfaces are implemented, and the kernel entry handoff is still absent. EFI
+data-cache invalidation before a RAM page becomes noncacheable. The PowerPC
+time and legacy interrupt interfaces compile, but the kernel entry handoff
+and full exception dispatcher are still absent. EFI
 memory-map parsing is disabled by the PowerPC boot-layout setting. A single-ABI
 libstdc++ build now
 succeeds with the PowerPC `setjmp.h` and `mcontext_t` layouts present.
@@ -363,7 +364,8 @@ targets include:
 | --- | --- |
 | AK | The short-string tag and float parser's eight-digit byte packing handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. The stack unwinder now follows the PowerPC backchain while preserving the existing frame layouts. Other AK data representations still need review. |
 | ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, applies REL, RELA, and RELR relative relocations, and checks the PowerPC TLS layout, r2 accessor, static `__tls_get_addr()` lookup, entry transfer, and secure PLT first and second calls using a test resolver. `DynamicObject` decodes native symbol and relocation fields; full loader symbol resolution, dynamic TLS relocation application, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
-| Kernel | `Tasks/Coredump.cpp` writes ELF64 little-endian. Memory-mapped PCI, storage, and device registers need protocol-specific byte-order checks. |
+| Kernel PCI | Open Firmware PCI address cells are now decoded with explicit big-endian 32- and 64-bit fields, and the 64-bit BAR cursor stays 64-bit on a 32-bit CPU. The same wire bytes and address alignment cases pass a native little-endian test and the PowerPC QEMU probe. Other PCI configuration and device-register byte orders still need review. |
+| Other kernel code | `Tasks/Coredump.cpp` writes ELF64 little-endian. Storage and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
 
 Each fix needs a format-level regression on both a little-endian build and the

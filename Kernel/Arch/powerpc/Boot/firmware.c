@@ -38,6 +38,8 @@ extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
+extern int pci_open_firmware_address_test(void);
+extern int pci_address_assignment_test(void);
 extern int powerpc_fenv_test(void);
 extern int powerpc_fpu_state_test(void);
 extern int powerpc_native_elf_header_test(void);
@@ -297,6 +299,14 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: big-endian float parser passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian float parser failed\r\n");
+        if (pci_open_firmware_address_test())
+            serial_write("SerenityOS PowerPC: PCI Open Firmware address passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: PCI Open Firmware address failed\r\n");
+        if (pci_address_assignment_test())
+            serial_write("SerenityOS PowerPC: PCI 64-bit address assignment passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: PCI 64-bit address assignment failed\r\n");
         int fenv_result = powerpc_fenv_test();
         if (fenv_result == 1)
             serial_write("SerenityOS PowerPC: FPSCR environment passed\r\n");

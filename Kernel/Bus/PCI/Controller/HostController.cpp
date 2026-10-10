@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -7,6 +7,7 @@
 #include <AK/Format.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/Access.h>
+#include <Kernel/Bus/PCI/AddressAssignment.h>
 #include <Kernel/Bus/PCI/Controller/HostController.h>
 #include <Kernel/Bus/PCI/Definitions.h>
 #include <Kernel/Sections.h>
@@ -42,8 +43,12 @@ ErrorOr<PhysicalAddress> HostController::translate_bus_address_to_host_address(B
     }
 
     for (auto const& window : *windows) {
-        if (bus_address >= window.bus_address && bus_address < (window.bus_address + window.size))
-            return PhysicalAddress { bus_address - window.bus_address + window.host_address.get() };
+        if (address_in_window(bus_address, window.bus_address, window.size)) {
+            auto offset = bus_address - window.bus_address;
+            if (offset > NumericLimits<u64>::max() - window.host_address.get())
+                return EFAULT;
+            return PhysicalAddress { offset + window.host_address.get() };
+        }
     }
 
     return EFAULT;
@@ -266,10 +271,13 @@ void HostController::configure_attached_devices(PCIConfiguration& config)
                     continue;
                 }
 
-                auto mmio_64bit_address = align_up_to(config.mmio_64bit_base, bar_size);
-                if (bar_prefetchable && mmio_64bit_address + bar_size <= config.mmio_64bit_end && mmio_64bit_address + bar_size <= NumericLimits<u32>::max()) {
-                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_64bit_address);
-                    config.mmio_64bit_base = mmio_64bit_address + bar_size;
+                auto mmio_64bit_address = align_bus_address(config.mmio_64bit_base, bar_size);
+                if (bar_prefetchable && mmio_64bit_address.has_value()
+                    && address_range_fits(mmio_64bit_address.value(), bar_size, config.mmio_64bit_end)
+                    && mmio_64bit_address.value() <= NumericLimits<u32>::max()
+                    && bar_size - 1 <= NumericLimits<u32>::max() - mmio_64bit_address.value()) {
+                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_64bit_address.value());
+                    config.mmio_64bit_base = mmio_64bit_address.value() + bar_size;
                     continue;
                 }
 
@@ -292,20 +300,22 @@ void HostController::configure_attached_devices(PCIConfiguration& config)
                     continue;
                 }
 
-                auto mmio_64bit_address = align_up_to(config.mmio_64bit_base, bar_size);
-                if (bar_prefetchable && mmio_64bit_address + bar_size <= config.mmio_64bit_end) {
-                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_64bit_address & 0xFFFFFFFF);
-                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset + 4, mmio_64bit_address >> 32);
-                    config.mmio_64bit_base = mmio_64bit_address + bar_size;
+                auto mmio_64bit_address = align_bus_address(config.mmio_64bit_base, bar_size);
+                if (bar_prefetchable && mmio_64bit_address.has_value()
+                    && address_range_fits(mmio_64bit_address.value(), bar_size, config.mmio_64bit_end)) {
+                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_64bit_address.value() & 0xFFFFFFFF);
+                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset + 4, mmio_64bit_address.value() >> 32);
+                    config.mmio_64bit_base = mmio_64bit_address.value() + bar_size;
                     bar_offset += 4;
                     continue;
                 }
 
-                auto mmio_32bit_address = align_up_to(config.mmio_32bit_base, bar_size);
-                if (mmio_32bit_address + bar_size <= config.mmio_32bit_end) {
-                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_32bit_address & 0xFFFFFFFF);
-                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset + 4, mmio_32bit_address >> 32);
-                    config.mmio_32bit_base = mmio_32bit_address + bar_size;
+                auto mmio_32bit_address = align_bus_address(config.mmio_32bit_base, bar_size);
+                if (mmio_32bit_address.has_value()
+                    && address_range_fits(mmio_32bit_address.value(), bar_size, config.mmio_32bit_end)) {
+                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset, mmio_32bit_address.value());
+                    write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), bar_offset + 4, 0);
+                    config.mmio_32bit_base = mmio_32bit_address.value() + bar_size;
                     bar_offset += 4;
                     continue;
                 }
@@ -365,7 +375,9 @@ void HostController::configure_attached_devices(PCIConfiguration& config)
         config.mmio_32bit_base = align_up_to(config.mmio_32bit_base, MiB);
         write16_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::MEMORY_BASE, config.mmio_32bit_base >> 16);
 
-        config.mmio_64bit_base = align_up_to(config.mmio_64bit_base, MiB);
+        auto aligned_prefetchable_base = align_bus_address(config.mmio_64bit_base, MiB);
+        VERIFY(aligned_prefetchable_base.has_value());
+        config.mmio_64bit_base = aligned_prefetchable_base.value();
         write16_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::PREFETCHABLE_MEMORY_BASE, config.mmio_64bit_base >> 16);
         write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::PREFETCHABLE_MEMORY_BASE_UPPER_32_BITS, config.mmio_64bit_base >> 32); },
 
@@ -377,7 +389,9 @@ void HostController::configure_attached_devices(PCIConfiguration& config)
             config.mmio_32bit_base = align_up_to(config.mmio_32bit_base, MiB);
             write16_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::MEMORY_LIMIT, config.mmio_32bit_base >> 16);
 
-            config.mmio_64bit_base = align_up_to(config.mmio_64bit_base, MiB);
+            auto aligned_prefetchable_limit = align_bus_address(config.mmio_64bit_base, MiB);
+            VERIFY(aligned_prefetchable_limit.has_value());
+            config.mmio_64bit_base = aligned_prefetchable_limit.value();
             write16_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::PREFETCHABLE_MEMORY_LIMIT, config.mmio_64bit_base >> 16);
             write32_field(device_identifier.address().bus(), device_identifier.address().device(), device_identifier.address().function(), PCI::RegisterOffset::PREFETCHABLE_MEMORY_LIMIT_UPPER_32_BITS, config.mmio_64bit_base >> 32);
 
