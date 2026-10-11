@@ -34,7 +34,7 @@ sigsetjmp:
     addi 5, 3, SAVED_SIGNAL_MASK_SLOT
     li 4, 0
     li 3, 0
-    bl sigprocmask@plt
+    bl sigprocmask
     lwz 3, 48(1)
     lwz 0, 68(1)
     mtlr 0

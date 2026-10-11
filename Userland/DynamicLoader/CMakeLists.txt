@@ -38,13 +38,16 @@ install(TARGETS Loader.so RUNTIME DESTINATION usr/lib/)
 if (SERENITY_ARCH STREQUAL "powerpc")
     set(powerpc_kernel_loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf")
     set(powerpc_loader_test "${SerenityOS_SOURCE_DIR}/Tests/DynamicLoader/PowerPC/test_bootstrap.py")
+    set(powerpc_program_mapping_test "${SerenityOS_SOURCE_DIR}/Tests/DynamicLoader/PowerPC/test_program_mapping.py")
     add_custom_target(PowerPCDynamicLoaderCheckQuick
         COMMAND python3 "${powerpc_loader_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>"
-        DEPENDS PowerPCFirmwareLoader Loader.so
+        COMMAND python3 "${powerpc_program_mapping_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --program "$<TARGET_FILE:init>" --library "$<TARGET_FILE:LibC>" --library "$<TARGET_FILE:LibCore>" --library "$<TARGET_FILE:LibCoreBasic>" --library "$<TARGET_FILE:LibCoreMinimal>" --library "$<TARGET_FILE:LibCrypt>" --library "$<TARGET_FILE:LibURL>" --library "$<TARGET_FILE:LibUnicode>" --library "$<TARGET_FILE:LibTextCodec>" --library "$<TARGET_FILE:LibSystem>"
+        DEPENDS PowerPCFirmwareLoader Loader.so init LibC
         USES_TERMINAL
     )
     add_custom_target(PowerPCDynamicLoaderCheck
         COMMAND python3 "${powerpc_loader_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --memory 512 --cpu 750cxe
+        COMMAND python3 "${powerpc_program_mapping_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --program "$<TARGET_FILE:init>" --library "$<TARGET_FILE:LibC>" --library "$<TARGET_FILE:LibCore>" --library "$<TARGET_FILE:LibCoreBasic>" --library "$<TARGET_FILE:LibCoreMinimal>" --library "$<TARGET_FILE:LibCrypt>" --library "$<TARGET_FILE:LibURL>" --library "$<TARGET_FILE:LibUnicode>" --library "$<TARGET_FILE:LibTextCodec>" --library "$<TARGET_FILE:LibSystem>" --memory 512 --cpu 750cxe
         DEPENDS PowerPCDynamicLoaderCheckQuick
         USES_TERMINAL
     )

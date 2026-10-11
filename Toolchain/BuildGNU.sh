@@ -205,10 +205,14 @@ NPROC=$(get_number_of_processing_units)
 mkdir -p "$DIR/Build/$ARCH"
 
 TARGET_CONFIGURE_ARGS=()
+TARGET_LIBSTDCXX_CXXFLAGS=()
 GCC_LANGUAGES="c,c++,objc,obj-c++"
 if [ "$ARCH" = "powerpc" ]; then
     # Pegasos 2 uses only the big-endian 32-bit SysV ABI.
     TARGET_CONFIGURE_ARGS+=(--disable-multilib --with-cpu=750)
+    # libsupc++ objects linked into LibC must use the secure PLT. Old-style
+    # PLT calls force a writable/executable segment in the resulting libc.so.
+    TARGET_LIBSTDCXX_CXXFLAGS+=("CXXFLAGS_FOR_TARGET=-g -O2 -msecure-plt")
 fi
 if [ "$bootstrap_only" = "1" ]; then
     GCC_LANGUAGES="c,c++"
@@ -277,7 +281,7 @@ pushd "$DIR/Build/$ARCH"
 
         if [ "$bootstrap_only" != "1" ]; then
             echo "XXX build libstdc++"
-            buildstep "libstdc++/build" "$MAKE" -j "$MAKEJOBS" all-target-libstdc++-v3 || exit 1
+            buildstep "libstdc++/build" "$MAKE" -j "$MAKEJOBS" all-target-libstdc++-v3 "${TARGET_LIBSTDCXX_CXXFLAGS[@]}" || exit 1
             echo "XXX install libstdc++"
             buildstep "libstdc++/install" "$MAKE" install-target-libstdc++-v3 || exit 1
         fi
