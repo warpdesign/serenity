@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, the SerenityOS developers.
+ * Copyright (c) 2023-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -9,6 +9,7 @@
 #include <Kernel/Arch/Delay.h>
 #include <Kernel/Arch/MemoryFences.h>
 #include <Kernel/Devices/Device.h>
+#include <Kernel/Devices/Storage/SD/ADMAAddress.h>
 #include <Kernel/Devices/Storage/SD/Commands.h>
 #include <Kernel/Devices/Storage/SD/SDHostController.h>
 #include <Kernel/Devices/Storage/StorageManagement.h>
@@ -682,8 +683,8 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
     //        This might cost us more descriptor entries but avoids the memcpy at the end
     //        of each read cycle
 
-    FlatPtr adma_descriptor_physical = m_dma_region->physical_page(0)->paddr().get();
-    FlatPtr adma_dma_region_physical = adma_descriptor_physical + PAGE_SIZE;
+    PhysicalPtr adma_descriptor_physical = m_dma_region->physical_page(0)->paddr().get();
+    PhysicalPtr adma_dma_region_physical = adma_descriptor_physical + PAGE_SIZE;
 
     FlatPtr adma_descriptor_virtual = m_dma_region->vaddr().get();
 
@@ -697,8 +698,8 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
         u32 i = 0;
         Array<SD::DMADescriptor64, 64>& command_buffer = *bit_cast<Array<SD::DMADescriptor64, 64>*>(adma_descriptor_virtual);
         for (; i < 64; ++i) {
-            FlatPtr physical_transfer_address = adma_dma_region_physical + offset;
-            VERIFY(physical_transfer_address >> 32 == 0);
+            auto address = SD::adma_address_words(adma_dma_region_physical, offset);
+            VERIFY(address.high == 0);
             // If the remaining block count is less than the maximum addressable blocks
             // we need to set the actual length and break out of the loop
             if (block_count - blocks_transferred < blocks_per_descriptor) {
@@ -710,7 +711,7 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
                     .action = SD::DMAAction::Tran,
                     .length_upper = 0,
                     .length_lower = static_cast<u32>(blocks_to_transfer * block_len),
-                    .address = static_cast<u32>(physical_transfer_address),
+                    .address = address.low,
                 };
                 blocks_transferred += blocks_to_transfer;
                 offset += static_cast<size_t>(blocks_to_transfer) * block_len;
@@ -724,7 +725,7 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
                 .action = SD::DMAAction::Tran,
                 .length_upper = 0,
                 .length_lower = 0, // length of 0 means 1<<16 bytes
-                .address = static_cast<u32>(physical_transfer_address),
+                .address = address.low,
             };
 
             blocks_transferred += blocks_per_descriptor;
@@ -737,8 +738,7 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
         u32 i = 0;
         Array<SD::DMADescriptor128, 32>& command_buffer = *bit_cast<Array<SD::DMADescriptor128, 32>*>(adma_descriptor_virtual);
         for (; i < 32; ++i) {
-            FlatPtr physical_transfer_address = adma_dma_region_physical + offset;
-            VERIFY(physical_transfer_address >> 32 == 0);
+            auto address = SD::adma_address_words(adma_dma_region_physical, offset);
             // If the remaining block count is less than the maximum addressable blocks
             // we need to set the actual length and break out of the loop
             if (block_count - blocks_transferred < blocks_per_descriptor) {
@@ -750,8 +750,8 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
                     .action = SD::DMAAction::Tran,
                     .length_upper = 0,
                     .length_lower = static_cast<u32>(blocks_to_read * block_len),
-                    .address_low = static_cast<u32>((physical_transfer_address + offset) & 0xFFFF'FFFF),
-                    .address_high = static_cast<u32>((physical_transfer_address + offset) >> 32),
+                    .address_low = address.low,
+                    .address_high = address.high,
                 };
                 blocks_transferred += blocks_to_read;
                 offset += static_cast<size_t>(blocks_to_read) * block_len;
@@ -765,8 +765,8 @@ u32 SDHostController::make_adma_descriptor_table(u32 block_count)
                 .action = SD::DMAAction::Tran,
                 .length_upper = 0,
                 .length_lower = 0, // length of 0 means 1<<16 bytes
-                .address_low = static_cast<u32>((physical_transfer_address + offset) & 0xFFFF'FFFF),
-                .address_high = static_cast<u32>((physical_transfer_address + offset) >> 32),
+                .address_low = address.low,
+                .address_high = address.high,
             };
 
             blocks_transferred += blocks_per_descriptor;
@@ -786,7 +786,7 @@ ErrorOr<void> SDHostController::transfer_blocks_adma2(u32 block_address, u32 blo
 {
     using enum OperatingMode;
 
-    FlatPtr adma_descriptor_physical = m_dma_region->physical_page(0)->paddr().get();
+    PhysicalPtr adma_descriptor_physical = m_dma_region->physical_page(0)->paddr().get();
 
     FlatPtr adma_descriptor_virtual = m_dma_region->vaddr().get();
     FlatPtr adma_dma_region_virtual = adma_descriptor_virtual + PAGE_SIZE;
@@ -819,9 +819,10 @@ ErrorOr<void> SDHostController::transfer_blocks_adma2(u32 block_address, u32 blo
         card_offset += blocks_transferred * block_len;
 
         // (2) Set the Descriptor address for ADMA in the ADMA System Address register.
-        m_registers->adma_system_address[0] = static_cast<u32>(adma_descriptor_physical & 0xFFFF'FFFF);
+        auto descriptor_address = SD::adma_address_words(adma_descriptor_physical);
+        m_registers->adma_system_address[0] = descriptor_address.low;
         if (m_mode == ADMA2_64)
-            m_registers->adma_system_address[1] = static_cast<u32>(adma_descriptor_physical >> 32);
+            m_registers->adma_system_address[1] = descriptor_address.high;
 
         // (3) Set the value corresponding to the executed data byte length of one block in the Block Size
         //     register.

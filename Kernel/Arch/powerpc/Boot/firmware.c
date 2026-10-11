@@ -41,6 +41,7 @@ extern int powerpc_float_parser_test(void);
 extern int pci_open_firmware_address_test(void);
 extern int pci_address_assignment_test(void);
 extern int nvme_endian_test(void);
+extern int sd_adma_address_test(void);
 extern int powerpc_fenv_test(void);
 extern int powerpc_fpu_state_test(void);
 extern int powerpc_native_elf_header_test(void);
@@ -312,6 +313,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: NVMe little-endian wire format passed\r\n");
         else
             serial_write("SerenityOS PowerPC: NVMe little-endian wire format failed\r\n");
+        if (sd_adma_address_test())
+            serial_write("SerenityOS PowerPC: SD ADMA physical addresses passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: SD ADMA physical addresses failed\r\n");
         int fenv_result = powerpc_fenv_test();
         if (fenv_result == 1)
             serial_write("SerenityOS PowerPC: FPSCR environment passed\r\n");
