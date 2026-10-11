@@ -22,6 +22,10 @@ _start:
     addi 6,6,4
     b .Lclear_bss
 .Lbss_done:
+    mfmsr 9
+    ori 9,9,0x2000 // The kernel initializes and saves scalar FP state.
+    mtmsr 9
+    isync
     lis 1,__stack_end@ha
     addi 1,1,__stack_end@l
     addi 1,1,-16

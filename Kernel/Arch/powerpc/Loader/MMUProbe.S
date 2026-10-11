@@ -28,6 +28,13 @@ powerpc_loader_enable_translation:
     mtspr 528,4
     mtspr 536,4
 
+    lis 4,0xfe00
+    ori 4,4,0x2a // Cache-inhibited, guarded PCI I/O window.
+    mtspr 541,4 // DBAT2L
+    lis 4,0xfe00
+    ori 4,4,0x1fe // 16 MiB PCI I/O identity map for early kernel debug.
+    mtspr 540,4 // DBAT2U
+
     lis 4,0x2000
     ori 4,4,12
     mtsr 12,4

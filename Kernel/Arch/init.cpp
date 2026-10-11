@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -140,6 +140,10 @@ READONLY_AFTER_INIT constinit BootInfo g_boot_info;
 
 extern "C" [[noreturn]] UNMAP_AFTER_INIT NO_SANITIZE_COVERAGE void init(BootInfo const& boot_info)
 {
+    if (boot_info.boot_method == BootMethod::FirmwareMemoryMap) {
+        g_boot_info = boot_info;
+        s_kernel_cmdline = boot_info.cmdline;
+    }
 #if ARCH(X86_64)
     g_boot_info = boot_info;
     s_kernel_cmdline = boot_info.cmdline;

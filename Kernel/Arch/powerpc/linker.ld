@@ -102,10 +102,12 @@ SECTIONS
         end_of_kernel_ksyms = .;
     } :ksyms
 
-    . = ALIGN(4K);
-    start_of_initial_stack = .;
-    . += 32K;
-    end_of_initial_stack = .;
+    .initial_stack ALIGN(4K) (NOLOAD) :
+    {
+        start_of_initial_stack = .;
+        . += 32K;
+        end_of_initial_stack = .;
+    } :ksyms
 
     end_of_kernel_image = .;
 }

@@ -16,6 +16,7 @@ PHDRS
 SECTIONS
 {
     . = 0x00200000;
+    __loader_start = .;
     .text : { KEEP(*(.text.first)) *(.text*) } :text
     .kernel_image ALIGN(4096) : { KEEP(*(.rodata.kernel)) } :image
     .rodata ALIGN(4096) : { *(.rodata*) *(.eh_frame*) } :data

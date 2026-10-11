@@ -165,7 +165,7 @@ def main():
             read_physical_memory(monitor, reads)
 
         output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
-                                  b"SerenityOS PowerPC loader: high kernel alias passed", inspect=inspect)
+                                  b"SerenityOS PowerPC loader: boot handoff validated", inspect=inspect)
         for marker in (
             b"SerenityOS PowerPC loader: kernel ELF32 validated",
             b"SerenityOS PowerPC loader: load span",
@@ -179,6 +179,7 @@ def main():
             b"SerenityOS PowerPC loader: hash table physical",
             b"SerenityOS PowerPC loader: mapped pages",
             b"SerenityOS PowerPC loader: high kernel alias passed",
+            b"SerenityOS PowerPC loader: boot handoff validated",
         ):
             if marker not in output:
                 raise SystemExit(f"PowerPC loader missed {marker!r}:\n{output.decode(errors='replace')}")
@@ -214,6 +215,11 @@ def main():
         table_address = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', table_suffix)
         if not table_address or int(table_address.group(1), 16) % (256 * 1024) != 0:
             raise SystemExit("PowerPC loader did not align its hash table")
+        symbols = subprocess.check_output([args.cross_compile + "nm", "--defined-only", str(args.kernel_elf)], text=True)
+        image_end = next(int(line.split()[0], 16) for line in symbols.splitlines()
+                         if line.endswith(" end_of_kernel_image"))
+        if int(table_address.group(1), 16) < int(physical.group(1), 16) + image_end - first:
+            raise SystemExit("PowerPC hash table overlaps the linked kernel image or initial stack")
         page_suffix = output.split(b"SerenityOS PowerPC loader: mapped pages", 1)[1]
         page_count = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', page_suffix)
         expected_pages = sum((int.from_bytes(source[header + 20:header + 24], "big") + 4095) // 4096

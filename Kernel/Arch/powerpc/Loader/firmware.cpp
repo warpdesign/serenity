@@ -7,6 +7,9 @@
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
 #include <Kernel/Arch/powerpc/Loader/KernelMappings.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
+#include <Kernel/Arch/powerpc/BootHandoff.h>
+#include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 
 using FirmwareEntry = int (*)(void*);
 
@@ -22,6 +25,12 @@ extern "C" u8 _binary_kernel_elf_end[];
 extern "C" u32 powerpc_loader_high_marker();
 extern "C" void powerpc_loader_enable_translation(u32 sdr1);
 extern "C" void powerpc_loader_disable_translation();
+extern "C" u8 __loader_start[];
+extern "C" u8 __stack_end[];
+
+static BootMemoryRange s_memory_ranges[32];
+static BootMemoryRange s_reserved_ranges[4];
+static char s_command_line[256];
 
 static u32 firmware_pointer(void const* pointer)
 {
@@ -42,6 +51,105 @@ static u32 claim_pages(FirmwareEntry firmware, u32 size, u32 alignment)
     if (firmware(&call) != 0)
         return 0;
     return call.cells[3];
+}
+
+static int get_property(FirmwareEntry firmware, u32 node, char const* name, void* buffer, u32 size)
+{
+    FirmwareCall call { "getprop", 4, 1,
+        { node, firmware_pointer(name), firmware_pointer(buffer), size, 0 } };
+    if (firmware(&call) != 0)
+        return -1;
+    return static_cast<int>(call.cells[4]);
+}
+
+static u32 first_child(FirmwareEntry firmware, u32 node)
+{
+    FirmwareCall call { "child", 1, 1, { node, 0 } };
+    if (firmware(&call) != 0)
+        return 0;
+    return call.cells[1];
+}
+
+static u32 next_peer(FirmwareEntry firmware, u32 node)
+{
+    FirmwareCall call { "peer", 1, 1, { node, 0 } };
+    if (firmware(&call) != 0)
+        return 0;
+    return call.cells[1];
+}
+
+static bool discover_memory_ranges(FirmwareEntry firmware, u32 root, u32& range_count)
+{
+    u32 address_cells = 1;
+    u32 size_cells = 1;
+    if (get_property(firmware, root, "#address-cells", &address_cells, sizeof(address_cells)) != sizeof(address_cells))
+        address_cells = 1;
+    if (get_property(firmware, root, "#size-cells", &size_cells, sizeof(size_cells)) != sizeof(size_cells))
+        size_cells = 1;
+    u32 memory = find_device(firmware, "/memory@0");
+    if (memory == 0 || memory == 0xffffffffu)
+        memory = find_device(firmware, "/memory");
+    if (memory == 0 || memory == 0xffffffffu)
+        return false;
+    u32 cells[64];
+    int length = get_property(firmware, memory, "reg", cells, sizeof(cells));
+    if (length <= 0 || length % sizeof(u32) != 0)
+        return false;
+    unsigned long long total_bytes;
+    return powerpc_parse_open_firmware_memory_reg(cells, length / sizeof(u32),
+        address_cells, size_cells, s_memory_ranges, 32, &range_count, &total_bytes);
+}
+
+static u32 discover_timebase_frequency(FirmwareEntry firmware)
+{
+    u32 cpus = find_device(firmware, "/cpus");
+    if (cpus == 0 || cpus == 0xffffffffu)
+        return 0;
+    u32 cpu = first_child(firmware, cpus);
+    u32 frequency = 0;
+    if (cpu == 0 || cpu == 0xffffffffu
+        || get_property(firmware, cpu, "timebase-frequency", &frequency, sizeof(frequency)) != sizeof(frequency))
+        return 0;
+    return frequency;
+}
+
+static u32 discover_controller_base(FirmwareEntry firmware, u32 root)
+{
+    for (u32 child = first_child(firmware, root); child != 0 && child != 0xffffffffu; child = next_peer(firmware, child)) {
+        u32 acknowledge = 0;
+        if (get_property(firmware, child, "8259-interrupt-acknowledge", &acknowledge, sizeof(acknowledge)) == sizeof(acknowledge)
+            && (acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET)
+            return acknowledge & ~0xffffu;
+    }
+    return 0;
+}
+
+static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
+{
+    int length = get_property(firmware, chosen, "bootargs", s_command_line, sizeof(s_command_line) - sizeof(" serial_debug"));
+    u32 count = 0;
+    if (length > 0 && length < static_cast<int>(sizeof(s_command_line))) {
+        while (count < static_cast<u32>(length) && s_command_line[count] != '\0')
+            ++count;
+    }
+    char const* debug = count == 0 ? "serial_debug" : " serial_debug";
+    for (u32 index = 0; debug[index] != '\0'; ++index)
+        s_command_line[count++] = debug[index];
+    s_command_line[count] = '\0';
+    return count;
+}
+
+static bool wants_kernel_entry()
+{
+    char const* needle = "serenity-loader-enter-kernel";
+    for (u32 offset = 0; s_command_line[offset] != '\0'; ++offset) {
+        u32 index = 0;
+        while (needle[index] != '\0' && s_command_line[offset + index] == needle[index])
+            ++index;
+        if (needle[index] == '\0')
+            return true;
+    }
+    return false;
 }
 
 static void write_console(FirmwareEntry firmware, u32 stdout, char const* message)
@@ -165,4 +273,53 @@ extern "C" void loader_main(FirmwareEntry firmware)
         return;
     }
     write_console(firmware, stdout, "SerenityOS PowerPC loader: high kernel alias passed\r\n");
+
+    u32 root = find_device(firmware, "/");
+    u32 memory_range_count = 0;
+    if (root == 0 || root == 0xffffffffu
+        || !discover_memory_ranges(firmware, root, memory_range_count)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware memory unavailable\r\n");
+        return;
+    }
+    u32 loader_start = reinterpret_cast<FlatPtr>(__loader_start);
+    u32 loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + 4095u) & ~4095u;
+    s_reserved_ranges[0] = { 0, 0x2000 };
+    s_reserved_ranges[1] = { loader_start, loader_end - loader_start };
+    s_reserved_ranges[2] = { physical_base, span };
+    s_reserved_ranges[3] = { mappings.table_physical, table_size };
+
+    Kernel::BootInfo boot_info {};
+    boot_info.boot_method = Kernel::BootMethod::FirmwareMemoryMap;
+    boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap {
+        s_memory_ranges, memory_range_count, s_reserved_ranges, 4
+    };
+    boot_info.physical_to_virtual_offset = static_cast<u32>(runtime_base) - physical_base;
+    boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
+    boot_info.kernel_load_base = static_cast<u32>(runtime_base);
+    boot_info.arch_specific.open_firmware_entry = firmware_pointer(reinterpret_cast<void const*>(firmware));
+    boot_info.arch_specific.hpt_virtual_address = mappings.table_virtual;
+    boot_info.arch_specific.hpt_physical_address = PhysicalAddress { mappings.table_physical };
+    boot_info.arch_specific.hpt_group_count = mappings.group_count;
+    boot_info.arch_specific.timebase_frequency_hz = discover_timebase_frequency(firmware);
+    boot_info.arch_specific.mv64361_registers_physical_base = discover_controller_base(firmware, root);
+    boot_info.cmdline = AK::StringView { s_command_line, prepare_command_line(firmware, chosen) };
+
+    PowerPCHashPageTable validated_table;
+    if (!Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, validated_table)
+        || validated_table.entries != reinterpret_cast<PowerPCHPTEntry*>(mappings.table_virtual)
+        || validated_table.group_count != mappings.group_count
+        || !Kernel::PowerPC::boot_timebase_frequency(boot_info).has_value()
+        || !Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value()) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff invalid\r\n");
+        return;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff validated\r\n");
+    if (wants_kernel_entry()) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: entering kernel\r\n");
+        powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1));
+        auto entry = reinterpret_cast<void (*)(Kernel::BootInfo const&)>(static_cast<u32>(runtime_base) + plan.entry_offset);
+        entry(boot_info);
+        powerpc_loader_disable_translation();
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel returned\r\n");
+    }
 }
