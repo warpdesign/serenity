@@ -52,6 +52,8 @@ def main():
         symbols = subprocess.run([args.readelf, "-Ws", str(executable)], capture_output=True, text=True, check=True).stdout
         if not re.search(r"\bUND __dynamic_cast\b", symbols):
             raise SystemExit("RTTI probe did not retain its dynamic_cast call")
+        if not re.search(r"\bUND __cxa_demangle\b", symbols):
+            raise SystemExit("RTTI probe did not retain its __cxa_demangle call")
 
         root = work / "root"
         (root / "usr/lib").mkdir(parents=True)
@@ -81,7 +83,7 @@ def main():
         if args.cpu:
             command.extend(("-cpu", args.cpu))
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        marker = b"PowerPC RTTI runtime passed"
+        marker = b"PowerPC RTTI and demangle runtime passed"
         found = False
         try:
             deadline = time.monotonic() + 45
@@ -104,7 +106,7 @@ def main():
                 + output.decode(errors="replace")[-3000:]
                 + errors.decode(errors="replace")[-1000:]
             )
-    print("Pegasos 2 C++ dynamic_cast runtime passed")
+    print("Pegasos 2 C++ dynamic_cast and demangle runtime passed")
 
 
 if __name__ == "__main__":

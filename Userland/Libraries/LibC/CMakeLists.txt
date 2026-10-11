@@ -135,6 +135,7 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     # cross toolchain has libsupc++.a but no shared C++ ABI runtime.
     target_link_options(LibC PRIVATE
         LINKER:--undefined=__dynamic_cast
+        LINKER:--undefined=__cxa_demangle
         LINKER:--undefined=_ZTVN10__cxxabiv117__class_type_infoE
         LINKER:--undefined=_ZTVN10__cxxabiv120__si_class_type_infoE
         LINKER:--undefined=_ZTVN10__cxxabiv121__vmi_class_type_infoE)
