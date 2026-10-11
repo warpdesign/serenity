@@ -284,6 +284,7 @@ private:
 
     PageTableEntry* pte(PageDirectory&, VirtualAddress);
     PageTableEntry* ensure_pte(PageDirectory&, VirtualAddress);
+    void prepare_kernel_heap_range(VirtualRange const&);
     bool map_page(PageDirectory&, VirtualAddress, PageMappingRequest const&);
     void unmap_page(PageDirectory&, VirtualAddress, bool release_empty_table);
     Optional<PageMappingInfo> query_page(PageDirectory&, VirtualAddress);

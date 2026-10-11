@@ -111,6 +111,29 @@ extern "C" int powerpc_page_mapping_test()
     if (powerpc_apply_kernel_mapping(&table, quickmap_address, kernel_request))
         return 0;
 
+    // Heap growth maps consecutive writable supervisor pages through the
+    // kernel mapping API. Verify the complete range and release it again.
+    kernel_request.execute_disabled = false;
+    kernel_request.global = true;
+    constexpr unsigned heap_address = KERNEL_MAPPING_BASE + 0x02000000u;
+    constexpr unsigned heap_physical_address = 0x00600000u;
+    for (unsigned index = 0; index < 3; ++index) {
+        kernel_request.physical_page_base = heap_physical_address + index * POWERPC_HPT_PAGE_SIZE;
+        if (!powerpc_apply_kernel_mapping(&table, heap_address + index * POWERPC_HPT_PAGE_SIZE, kernel_request))
+            return 0;
+    }
+    for (unsigned index = 0; index < 3; ++index) {
+        auto address = heap_address + index * POWERPC_HPT_PAGE_SIZE;
+        auto* entry = powerpc_hpt_find(&table, address >> 28, address);
+        if (!entry || (entry->lower & 0xfffff000u) != heap_physical_address + index * POWERPC_HPT_PAGE_SIZE
+            || (entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY)
+            return 0;
+        if (!powerpc_hpt_unmap(&table, address >> 28, address))
+            return 0;
+        if (powerpc_hpt_find(&table, address >> 28, address))
+            return 0;
+    }
+
     alignas(64) PowerPCHPTEntry tiny_entries[POWERPC_HPT_ENTRIES_PER_GROUP] {};
     PowerPCHashPageTable tiny_table { tiny_entries, 1 };
     if (powerpc_map_kernel_page_array(&tiny_table, 0xc4000000u, 0x00600000u, 9))

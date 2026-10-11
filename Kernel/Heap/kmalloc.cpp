@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -19,11 +19,7 @@
 #include <Kernel/Security/AddressSanitizer.h>
 #include <Kernel/Tasks/PerformanceManager.h>
 
-#if ARCH(X86_64) || ARCH(AARCH64) || ARCH(RISCV64)
 static constexpr size_t CHUNK_SIZE = 64;
-#else
-#    error Unknown architecture
-#endif
 static_assert(is_power_of_two(CHUNK_SIZE));
 
 static constexpr size_t INITIAL_KMALLOC_MEMORY_SIZE = 16 * MiB;
@@ -369,15 +365,14 @@ struct KmallocGlobalData {
         for (auto vaddr = new_subheap_base; !physical_pages.is_empty(); vaddr = vaddr.offset(PAGE_SIZE)) {
             // FIXME: We currently leak physical memory when mapping it into the kmalloc heap.
             auto& page = physical_pages.take_one().leak_ref();
-            auto* pte = MM.pte(MM.kernel_page_directory(), vaddr);
-            VERIFY(pte);
-            pte->set_physical_page_base(page.paddr().get());
-            pte->set_global(true);
-            pte->set_user_allowed(false);
-            pte->set_writable(true);
-            if (cpu_supports_nx)
-                pte->set_execute_disabled(true);
-            pte->set_present(true);
+            VERIFY(MM.map_page(MM.kernel_page_directory(), vaddr, Memory::PageMappingRequest {
+                .physical_page_base = page.paddr().get(),
+                .memory_type = Memory::MemoryType::Normal,
+                .writable = true,
+                .user_allowed = false,
+                .execute_disabled = cpu_supports_nx,
+                .global = true,
+            }));
         }
 
         add_subheap(new_subheap_base.as_ptr(), new_subheap_size);
@@ -394,12 +389,8 @@ struct KmallocGlobalData {
             .next_virtual_address = reserved_region->range().base(),
         };
 
-        // Make sure the entire kmalloc VM range is backed by page tables.
-        // This avoids having to deal with lazy page table allocation during heap expansion.
         SpinlockLocker pd_locker(MM.kernel_page_directory().get_lock());
-        for (auto vaddr = reserved_region->range().base(); vaddr < reserved_region->range().end(); vaddr = vaddr.offset(PAGE_SIZE)) {
-            MM.ensure_pte(MM.kernel_page_directory(), vaddr);
-        }
+        MM.prepare_kernel_heap_range(reserved_region->range());
 
         (void)reserved_region.leak_ptr();
     }

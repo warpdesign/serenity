@@ -20,6 +20,7 @@ struct PageMappingRequest {
     bool writable { false };
     bool user_allowed { false };
     bool execute_disabled { false };
+    bool global { false };
 };
 
 struct PageMappingInfo {

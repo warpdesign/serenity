@@ -305,6 +305,14 @@ PageTableEntry* MemoryManager::pte(PageDirectory& page_directory, VirtualAddress
     return &quickmap_pt(PhysicalAddress((FlatPtr)pde.page_table_base()))[page_table_index];
 }
 
+void MemoryManager::prepare_kernel_heap_range(VirtualRange const& range)
+{
+    VERIFY(kernel_page_directory().get_lock().is_locked_by_current_processor());
+    // Heap expansion cannot allocate a page table while the heap lock is held.
+    for (auto address = range.base(); address < range.end(); address = address.offset(PAGE_SIZE))
+        VERIFY(ensure_pte(kernel_page_directory(), address));
+}
+
 PageTableEntry* MemoryManager::ensure_pte(PageDirectory& page_directory, VirtualAddress vaddr)
 {
     VERIFY_INTERRUPTS_DISABLED();

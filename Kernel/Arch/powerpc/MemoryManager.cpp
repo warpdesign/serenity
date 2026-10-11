@@ -97,6 +97,12 @@ UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& globa
     dmesgln("MM: PowerPC physical-page entries: {}", metadata_region.range());
 }
 
+void MemoryManager::prepare_kernel_heap_range(VirtualRange const&)
+{
+    VERIFY(kernel_page_directory().get_lock().is_locked_by_current_processor());
+    // The fixed hash page table needs no per-address allocation before mapping.
+}
+
 bool MemoryManager::map_page(PageDirectory& directory, VirtualAddress address, PageMappingRequest const& request)
 {
     VERIFY(directory.get_lock().is_locked_by_current_processor());

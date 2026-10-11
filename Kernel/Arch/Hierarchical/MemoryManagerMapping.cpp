@@ -24,6 +24,7 @@ bool MemoryManager::map_page(PageDirectory& directory, VirtualAddress address, P
     if (Processor::current().has_nx())
         entry->set_execute_disabled(request.execute_disabled);
     entry->set_user_allowed(request.user_allowed);
+    entry->set_global(request.global);
     return true;
 }
 
