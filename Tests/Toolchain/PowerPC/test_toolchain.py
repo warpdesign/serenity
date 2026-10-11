@@ -55,6 +55,23 @@ def main():
         subprocess.run([args.compiler, "-msdata=none", "-fPIC", "-shared", "-nostdlib", crtbegin, str(resolver_source), str(trampoline_source), crtend, "-o", str(trampoline_image)], check=True)
         trampoline_dynamic = subprocess.check_output([args.readelf, "-W", "-d", "-r", str(trampoline_image)], text=True)
 
+        kernel_linker_source = Path(__file__).resolve().parents[3] / "Kernel/Arch/powerpc/linker.ld"
+        kernel_linker = Path(directory) / "kernel-linker.ld"
+        kernel_source = Path(directory) / "kernel-layout.S"
+        kernel_object = Path(directory) / "kernel-layout.o"
+        kernel_image = Path(directory) / "kernel-layout.elf"
+        subprocess.run([args.compiler, "-E", "-P", "-x", "c", "-I" + str(kernel_linker_source.parents[3]), str(kernel_linker_source), "-o", str(kernel_linker)], check=True)
+        kernel_source.write_text(
+            '.section .text.first,"ax"\n.global init\ninit: blr\n'
+            '.section .data,"aw"\n.long 0x12345678\n'
+            '.section .bss,"aw",@nobits\n.space 16\n'
+            '.section .heap,"aw",@nobits\n.space 4096\n'
+            '.section .kernel_symbols,"aw"\n.long 0\n'
+        )
+        subprocess.run([args.compiler, "-m32", "-msdata=none", "-ffreestanding", "-fPIE", "-c", str(kernel_source), "-o", str(kernel_object)], check=True)
+        subprocess.run([args.compiler, "-static-pie", "-nostdlib", "-nodefaultlibs", "-Wl,-z,max-page-size=0x1000", "-Wl,-T," + str(kernel_linker), str(kernel_object), "-o", str(kernel_image)], check=True)
+        kernel_layout = subprocess.check_output([args.readelf, "-W", "-h", "-l", "-s", str(kernel_image)], text=True)
+
     for field in ("ELF32", "big endian", "PowerPC"):
         if field not in header:
             raise SystemExit(f"Compiled object is missing {field}: {header}")
@@ -68,6 +85,11 @@ def main():
         raise SystemExit(f"PowerPC secure PLT metadata is missing: {plt_dynamic}")
     if "TEXTREL" in trampoline_dynamic or "R_PPC_REL24" in trampoline_dynamic:
         raise SystemExit(f"PowerPC PLT trampoline needs a text relocation: {trampoline_dynamic}")
+    for expected in ("ELF32", "big endian", "PowerPC", "start_of_kernel_image", "end_of_kernel_image", "start_of_initial_stack", "end_of_initial_stack"):
+        if expected not in kernel_layout:
+            raise SystemExit(f"PowerPC kernel linker layout is missing {expected}: {kernel_layout}")
+    if len(re.findall(r"^  LOAD\s", kernel_layout, re.MULTILINE)) < 3 or "R E" not in kernel_layout or "RW" not in kernel_layout:
+        raise SystemExit(f"PowerPC kernel linker load segments are invalid: {kernel_layout}")
     print("powerpc-serenity toolchain passed")
 
 

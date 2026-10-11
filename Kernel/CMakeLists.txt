@@ -953,6 +953,18 @@ elseif("${SERENITY_ARCH}" STREQUAL "riscv64")
     target_link_options(Kernel PRIVATE LINKER:-T ${CMAKE_CURRENT_BINARY_DIR}/linker.ld -nostdlib LINKER:-X)
 
     set_target_properties(Kernel PROPERTIES LINK_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/linker.ld")
+elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
+    add_custom_command(
+        OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
+        COMMAND "${CMAKE_CXX_COMPILER}" ${TARGET_STRING} -E -P -x c -I${CMAKE_CURRENT_SOURCE_DIR}/.. "${CMAKE_CURRENT_SOURCE_DIR}/Arch/powerpc/linker.ld" -o "${CMAKE_CURRENT_BINARY_DIR}/linker.ld"
+        MAIN_DEPENDENCY "Arch/powerpc/linker.ld"
+        COMMENT "Preprocessing linker.ld"
+        VERBATIM
+    )
+    add_custom_target(generate_kernel_linker_script DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/linker.ld)
+    add_dependencies(Kernel generate_kernel_linker_script)
+    target_link_options(Kernel PRIVATE LINKER:-T ${CMAKE_CURRENT_BINARY_DIR}/linker.ld -nostdlib -nodefaultlibs)
+    set_target_properties(Kernel PROPERTIES LINK_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/linker.ld")
 elseif ("${SERENITY_ARCH}" STREQUAL "x86_64")
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/linker.ld
@@ -991,6 +1003,8 @@ elseif ("${SERENITY_ARCH}" STREQUAL "riscv64")
     set(KERNEL_ELF_OBJCOPY_TARGET "elf64-littleriscv")
 elseif ("${SERENITY_ARCH}" STREQUAL "x86_64")
     set(KERNEL_ELF_OBJCOPY_TARGET "elf64-x86-64")
+elseif ("${SERENITY_ARCH}" STREQUAL "powerpc")
+    set(KERNEL_ELF_OBJCOPY_TARGET "elf32-powerpc")
 endif()
 
 # The Kernel is linked to the Pre-kernel binary.
