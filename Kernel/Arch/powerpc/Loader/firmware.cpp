@@ -31,6 +31,14 @@ static u32 find_device(FirmwareEntry firmware, char const* path)
     return call.cells[1];
 }
 
+static u32 claim_pages(FirmwareEntry firmware, u32 size)
+{
+    FirmwareCall call { "claim", 3, 1, { 0, size, 2 * 1024 * 1024, 0 } };
+    if (firmware(&call) != 0)
+        return 0;
+    return call.cells[3];
+}
+
 static void write_console(FirmwareEntry firmware, u32 stdout, char const* message)
 {
     u32 length = 0;
@@ -74,4 +82,19 @@ extern "C" void loader_main(FirmwareEntry firmware)
     write_hex(firmware, stdout, plan.end_virtual_offset - plan.first_virtual_offset);
     write_console(firmware, stdout, "SerenityOS PowerPC loader: entry ");
     write_hex(firmware, stdout, plan.entry_offset);
+
+    u32 span = plan.end_virtual_offset - plan.first_virtual_offset;
+    u32 physical_base = claim_pages(firmware, span);
+    if (physical_base == 0 || physical_base == 0xffffffffu
+        || (physical_base & (2 * 1024 * 1024 - 1)) != 0
+        || physical_base > 0xffffffffu - span
+        || !Kernel::PowerPC::Loader::load_kernel_image(_binary_kernel_elf_start,
+            _binary_kernel_elf_end - _binary_kernel_elf_start, plan,
+            reinterpret_cast<u8*>(physical_base), span)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel segment load failed\r\n");
+        return;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel segments loaded\r\n");
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: physical base ");
+    write_hex(firmware, stdout, physical_base);
 }

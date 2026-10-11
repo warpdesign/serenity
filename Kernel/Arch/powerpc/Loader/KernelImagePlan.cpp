@@ -71,4 +71,34 @@ bool plan_kernel_image(u8 const* image, size_t image_size, KernelImagePlan& plan
     return true;
 }
 
+bool load_kernel_image(u8 const* image, size_t image_size, KernelImagePlan const& plan, u8* destination, size_t destination_size)
+{
+    KernelImagePlan checked;
+    if (!plan_kernel_image(image, image_size, checked)
+        || checked.first_virtual_offset != plan.first_virtual_offset
+        || checked.end_virtual_offset != plan.end_virtual_offset
+        || checked.entry_offset != plan.entry_offset
+        || checked.load_segment_count != plan.load_segment_count
+        || !destination || destination_size < plan.end_virtual_offset - plan.first_virtual_offset)
+        return false;
+    auto source_start = static_cast<u64>(reinterpret_cast<FlatPtr>(image));
+    auto destination_start = static_cast<u64>(reinterpret_cast<FlatPtr>(destination));
+    if (source_start < destination_start + destination_size
+        && destination_start < source_start + image_size)
+        return false;
+
+    Elf_Ehdr header;
+    __builtin_memcpy(&header, image, sizeof(header));
+    for (u32 index = 0; index < header.e_phnum; ++index) {
+        Elf_Phdr segment;
+        __builtin_memcpy(&segment, image + header.e_phoff + index * sizeof(segment), sizeof(segment));
+        if (segment.p_type != PT_LOAD)
+            continue;
+        auto* target = destination + segment.p_vaddr - plan.first_virtual_offset;
+        __builtin_memcpy(target, image + segment.p_offset, segment.p_filesz);
+        __builtin_memset(target + segment.p_filesz, 0, segment.p_memsz - segment.p_filesz);
+    }
+    return true;
+}
+
 }
