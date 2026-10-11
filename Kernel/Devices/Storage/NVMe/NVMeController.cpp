@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021, Pankaj R <pankydev8@gmail.com>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2021-2026, Pankaj R <pankydev8@gmail.com>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -51,7 +51,7 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::initialize(bool is_queue_polled)
     // Queues will individually map the doorbell register respectively
     m_controller_regs = TRY(Memory::map_typed_writable<ControllerRegister volatile>(m_bar));
 
-    auto caps = m_controller_regs->cap;
+    auto caps = read_nvme_register(m_controller_regs->cap);
     m_ready_timeout = Duration::from_milliseconds((CAP_TO(caps) + 1) * 500); // CAP.TO is in 500ms units
 
     calculate_doorbell_stride();
@@ -82,11 +82,11 @@ bool NVMeController::wait_for_ready(bool expected_ready_bit_value)
     auto wait_iterations = m_ready_timeout.to_milliseconds();
 
     u32 expected_rdy = expected_ready_bit_value ? 1 : 0;
-    while (((m_controller_regs->csts >> CSTS_RDY_BIT) & 0x1) != expected_rdy) {
+    while (((read_nvme_register(m_controller_regs->csts) >> CSTS_RDY_BIT) & 0x1) != expected_rdy) {
         microseconds_delay(one_ms_io_delay);
 
         if (--wait_iterations == 0) {
-            if (((m_controller_regs->csts >> CSTS_RDY_BIT) & 0x1) != expected_rdy) {
+            if (((read_nvme_register(m_controller_regs->csts) >> CSTS_RDY_BIT) & 0x1) != expected_rdy) {
                 dbgln_if(NVME_DEBUG, "NVMEController: CSTS.RDY still not set to {} after {} ms", expected_rdy, m_ready_timeout.to_milliseconds());
                 return false;
             }
@@ -98,18 +98,18 @@ bool NVMeController::wait_for_ready(bool expected_ready_bit_value)
 
 ErrorOr<void> NVMeController::reset_controller()
 {
-    if ((m_controller_regs->cc & (1 << CC_EN_BIT)) != 0) {
+    if ((read_nvme_register(m_controller_regs->cc) & (1 << CC_EN_BIT)) != 0) {
         // If the EN bit is already set, we need to wait
         // until the RDY bit is 1, otherwise the behavior is undefined
         if (!wait_for_ready(true))
             return Error::from_errno(ETIMEDOUT);
     }
 
-    auto cc = m_controller_regs->cc;
+    auto cc = read_nvme_register(m_controller_regs->cc);
 
     cc = cc & ~(1 << CC_EN_BIT);
 
-    m_controller_regs->cc = cc;
+    write_nvme_register(m_controller_regs->cc, cc);
 
     full_memory_fence();
 
@@ -122,20 +122,20 @@ ErrorOr<void> NVMeController::reset_controller()
 
 ErrorOr<void> NVMeController::start_controller()
 {
-    if (!(m_controller_regs->cc & (1 << CC_EN_BIT))) {
+    if (!(read_nvme_register(m_controller_regs->cc) & (1 << CC_EN_BIT))) {
         // If the EN bit is not already set, we need to wait
         // until the RDY bit is 0, otherwise the behavior is undefined
         if (!wait_for_ready(false))
             return Error::from_errno(ETIMEDOUT);
     }
 
-    auto cc = m_controller_regs->cc;
+    auto cc = read_nvme_register(m_controller_regs->cc);
 
     cc = cc | (1 << CC_EN_BIT);
     cc = cc | (CQ_WIDTH << CC_IOCQES_BIT);
     cc = cc | (SQ_WIDTH << CC_IOSQES_BIT);
 
-    m_controller_regs->cc = cc;
+    write_nvme_register(m_controller_regs->cc, cc);
 
     full_memory_fence();
 
@@ -150,7 +150,7 @@ UNMAP_AFTER_INIT void NVMeController::set_admin_q_depth()
 {
     // Queue depth is 0 based
     u16 queue_depth = ADMIN_QUEUE_SIZE - 1;
-    m_controller_regs->aqa = queue_depth | (queue_depth << AQA_ACQ_SHIFT);
+    write_nvme_register(m_controller_regs->aqa, static_cast<u32>(queue_depth | (queue_depth << AQA_ACQ_SHIFT)));
 }
 
 UNMAP_AFTER_INIT ErrorOr<void> NVMeController::identify_and_init_namespaces()
@@ -159,7 +159,7 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::identify_and_init_namespaces()
     RefPtr<Memory::PhysicalRAMPage> prp_dma_buffer;
     OwnPtr<Memory::Region> prp_dma_region;
     auto namespace_data_struct = TRY(ByteBuffer::create_zeroed(NVMe_IDENTIFY_SIZE));
-    u32 active_namespace_list[NVMe_IDENTIFY_SIZE / sizeof(u32)];
+    LittleEndian<u32> active_namespace_list[NVMe_IDENTIFY_SIZE / sizeof(u32)];
 
     {
         // FIXME: Synchronize DMA buffer accesses correctly and set the MemoryType to NonCacheable.
@@ -172,7 +172,7 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::identify_and_init_namespaces()
         NVMeSubmission sub {};
         u16 status = 0;
         sub.op = OP_ADMIN_IDENTIFY;
-        sub.identify.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(prp_dma_buffer->paddr().as_ptr()));
+        sub.identify.data_ptr.prp1 = prp_dma_buffer->paddr().get();
         sub.identify.cns = NVMe_CNS_ID_ACTIVE_NS & 0xff;
         status = submit_admin_command(sub, true);
         if (status) {
@@ -194,7 +194,7 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::identify_and_init_namespaces()
             if (nsid == 0)
                 break;
             sub.op = OP_ADMIN_IDENTIFY;
-            sub.identify.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(prp_dma_buffer->paddr().as_ptr()));
+            sub.identify.data_ptr.prp1 = prp_dma_buffer->paddr().get();
             sub.identify.cns = NVMe_CNS_ID_NS & 0xff;
             sub.identify.nsid = nsid;
             status = submit_admin_command(sub, true);
@@ -236,7 +236,7 @@ ErrorOr<void> NVMeController::identify_and_init_controller()
         NVMeSubmission sub {};
         u16 status = 0;
         sub.op = OP_ADMIN_IDENTIFY;
-        sub.identify.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(prp_dma_buffer->paddr().as_ptr()));
+        sub.identify.data_ptr.prp1 = prp_dma_buffer->paddr().get();
         sub.identify.cns = NVMe_CNS_ID_CTRL & 0xff;
         status = submit_admin_command(sub, true);
         if (status) {
@@ -269,8 +269,8 @@ ErrorOr<void> NVMeController::identify_and_init_controller()
         {
             NVMeSubmission sub {};
             sub.op = OP_ADMIN_DBBUF_CONFIG;
-            sub.dbbuf_cmd.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(m_dbbuf_shadow_page->paddr().as_ptr()));
-            sub.dbbuf_cmd.data_ptr.prp2 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(m_dbbuf_eventidx_page->paddr().as_ptr()));
+            sub.dbbuf_cmd.data_ptr.prp1 = m_dbbuf_shadow_page->paddr().get();
+            sub.dbbuf_cmd.data_ptr.prp2 = m_dbbuf_eventidx_page->paddr().get();
 
             submit_admin_command(sub, true);
         }
@@ -284,8 +284,8 @@ ErrorOr<void> NVMeController::identify_and_init_controller()
 UNMAP_AFTER_INIT NVMeController::NSFeatures NVMeController::get_ns_features(IdentifyNamespace& identify_data_struct)
 {
     auto flbas = identify_data_struct.flbas & FLBA_SIZE_MASK;
-    auto namespace_size = identify_data_struct.nsze;
-    auto lba_format = identify_data_struct.lbaf[flbas];
+    u64 namespace_size = identify_data_struct.nsze;
+    u32 lba_format = identify_data_struct.lbaf[flbas];
 
     auto lba_size = (lba_format & LBA_SIZE_MASK) >> 16;
     return { namespace_size, static_cast<u8>(lba_size) };
@@ -351,8 +351,8 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::create_admin_queue(QueueType queu
         .dbbuf_eventidx = {},
     };
 
-    m_controller_regs->acq = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(cq_dma_pages.first()->paddr().as_ptr()));
-    m_controller_regs->asq = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(sq_dma_pages.first()->paddr().as_ptr()));
+    write_nvme_register(m_controller_regs->acq, cq_dma_pages.first()->paddr().get());
+    write_nvme_register(m_controller_regs->asq, sq_dma_pages.first()->paddr().get());
 
     Optional<InterruptNumber> irq;
     if (queue_type == QueueType::IRQ)
@@ -398,10 +398,10 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::create_io_queue(u8 qid, QueueType
     {
         NVMeSubmission sub {};
         sub.op = OP_ADMIN_CREATE_COMPLETION_QUEUE;
-        sub.create_cq.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(cq_dma_pages.first()->paddr().as_ptr()));
+        sub.create_cq.prp1 = cq_dma_pages.first()->paddr().get();
         sub.create_cq.cqid = qid;
         // The queue size is 0 based
-        sub.create_cq.qsize = AK::convert_between_host_and_little_endian(IO_QUEUE_SIZE - 1);
+        sub.create_cq.qsize = IO_QUEUE_SIZE - 1;
         auto flags = (queue_type == QueueType::IRQ) ? QUEUE_IRQ_ENABLED : QUEUE_IRQ_DISABLED;
         flags |= QUEUE_PHY_CONTIGUOUS;
         // When using MSIx interrupts, qid is used as an index into the interrupt table
@@ -409,19 +409,19 @@ UNMAP_AFTER_INIT ErrorOr<void> NVMeController::create_io_queue(u8 qid, QueueType
             sub.create_cq.irq_vector = qid;
         else
             sub.create_cq.irq_vector = 0;
-        sub.create_cq.cq_flags = AK::convert_between_host_and_little_endian(flags & 0xFFFF);
+        sub.create_cq.cq_flags = static_cast<u16>(flags);
         submit_admin_command(sub, true);
     }
     {
         NVMeSubmission sub {};
         sub.op = OP_ADMIN_CREATE_SUBMISSION_QUEUE;
-        sub.create_sq.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(sq_dma_pages.first()->paddr().as_ptr()));
+        sub.create_sq.prp1 = sq_dma_pages.first()->paddr().get();
         sub.create_sq.sqid = qid;
         // The queue size is 0 based
-        sub.create_sq.qsize = AK::convert_between_host_and_little_endian(IO_QUEUE_SIZE - 1);
+        sub.create_sq.qsize = IO_QUEUE_SIZE - 1;
         auto flags = QUEUE_PHY_CONTIGUOUS;
         sub.create_sq.cqid = qid;
-        sub.create_sq.sq_flags = AK::convert_between_host_and_little_endian(flags);
+        sub.create_sq.sq_flags = static_cast<u16>(flags);
         submit_admin_command(sub, true);
     }
 

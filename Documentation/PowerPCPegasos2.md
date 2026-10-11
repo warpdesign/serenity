@@ -79,6 +79,7 @@ The native console reports `serial online`, `setjmp roundtrip passed`,
 `big-endian float digits passed`,
 `big-endian float parser passed`,
 `PCI Open Firmware address passed`, `PCI 64-bit address assignment passed`,
+`NVMe little-endian wire format passed`,
 `FPSCR environment passed`,
 `FPU state roundtrip passed`,
 `ELF32 big-endian header passed`,
@@ -369,7 +370,8 @@ targets include:
 | AK | The short-string tag and float parser's eight-digit byte packing handle either host byte order. QEMU checks both layouts and parses decimals with the full parser on PowerPC; a native little-endian parser harness checks the same cases. The stack unwinder now follows the PowerPC backchain while preserving the existing frame layouts. Other AK data representations still need review. |
 | ELF and loader | LibELF selects native ELF32 big-endian types on PowerPC. QEMU validates headers, parses an image, applies REL, RELA, and RELR relative relocations, and checks the PowerPC TLS layout, r2 accessor, static `__tls_get_addr()` lookup, entry transfer, and secure PLT first and second calls using a test resolver. `DynamicObject` decodes native symbol and relocation fields; full loader symbol resolution, dynamic TLS relocation application, and `ELFBuild.cpp` still need a complete ELF32 big-endian path. |
 | Kernel PCI | Open Firmware PCI address cells are now decoded with explicit big-endian 32- and 64-bit fields, and the 64-bit BAR cursor stays 64-bit on a 32-bit CPU. The same wire bytes and address alignment cases pass a native little-endian test and the PowerPC QEMU probe. Other PCI configuration and device-register byte orders still need review. |
-| Other kernel code | `Tasks/Coredump.cpp` writes ELF64 little-endian. Storage and device registers need protocol-specific byte-order checks. |
+| NVMe | PRP addresses and command fields now enter `LittleEndian<T>` wrappers as native values; completion and identify fields decode through the same wrappers. Raw controller and doorbell registers convert once at the MMIO boundary. Native little-endian and PowerPC QEMU tests check the device-visible bytes, but no NVMe controller has run under the Serenity PowerPC kernel yet. |
+| Other kernel code | `Tasks/Coredump.cpp` writes ELF64 little-endian. Other storage and device registers need protocol-specific byte-order checks. |
 | Libraries and apps | Direct native-width reads in code such as LibPDF, LibSQL, and LibCompress need format-by-format review. Existing `LittleEndian<T>` and `BigEndian<T>` fields provide a starting point, but do not cover every parser or writer. |
 
 Each fix needs a format-level regression on both a little-endian build and the

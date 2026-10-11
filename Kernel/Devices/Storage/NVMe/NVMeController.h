@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Pankaj R <pankydev8@gmail.com>
+ * Copyright (c) 2021-2026, Pankaj R <pankydev8@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,6 +11,7 @@
 #include <AK/Types.h>
 #include <Kernel/Bus/PCI/Device.h>
 #include <Kernel/Devices/Storage/NVMe/NVMeDefinitions.h>
+#include <Kernel/Devices/Storage/NVMe/NVMeEndian.h>
 #include <Kernel/Devices/Storage/NVMe/NVMeNameSpace.h>
 #include <Kernel/Devices/Storage/NVMe/NVMeQueue.h>
 #include <Kernel/Devices/Storage/StorageController.h>
@@ -67,7 +68,7 @@ private:
     ErrorOr<void> create_io_queue(u8 qid, QueueType queue_type);
     void calculate_doorbell_stride()
     {
-        m_dbl_stride = (m_controller_regs->cap >> CAP_DBL_SHIFT) & CAP_DBL_MASK;
+        m_dbl_stride = (read_nvme_register(m_controller_regs->cap) >> CAP_DBL_SHIFT) & CAP_DBL_MASK;
     }
     bool wait_for_ready(bool);
 

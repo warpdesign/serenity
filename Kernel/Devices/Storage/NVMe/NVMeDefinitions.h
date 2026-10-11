@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Pankaj R <pankydev8@gmail.com>
+ * Copyright (c) 2021-2026, Pankaj R <pankydev8@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -25,12 +25,12 @@ struct ControllerRegister {
 };
 
 struct IdentifyNamespace {
-    u64 nsze;
-    u64 ncap;
+    LittleEndian<u64> nsze;
+    LittleEndian<u64> ncap;
     u8 rsdv1[10];
     u8 flbas;
     u8 rsvd2[100];
-    u32 lbaf[16];
+    LittleEndian<u32> lbaf[16];
     u64 rsvd3[488];
 };
 
@@ -39,7 +39,7 @@ struct IdentifyNamespace {
 // instead of using rsd array.
 struct IdentifyController {
     u8 rsdv1[256];
-    u16 oacs;
+    LittleEndian<u16> oacs;
     u8 rsdv2[3838];
 };
 
@@ -138,7 +138,7 @@ struct [[gnu::packed]] NVMeCompletion {
     LittleEndian<u16> sq_head; /* how much of this queue may be reclaimed */
     LittleEndian<u16> sq_id;   /* submission queue that generated this entry */
 
-    u16 command_id;           /* of the command which completed */
+    LittleEndian<u16> command_id; /* of the command which completed */
     LittleEndian<u16> status; /* did the command fail, and if so, why? */
 };
 

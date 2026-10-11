@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Pankaj R <pankydev8@gmail.com>
+ * Copyright (c) 2021-2026, Pankaj R <pankydev8@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -172,10 +172,10 @@ void NVMeQueue::read(AsyncBlockDeviceRequest& request, u16 nsid, u64 index, u32 
     NVMeSubmission sub {};
     sub.op = OP_NVME_READ;
     sub.rw.nsid = nsid;
-    sub.rw.slba = AK::convert_between_host_and_little_endian(index);
+    sub.rw.slba = index;
     // No. of lbas is 0 based
-    sub.rw.length = AK::convert_between_host_and_little_endian((count - 1) & 0xFFFF);
-    sub.rw.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(m_rw_dma_page->paddr().as_ptr()));
+    sub.rw.length = static_cast<u16>((count - 1) & 0xFFFF);
+    sub.rw.data_ptr.prp1 = m_rw_dma_page->paddr().get();
     sub.cmdid = get_request_cid();
 
     m_requests.with([&sub, &request](auto& requests) {
@@ -192,10 +192,10 @@ void NVMeQueue::write(AsyncBlockDeviceRequest& request, u16 nsid, u64 index, u32
 
     sub.op = OP_NVME_WRITE;
     sub.rw.nsid = nsid;
-    sub.rw.slba = AK::convert_between_host_and_little_endian(index);
+    sub.rw.slba = index;
     // No. of lbas is 0 based
-    sub.rw.length = AK::convert_between_host_and_little_endian((count - 1) & 0xFFFF);
-    sub.rw.data_ptr.prp1 = reinterpret_cast<u64>(AK::convert_between_host_and_little_endian(m_rw_dma_page->paddr().as_ptr()));
+    sub.rw.length = static_cast<u16>((count - 1) & 0xFFFF);
+    sub.rw.data_ptr.prp1 = m_rw_dma_page->paddr().get();
     sub.cmdid = get_request_cid();
 
     m_requests.with([&sub, &request](auto& requests) {

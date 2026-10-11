@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Pankaj R <pankydev8@gmail.com>
+ * Copyright (c) 2021-2026, Pankaj R <pankydev8@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,6 +13,7 @@
 #include <Kernel/Arch/MemoryFences.h>
 #include <Kernel/Bus/PCI/Device.h>
 #include <Kernel/Devices/Storage/NVMe/NVMeDefinitions.h>
+#include <Kernel/Devices/Storage/NVMe/NVMeEndian.h>
 #include <Kernel/Interrupts/IRQHandler.h>
 #include <Kernel/Library/LockRefPtr.h>
 #include <Kernel/Library/NonnullLockRefPtr.h>
@@ -68,12 +69,12 @@ protected:
     // Updates the shadow buffer and returns if mmio is needed
     bool update_shadow_buf(u16 new_value, u32* dbbuf, u32* ei)
     {
-        u32 const old = *dbbuf;
+        u32 const old = read_nvme_register(*dbbuf);
 
-        *dbbuf = new_value;
+        write_nvme_register(*dbbuf, static_cast<u32>(new_value));
         full_memory_fence();
 
-        bool need_mmio = static_cast<u16>(new_value - *ei - 1) < static_cast<u16>(new_value - old);
+        bool need_mmio = static_cast<u16>(new_value - read_nvme_register(*ei) - 1) < static_cast<u16>(new_value - old);
         return need_mmio;
     }
 
@@ -82,7 +83,7 @@ protected:
         full_memory_fence();
         if (m_db_regs.dbbuf_shadow.paddr.is_null()
             || update_shadow_buf(m_sq_tail, &m_db_regs.dbbuf_shadow->sq_tail, &m_db_regs.dbbuf_eventidx->sq_tail))
-            m_db_regs.mmio_reg->sq_tail = m_sq_tail;
+            write_nvme_register(m_db_regs.mmio_reg->sq_tail, static_cast<u32>(m_sq_tail));
     }
 
     NVMeQueue(NonnullOwnPtr<Memory::Region> rw_dma_region, Memory::PhysicalRAMPage const& rw_dma_page, u16 qid, u32 q_depth, OwnPtr<Memory::Region> cq_dma_region, OwnPtr<Memory::Region> sq_dma_region, Doorbell db_regs);
@@ -111,7 +112,7 @@ private:
         full_memory_fence();
         if (m_db_regs.dbbuf_shadow.paddr.is_null()
             || update_shadow_buf(m_cq_head, &m_db_regs.dbbuf_shadow->cq_head, &m_db_regs.dbbuf_eventidx->cq_head))
-            m_db_regs.mmio_reg->cq_head = m_cq_head;
+            write_nvme_register(m_db_regs.mmio_reg->cq_head, static_cast<u32>(m_cq_head));
     }
 
 protected:
