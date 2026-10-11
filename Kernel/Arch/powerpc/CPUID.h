@@ -8,6 +8,7 @@
 
 #include <AK/ArbitrarySizedEnum.h>
 #include <AK/Platform.h>
+#include <AK/StringView.h>
 #include <AK/Types.h>
 
 VALIDATE_IS_POWERPC32()
@@ -27,6 +28,8 @@ inline u32 read_pvr()
     asm volatile("mfspr %0,287" : "=r"(value));
     return value;
 }
+
+StringView processor_model_name(u32 pvr);
 
 }
 
