@@ -646,7 +646,9 @@ DynamicLoader::RelocationResult DynamicLoader::do_direct_relocation(DynamicObjec
             break;
 
         size_t addend = relocation.addend_used() ? relocation.addend() : *patch_ptr;
-        *patch_ptr = addend + maybe_resolution->value - TLS_DTV_OFFSET + TLS_TP_STATIC_TLS_BLOCK_OFFSET;
+        // __tls_get_addr applies the static TLS block offset. Only the DTV
+        // bias belongs in a DTPREL relocation.
+        *patch_ptr = addend + maybe_resolution->value - TLS_DTV_OFFSET;
         break;
     }
 #ifdef HAS_TLSDESC_SUPPORT

@@ -22,6 +22,8 @@ extern "C" {
 // changed if we support dynamically allocated TLS blocks.
 void* __tls_get_addr(__tls_index* index)
 {
-    return reinterpret_cast<void*>(ELF::get_thread_pointer_register() + index->ti_module + index->ti_offset + ELF::TLS_DTV_OFFSET);
+    // The caller may add a local-dynamic DTPREL offset after this call, so
+    // include the static TLS block's position relative to the thread pointer.
+    return reinterpret_cast<void*>(ELF::get_thread_pointer_register() + index->ti_module + index->ti_offset + ELF::TLS_DTV_OFFSET + ELF::TLS_TP_STATIC_TLS_BLOCK_OFFSET);
 }
 }
