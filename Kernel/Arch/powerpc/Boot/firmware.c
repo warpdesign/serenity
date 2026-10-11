@@ -41,6 +41,8 @@ extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
 extern int pci_open_firmware_address_test(void);
 extern int pci_address_assignment_test(void);
+extern int powerpc_pegasos2_pci_config_test(void);
+extern volatile Cell powerpc_pegasos2_pci_config_debug;
 extern int nvme_endian_test(void);
 extern int sd_adma_address_test(void);
 extern int powerpc_deferred_key_press_test(void);
@@ -326,6 +328,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: PCI 64-bit address assignment passed\r\n");
         else
             serial_write("SerenityOS PowerPC: PCI 64-bit address assignment failed\r\n");
+        if (powerpc_pegasos2_pci_config_test())
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read failed 0x");
+            serial_write_hex(powerpc_pegasos2_pci_config_debug);
+            serial_write("\r\n");
+        }
         if (nvme_endian_test())
             serial_write("SerenityOS PowerPC: NVMe little-endian wire format passed\r\n");
         else

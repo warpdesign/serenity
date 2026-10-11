@@ -33,6 +33,7 @@ def main():
         b"SerenityOS PowerPC: big-endian float parser passed",
         b"SerenityOS PowerPC: PCI Open Firmware address passed",
         b"SerenityOS PowerPC: PCI 64-bit address assignment passed",
+        b"SerenityOS PowerPC: Pegasos 2 PCI config read passed",
         b"SerenityOS PowerPC: NVMe little-endian wire format passed",
         b"SerenityOS PowerPC: SD ADMA physical addresses passed",
         b"SerenityOS PowerPC: deferred key press passed",
