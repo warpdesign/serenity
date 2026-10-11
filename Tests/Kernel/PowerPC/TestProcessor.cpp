@@ -9,6 +9,12 @@
 namespace Kernel {
 Atomic<u32> g_total_processors;
 FPUState s_clean_fpu_state;
+
+void ProcessorBase::check_invoke_scheduler()
+{
+    // The boot probe has no scheduler; clear_critical must not request one.
+    VERIFY(m_invoke_scheduler_async == 0);
+}
 }
 
 extern "C" int powerpc_processor_test()
@@ -31,8 +37,10 @@ extern "C" int powerpc_processor_test()
 
     Kernel::Processor::enter_critical();
     passed &= Kernel::Processor::in_critical() == 1;
-    Kernel::Processor::restore_critical(0);
+    passed &= Kernel::Processor::clear_critical() == 1;
     passed &= Kernel::Processor::in_critical() == 0;
+    passed &= &Kernel::Processor::by_id(0) == &processor;
+    passed &= Kernel::Processor::smp_wake_n_idle_processors(1) == 0;
 
     auto before = Kernel::Processor::read_cycle_count();
     for (unsigned index = 0; index < 10000; ++index)

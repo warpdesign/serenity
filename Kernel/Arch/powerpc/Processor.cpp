@@ -7,6 +7,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/CPUID.h>
 #include <Kernel/Arch/powerpc/TLB.h>
+#include <Kernel/Interrupts/InterruptDisabler.h>
 
 namespace Kernel {
 
@@ -53,6 +54,49 @@ void ProcessorBase::initialize(u32 cpu)
     disable_interrupts();
     for (;;)
         asm volatile("nop" : : : "memory");
+}
+
+u32 ProcessorBase::clear_critical()
+{
+    InterruptDisabler disabler;
+    auto previous = in_critical();
+    auto& processor = current();
+    processor.m_in_critical = 0;
+    if (processor.m_in_irq == 0)
+        processor.check_invoke_scheduler();
+    return previous;
+}
+
+u32 ProcessorBase::smp_wake_n_idle_processors(u32)
+{
+    // Pegasos 2 bring-up currently has only the bootstrap processor.
+    return 0;
+}
+
+Processor& ProcessorBase::by_id(u32 id)
+{
+    VERIFY(id == 0);
+    return current();
+}
+
+void ProcessorBase::idle_begin() const
+{
+}
+
+void ProcessorBase::idle_end() const
+{
+}
+
+void ProcessorBase::idle() const
+{
+    VERIFY_INTERRUPTS_DISABLED();
+    idle_begin();
+    // The 750 has no architecture-neutral WFI. Let pending interrupts run,
+    // then return to the scheduler with interrupts disabled as it expects.
+    enable_interrupts();
+    pause();
+    disable_interrupts();
+    idle_end();
 }
 
 void ProcessorBase::store_fpu_state(FPUState& state)
