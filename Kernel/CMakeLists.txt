@@ -669,6 +669,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp
         Arch/powerpc/SegmentRegisters.cpp
+        Arch/powerpc/SmapDisabler.cpp
         Arch/powerpc/TLB.cpp
         Arch/powerpc/Time/TimeManagement.cpp
         Arch/powerpc/Time/Timer.cpp
