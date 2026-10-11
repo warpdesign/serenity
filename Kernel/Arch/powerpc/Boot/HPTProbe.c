@@ -80,6 +80,7 @@ static int s_user_syscall_resume_observed;
 static int s_user_exception_frame_observed;
 static int s_user_external_irq_observed;
 volatile Word powerpc_hpt_user_high_debug;
+volatile Word powerpc_probe_dsi_high_segment;
 
 volatile struct PowerPCExceptionState powerpc_user_probe_frame;
 
@@ -958,7 +959,8 @@ int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
         | (unmapped ? 1u << 12 : 0u)
         | (rejected_translated_switch ? 1u << 13 : 0u);
     powerpc_hpt_user_high_debug |= second_syscall_high_segment == (0x20000000u | (user_base + 12)) ? 1u << 14 : 0u;
-    return powerpc_hpt_user_high_debug == 0x7fffu;
+    powerpc_hpt_user_high_debug |= powerpc_probe_dsi_high_segment == (0x20000000u | 12) ? 1u << 15 : 0u;
+    return powerpc_hpt_user_high_debug == 0xffffu;
 }
 
 int powerpc_user_stack_observed(void)

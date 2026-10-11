@@ -13,16 +13,60 @@
 .global data_storage_exception_vector_end
 data_storage_exception_vector_start:
     mtspr 275, 11     // SPRG3: preserve r11 from the interrupted code.
+    mtspr 273, 12     // Temporarily preserve r12 while recording the kernel SR.
     mfspr 11, 272     // SPRG0: count data-storage exceptions.
     addi 11, 11, 1
     mtspr 272, 11
     mfspr 11, 19      // DAR: faulting effective address.
     mtspr 274, 11     // SPRG2
-    mfspr 11, 18      // DSISR: data-storage fault cause.
-    mtspr 273, 11     // SPRG1, replacing the earlier trap count.
+
+    // The vector runs in real mode. Restore shared kernel high VSIDs before
+    // any translated kernel access in a future full handler.
+    sync
+    lis 11, 0x2000
+    ori 11, 11, 12
+    mtsr 12, 11
+    addi 11, 11, 1
+    mtsr 13, 11
+    addi 11, 11, 1
+    mtsr 14, 11
+    addi 11, 11, 1
+    mtsr 15, 11
+    isync
+    mfsr 11, 12
+    lis 12, powerpc_probe_dsi_high_segment@ha
+    stw 11, powerpc_probe_dsi_high_segment@l(12)
+    mfspr 12, 273     // Restore the interrupted r12.
+
     mfspr 11, 26      // Skip the probe's faulting load.
     addi 11, 11, 4
     mtspr 26, 11
+
+    mfcr 11
+    mtspr 273, 11     // Use SPRG1 to preserve CR across the mode test.
+    mfspr 11, 27
+    andi. 11, 11, 0x4000
+    beq .Lrestore_data_storage_state
+
+    // Low SR1 holds the process VSID base + 1. Restore its unused high VSIDs
+    // before rfi to keep the read-only kernel alias absent in user mode.
+    sync
+    mfsr 11, 1
+    addi 11, 11, 11
+    mtsr 12, 11
+    addi 11, 11, 1
+    mtsr 13, 11
+    addi 11, 11, 1
+    mtsr 14, 11
+    addi 11, 11, 1
+    mtsr 15, 11
+    isync
+
+.Lrestore_data_storage_state:
+    mfspr 11, 273
+    mtcrf 255, 11
+    mfspr 11, 18      // DSISR: data-storage fault cause.
+    mtspr 273, 11     // SPRG1, replacing the temporary CR value.
     mfspr 11, 275
     rfi
 data_storage_exception_vector_end:
