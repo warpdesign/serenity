@@ -48,7 +48,7 @@ SAFEMEM_TEST_OBJECTS := $(BUILD_DIR)/safe_mem.o $(BUILD_DIR)/safe_mem_asm.o $(BU
 ATOMIC64_TEST_OBJECTS := $(BUILD_DIR)/atomic64.o $(BUILD_DIR)/test_atomic64.o
 DEBUG_OUTPUT_TEST_OBJECTS := $(BUILD_DIR)/debug_output.o $(BUILD_DIR)/test_debug_output.o
 CURRENT_TIME_TEST_OBJECTS := $(BUILD_DIR)/current_time.o $(BUILD_DIR)/test_current_time.o
-KERNEL_CONTEXT_TEST_OBJECTS := $(BUILD_DIR)/kernel_context.o $(BUILD_DIR)/test_kernel_context.o
+KERNEL_CONTEXT_TEST_OBJECTS := $(BUILD_DIR)/kernel_context.o $(BUILD_DIR)/test_kernel_context.o $(BUILD_DIR)/kernel_exception_return.o $(BUILD_DIR)/test_kernel_exception_return.o
 
 .PHONY: all check check-quick clean
 
@@ -340,6 +340,12 @@ $(BUILD_DIR)/kernel_context.o: ../KernelContext.S ../KernelContextOffsets.h | $(
 
 $(BUILD_DIR)/test_kernel_context.o: ../../../../Tests/Kernel/PowerPC/TestKernelContext.cpp ../KernelContext.h ../KernelContextOffsets.h ../ThreadRegisters.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/kernel_exception_return.o: ../KernelExceptionReturn.S ../KernelContextOffsets.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/test_kernel_exception_return.o: ../../../../Tests/Kernel/PowerPC/TestKernelExceptionReturn.S ../KernelContextOffsets.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/runtime.o: Runtime.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@

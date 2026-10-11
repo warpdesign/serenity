@@ -665,6 +665,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/InterruptManagement.cpp
         Arch/powerpc/Interrupts.cpp
         Arch/powerpc/KernelContext.S
+        Arch/powerpc/KernelExceptionReturn.S
         Arch/powerpc/MemoryManager.cpp
         Arch/powerpc/OpenFirmwareMemoryMap.cpp
         Arch/powerpc/PageDirectory.cpp

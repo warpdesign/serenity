@@ -17,6 +17,7 @@ static_assert(__builtin_offsetof(PowerPCExceptionState, ctr) == PPC_CONTEXT_CTR)
 static_assert(__builtin_offsetof(PowerPCExceptionState, xer) == PPC_CONTEXT_XER);
 static_assert(__builtin_offsetof(PowerPCExceptionState, lr) == PPC_CONTEXT_LR);
 static_assert(__builtin_offsetof(PowerPCExceptionState, srr0) == PPC_CONTEXT_IP);
+static_assert(__builtin_offsetof(PowerPCExceptionState, srr1) == PPC_CONTEXT_SRR1);
 
 static Kernel::ThreadRegisters s_main_context {};
 static Kernel::ThreadRegisters s_worker_context {};

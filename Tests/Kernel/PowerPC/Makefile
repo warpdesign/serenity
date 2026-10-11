@@ -63,6 +63,8 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestKernelContext.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/ContextSwitch.cpp
 	$(CC) $(CFLAGS) -c ../../../Kernel/Arch/powerpc/KernelContext.S -o $(BUILD_DIR)/KernelContext.o
+	$(CC) $(CFLAGS) -c ../../../Kernel/Arch/powerpc/KernelExceptionReturn.S -o $(BUILD_DIR)/KernelExceptionReturn.o
+	$(CC) $(CFLAGS) -c TestKernelExceptionReturn.S -o $(BUILD_DIR)/TestKernelExceptionReturn.o
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/SmapDisabler.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only TestSmapDisabler.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only ../../../Kernel/Arch/powerpc/SafeMem.cpp

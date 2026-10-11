@@ -65,6 +65,7 @@ def main():
         b"SerenityOS PowerPC: translated kernel debug UART passed",
         b"SerenityOS PowerPC: wall-clock fallback passed",
         b"SerenityOS PowerPC: kernel context switch passed",
+        b"SerenityOS PowerPC: supervisor exception return passed",
         b"SerenityOS PowerPC: HPT external IRQ stack passed",
         b"SerenityOS PowerPC: HPT high IRQ handler passed",
         b"SerenityOS PowerPC: user-mode external IRQ resume passed",
