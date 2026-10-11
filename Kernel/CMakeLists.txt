@@ -646,6 +646,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
     set(KERNEL_SOURCES
         ${KERNEL_SOURCES}
         Arch/powerpc/CPUID.cpp
+        Arch/powerpc/Atomic64.cpp
         Arch/powerpc/Delay.cpp
         Arch/powerpc/CPUInfo.cpp
         Arch/powerpc/ForkRegisters.cpp
