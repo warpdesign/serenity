@@ -24,6 +24,24 @@ _start:
     sc
     cmpwi 3,0
     ble .Lsyscall_failed
+    // getcwd() writes into a lazily allocated user data page while the
+    // kernel is servicing a syscall.
+    bl .Lcwd_address
+.Lcwd_address:
+    mflr 3
+    addi 3,3,.Lcwd_buffer-.Lcwd_address
+    li 4,64
+    li 0,SYSCALL_GETCWD
+    sc
+    cmpwi 3,2
+    bne .Lsyscall_failed
+    bl .Lcwd_check
+.Lcwd_check:
+    mflr 5
+    addi 5,5,.Lcwd_buffer-.Lcwd_check
+    lbz 5,0(5)
+    cmpwi 5,'/'
+    bne .Lsyscall_failed
     bl .Lmessage_address
 .Lmessage_address:
     mflr 3
@@ -43,3 +61,8 @@ _start:
 .Lmessage:
     .ascii "PPC user syscall\n"
 .Lmessage_end:
+
+.section .bss,"aw",@nobits
+.p2align 12
+.Lcwd_buffer:
+    .space 64

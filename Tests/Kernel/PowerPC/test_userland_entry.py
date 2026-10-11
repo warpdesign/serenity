@@ -45,6 +45,7 @@ def main():
     syscall_header = Path(__file__).parents[3] / "Kernel/API/Syscall.h"
     syscall_names = re.findall(r"^\s*S\((\w+),", syscall_header.read_text(), re.MULTILINE)
     getpid_number = syscall_names.index("getpid")
+    getcwd_number = syscall_names.index("getcwd")
     dbgputstr_number = syscall_names.index("dbgputstr")
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-user-entry-") as directory:
         work = Path(directory)
@@ -53,6 +54,7 @@ def main():
         subprocess.run([
             args.cross_compile + "gcc", "-m32", "-msdata=none", "-ffreestanding", "-fno-pic", "-fno-pie",
             f"-DSYSCALL_GETPID={getpid_number}",
+            f"-DSYSCALL_GETCWD={getcwd_number}",
             f"-DSYSCALL_DBGPUTSTR={dbgputstr_number}",
             "-c", str(fixtures / "UserLoop.S"), "-o", str(object_file),
         ], check=True)
@@ -133,7 +135,7 @@ def main():
         user_timer_interrupts = sum("=> DECR" in line and int(line.split(" at ")[1].split(" =>")[0], 16) < 0xc0000000 for line in interrupt_lines if " at " in line)
         user_external_interrupts = sum("=> EXTERNAL" in line and int(line.split(" at ")[1].split(" =>")[0], 16) < 0xc0000000 for line in interrupt_lines if " at " in line)
         user_syscalls = sum("=> SYSCALL" in line and int(line.split(" at ")[1].split(" =>")[0], 16) < 0xc0000000 for line in interrupt_lines if " at " in line)
-        if observed_user_loop != 2 or user_instruction_faults < 1 or user_faults < 1 or user_timer_interrupts < 2 or user_external_interrupts < 1 or user_syscalls < 2 or b"PPC user syscall" not in serial_output or b"KERNEL PANIC" in serial_output:
+        if observed_user_loop != 2 or user_instruction_faults < 1 or user_faults < 1 or user_timer_interrupts < 2 or user_external_interrupts < 1 or user_syscalls < 3 or b"PPC user syscall" not in serial_output or b"KERNEL PANIC" in serial_output:
             raise SystemExit(
                 f"Pegasos 2 user entry failed: loop samples={observed_user_loop}, user instruction faults={user_instruction_faults}, user data faults={user_faults}, user timer interrupts={user_timer_interrupts}, user external interrupts={user_external_interrupts}, user syscalls={user_syscalls}\n"
                 + serial_output.decode(errors="replace")[-3000:]
