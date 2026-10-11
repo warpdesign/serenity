@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/ExceptionVectorInstaller.h>
+
 typedef unsigned int Word;
 
 enum {
@@ -12,8 +14,6 @@ enum {
     ProgramExceptionVector = 0x700,
     DecrementerExceptionVector = 0x900,
     SystemCallExceptionVector = 0xc00,
-    VectorSlotSize = 0x100,
-    CacheLineSize = 32,
     MSRExternalInterruptEnable = 0x8000,
     MSRProblemState = 0x4000,
     MSRExceptionPrefix = 0x40,
@@ -33,36 +33,14 @@ extern Word system_call_probe_vector_start[];
 extern Word system_call_probe_vector_end[];
 extern void trigger_program_exception(void);
 
-static int install_probe_vector(Word address, Word* start, Word* end)
-{
-    Word length = (Word)(__UINTPTR_TYPE__)end - (Word)(__UINTPTR_TYPE__)start;
-    if (length == 0 || length > VectorSlotSize || length % sizeof(Word) != 0)
-        return 0;
-
-    Word word_count = length / sizeof(Word);
-    for (Word index = 0; index < word_count; ++index) {
-        Word destination = address + index * sizeof(Word);
-        Word instruction = start[index];
-        __asm__ volatile("stw %0,0(%1)" : : "r"(instruction), "r"(destination) : "memory");
-    }
-
-    for (Word destination = address; destination < address + length; destination += CacheLineSize)
-        __asm__ volatile("dcbst 0,%0" : : "r"(destination) : "memory");
-    __asm__ volatile("sync" : : : "memory");
-    for (Word destination = address; destination < address + length; destination += CacheLineSize)
-        __asm__ volatile("icbi 0,%0" : : "r"(destination) : "memory");
-    __asm__ volatile("sync; isync" : : : "memory");
-    return 1;
-}
-
 int powerpc_install_decrementer_probe_vector(void)
 {
-    return install_probe_vector(DecrementerExceptionVector, decrementer_exception_vector_start, decrementer_exception_vector_end);
+    return powerpc_install_exception_vector(DecrementerExceptionVector, decrementer_exception_vector_start, decrementer_exception_vector_end);
 }
 
 int powerpc_install_external_interrupt_probe_vector(void)
 {
-    return install_probe_vector(ExternalInterruptVector, external_interrupt_vector_start, external_interrupt_vector_end);
+    return powerpc_install_exception_vector(ExternalInterruptVector, external_interrupt_vector_start, external_interrupt_vector_end);
 }
 
 int powerpc_program_exception_roundtrip(void)
@@ -72,9 +50,24 @@ int powerpc_program_exception_roundtrip(void)
     if ((machine_state & (MSRProblemState | MSRAddressTranslation)) != 0)
         return 0; // Require supervisor real mode for direct low-memory vectors.
 
-    if (!install_probe_vector(DataStorageExceptionVector, data_storage_exception_vector_start, data_storage_exception_vector_end)
-        || !install_probe_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_end)
-        || !install_probe_vector(SystemCallExceptionVector, system_call_probe_vector_start, system_call_probe_vector_end))
+    if (!powerpc_install_exception_vector(DataStorageExceptionVector, data_storage_exception_vector_start, data_storage_exception_vector_end)
+        || !powerpc_install_exception_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_end)
+        || !powerpc_install_exception_vector(SystemCallExceptionVector, system_call_probe_vector_start, system_call_probe_vector_end))
+        return 0;
+
+    // Reject invalid slots and templates without changing the installed
+    // program vector. The valid vector is exercised by the trap below.
+    Word installed_instruction;
+    __asm__ volatile("lwz %0,0(%1)" : "=r"(installed_instruction) : "r"(ProgramExceptionVector) : "memory");
+    Word oversized_template[65] = { 0 };
+    if (powerpc_install_exception_vector(ProgramExceptionVector + 4, program_exception_vector_start, program_exception_vector_end)
+        || powerpc_install_exception_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_start)
+        || powerpc_install_exception_vector(ProgramExceptionVector, (char*)program_exception_vector_start + 1, program_exception_vector_end)
+        || powerpc_install_exception_vector(ProgramExceptionVector, oversized_template, oversized_template + 65))
+        return 0;
+    Word instruction_after_rejection;
+    __asm__ volatile("lwz %0,0(%1)" : "=r"(instruction_after_rejection) : "r"(ProgramExceptionVector) : "memory");
+    if (instruction_after_rejection != installed_instruction)
         return 0;
 
     Word zero = 0;
