@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Tim Schumacher <timschumi@gmx.de>
+ * Copyright (c) 2023-2026, Tim Schumacher <timschumi@gmx.de>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -9,6 +9,43 @@
 #include <LibTest/TestCase.h>
 
 using namespace Test::Randomized;
+
+TEST_CASE(little_endian_bit_stream_reads_known_bytes)
+{
+    Array<u8, 4> const input { 0x12, 0x34, 0x56, 0x78 };
+    FixedMemoryStream memory_stream { input.span() };
+    LittleEndianInputBitStream bit_stream { MaybeOwned<Stream>(memory_stream) };
+
+    EXPECT_EQ(MUST(bit_stream.read_bits<u16>(12)), 0x412u);
+    EXPECT_EQ(MUST(bit_stream.read_bits<u16>(12)), 0x563u);
+    EXPECT_EQ(MUST(bit_stream.read_bits<u8>(8)), 0x78u);
+}
+
+TEST_CASE(little_endian_bit_stream_reads_bytes_after_bits)
+{
+    Array<u8, 4> const input { 0xa5, 0x34, 0x12, 0x7f };
+    FixedMemoryStream memory_stream { input.span() };
+    LittleEndianInputBitStream bit_stream { MaybeOwned<Stream>(memory_stream) };
+
+    EXPECT_EQ(MUST(bit_stream.read_bits<u8>(4)), 0x5u);
+    Array<u8, 2> output {};
+    auto read = MUST(bit_stream.read_some(output.span()));
+    EXPECT_EQ(read.size(), 2u);
+    EXPECT_EQ(output[0], 0x34u);
+    EXPECT_EQ(output[1], 0x12u);
+}
+
+TEST_CASE(little_endian_bit_stream_writes_known_bytes)
+{
+    AllocatingMemoryStream memory_stream;
+    LittleEndianOutputBitStream bit_stream { MaybeOwned<Stream>(memory_stream) };
+
+    MUST(bit_stream.write_bits<u16>(0x1234, 16));
+    MUST(bit_stream.flush_buffer_to_stream());
+    auto output = MUST(memory_stream.read_until_eof());
+    Array<u8, 2> const expected { 0x34, 0x12 };
+    EXPECT_EQ(output.bytes(), expected.span());
+}
 
 // Note: This does not do any checks on the internal representation, it just ensures that the behavior of the input and output streams match.
 TEST_CASE(little_endian_bit_stream_input_output_match)

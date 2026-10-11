@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, kleines Filmröllchen <filmroellchen@serenityos.org>.
+ * Copyright (c) 2021-2026, kleines Filmröllchen <filmroellchen@serenityos.org>.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,6 +8,7 @@
 
 #include <AK/ByteBuffer.h>
 #include <AK/Concepts.h>
+#include <AK/Endian.h>
 #include <AK/MaybeOwned.h>
 #include <AK/NumericLimits.h>
 #include <AK/OwnPtr.h>
@@ -173,7 +174,7 @@ public:
 
         if (m_bit_count > 0) {
             auto bits_to_read = min(buffer.size() * bits_per_byte, m_bit_count);
-            auto result = TRY(read_bits(bits_to_read));
+            auto result = AK::convert_between_host_and_little_endian(TRY(read_bits(bits_to_read)));
 
             bytes_read = bits_to_read / bits_per_byte;
             buffer.overwrite(0, &result, bytes_read);
@@ -266,7 +267,7 @@ private:
             BufferType buffer = 0;
             auto bytes = TRY(m_stream->read_some({ &buffer, bytes_to_read }));
 
-            m_bit_buffer |= (buffer << m_bit_count);
+            m_bit_buffer |= (AK::convert_between_host_and_little_endian(buffer) << m_bit_count);
             m_bit_count += bytes.size() * bits_per_byte;
         }
 
@@ -406,7 +407,8 @@ public:
     ALWAYS_INLINE ErrorOr<void> flush_buffer_to_stream()
     {
         auto bytes_to_write = m_bit_count / bits_per_byte;
-        TRY(m_stream->write_until_depleted({ &m_bit_buffer, bytes_to_write }));
+        auto little_endian_buffer = AK::convert_between_host_and_little_endian(m_bit_buffer);
+        TRY(m_stream->write_until_depleted({ &little_endian_buffer, bytes_to_write }));
 
         if (m_bit_count == bit_buffer_size) {
             m_bit_buffer = 0;

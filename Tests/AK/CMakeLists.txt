@@ -107,3 +107,16 @@ foreach(source IN LISTS AK_TEST_SOURCES)
 endforeach()
 
 target_link_libraries(TestString PRIVATE LibUnicode)
+
+if (NOT CMAKE_CROSSCOMPILING)
+    add_custom_target(AKCheckQuick
+        COMMAND "$<TARGET_FILE:TestBitStream>"
+        DEPENDS TestBitStream
+        USES_TERMINAL
+    )
+    add_custom_target(AKCheck
+        COMMAND "$<TARGET_FILE:TestEndian>"
+        DEPENDS AKCheckQuick TestEndian
+        USES_TERMINAL
+    )
+endif()
