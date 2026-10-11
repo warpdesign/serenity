@@ -92,6 +92,26 @@ target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
+    set(powerpc_signal_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_signal_stack_alignment.py")
+    set(powerpc_signal_arguments
+        --compiler "${CMAKE_C_COMPILER}" --qemu qemu-system-ppc
+        --kernel-loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --libc "$<TARGET_FILE:LibC>" --libsystem "$<TARGET_FILE:LibSystem>"
+    )
+    add_custom_target(PowerPCSignalCheckQuick
+        COMMAND python3 "${powerpc_signal_test}" ${powerpc_signal_arguments}
+        DEPENDS PowerPCFirmwareLoader Loader.so LibC LibSystem
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCSignalCheck
+        COMMAND python3 "${powerpc_signal_test}" ${powerpc_signal_arguments} --memory 512 --cpu 750cxe
+        DEPENDS PowerPCSignalCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     add_custom_target(PowerPCWindowServerCheckQuick
         DEPENDS PowerPCFirmwareLoaderCheckQuick init mount DeviceMapper SystemServer WindowServer keymap Loader.so
     )

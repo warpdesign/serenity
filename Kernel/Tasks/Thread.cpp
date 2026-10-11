@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -1096,7 +1096,7 @@ DispatchSignalResult Thread::dispatch_signal(u8 signal)
         // so we need to account for this here.
         constexpr static FlatPtr elements_pushed_on_stack_before_handler_address = 1; // one slot for a saved register
         FlatPtr const extra_bytes_pushed_on_stack_before_handler_address = sizeof(ucontext) + sizeof(signal_info);
-        FlatPtr stack_alignment = (stack - elements_pushed_on_stack_before_handler_address * sizeof(FlatPtr) + extra_bytes_pushed_on_stack_before_handler_address) % 16;
+        FlatPtr stack_alignment = (stack - elements_pushed_on_stack_before_handler_address * sizeof(FlatPtr) - extra_bytes_pushed_on_stack_before_handler_address) % 16;
         stack -= stack_alignment;
 
 #if ARCH(X86_64)
