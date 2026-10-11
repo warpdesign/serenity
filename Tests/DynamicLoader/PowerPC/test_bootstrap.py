@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--qemu", required=True)
     parser.add_argument("--kernel-loader", required=True)
     parser.add_argument("--user-loader", required=True)
-    parser.add_argument("--memory", type=int, default=256)
+    parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--cpu")
     args = parser.parse_args()
 

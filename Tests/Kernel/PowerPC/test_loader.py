@@ -84,7 +84,7 @@ def main():
     parser.add_argument("--kernel-elf", type=Path, required=True)
     parser.add_argument("--loader-dir", type=Path, required=True)
     parser.add_argument("--cross-compile", required=True)
-    parser.add_argument("--memory", type=int, default=256)
+    parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--cpu")
     parser.add_argument("--corrupt-only", action="store_true")
     args = parser.parse_args()

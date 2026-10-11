@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--qemu", required=True)
     parser.add_argument("--kernel", required=True)
+    parser.add_argument("--memory", type=int, default=512)
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory(prefix="serenity-pegasos2-rtas-") as directory:
@@ -20,7 +21,7 @@ def main():
         command = [
             args.qemu,
             "-M", "pegasos2",
-            "-m", "256",
+            "-m", str(args.memory),
             "-kernel", args.kernel,
             "-append", "serenity-rtas-power-off-test",
             "-display", "none",

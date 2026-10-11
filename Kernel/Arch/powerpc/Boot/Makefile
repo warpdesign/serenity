@@ -404,7 +404,7 @@ check-quick: all
 	$(MAKE) -C ../../../../Tests/Kernel/NVMe check-quick
 	$(MAKE) -C ../../../../Tests/Kernel/SD check-quick
 	$(MAKE) -C ../../../../Tests/Kernel/PowerPC check-quick CROSS_COMPILE=$(CROSS_COMPILE)
-	python3 ../../../../Tests/Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf --memory 256
+	python3 ../../../../Tests/Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf --memory 512
 	python3 ../../../../Tests/Kernel/PowerPC/test_rtas_power_off.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf
 
 check: check-quick
