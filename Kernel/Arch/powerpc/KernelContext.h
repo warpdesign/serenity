@@ -12,6 +12,7 @@ struct RegisterState;
 struct ThreadRegisters;
 extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thread);
 extern "C" [[noreturn]] void powerpc_restore_supervisor_exception_state(RegisterState const&);
+extern "C" [[noreturn]] void powerpc_start_initial_context(ThreadRegisters const&, Thread*);
 }
 
 // Save the outgoing kernel call context and jump to the incoming one. The

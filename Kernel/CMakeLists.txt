@@ -659,9 +659,11 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/ELFMachine.cpp
         Arch/powerpc/SignalTrampoline.cpp
         Arch/powerpc/BootHandoff.cpp
+        Arch/powerpc/ContextSwitch.cpp
         Arch/powerpc/FPUState.S
         Arch/powerpc/HashPageTable.cpp
-        Arch/powerpc/ContextSwitch.cpp
+        Arch/powerpc/InitialThreadContext.cpp
+        Arch/powerpc/InitialThreadEntry.S
         Arch/powerpc/InterruptManagement.cpp
         Arch/powerpc/Interrupts.cpp
         Arch/powerpc/KernelContext.S
