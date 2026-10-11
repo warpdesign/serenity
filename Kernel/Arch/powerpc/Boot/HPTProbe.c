@@ -556,7 +556,9 @@ int powerpc_hpt_group_reuse(void)
         return 0;
 
     powerpc_enable_boot_translation();
-    int passed = unmap_high_page(CollisionBase + (CollisionCount - 1) * CollisionStride)
+    int passed = powerpc_unmap_kernel_page_range(&s_hpt,
+                     CollisionBase + (CollisionCount - 1) * CollisionStride,
+                     CollisionBase + (CollisionCount - 1) * CollisionStride + PageSize)
         && map_high_page(replacement_alias, replacement_physical);
     if (passed) {
         volatile Word* alias = (volatile Word*)(__UINTPTR_TYPE__)replacement_alias;

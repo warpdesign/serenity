@@ -29,6 +29,7 @@ int powerpc_page_directory_backend_purge(struct PowerPCPageDirectoryBackend cons
 int powerpc_page_directory_backend_activate(struct PowerPCPageDirectoryBackend const*);
 int powerpc_set_kernel_page_writable(struct PowerPCHashPageTable const*, PowerPCHPTWord effective_address, int writable);
 int powerpc_protect_kernel_page_range(struct PowerPCHashPageTable const*, PowerPCHPTWord start, PowerPCHPTWord end);
+int powerpc_unmap_kernel_page_range(struct PowerPCHashPageTable const*, PowerPCHPTWord start, PowerPCHPTWord end);
 
 #ifdef __cplusplus
 }

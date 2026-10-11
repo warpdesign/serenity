@@ -165,6 +165,24 @@ int powerpc_protect_kernel_page_range(PowerPCHashPageTable const* table, PowerPC
     return 1;
 }
 
+int powerpc_unmap_kernel_page_range(PowerPCHashPageTable const* table, PowerPCHPTWord start, PowerPCHPTWord end)
+{
+    if (!table || start < 0xc0000000u || end < start
+        || (start & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || (end & (POWERPC_HPT_PAGE_SIZE - 1)) != 0)
+        return 0;
+
+    for (auto address = start; address < end; address += POWERPC_HPT_PAGE_SIZE) {
+        if (!powerpc_hpt_find(table, address >> 28, address))
+            return 0;
+    }
+    for (auto address = start; address < end; address += POWERPC_HPT_PAGE_SIZE) {
+        if (!powerpc_hpt_unmap(table, address >> 28, address))
+            return 0;
+    }
+    return 1;
+}
+
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address)
 {
     auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);

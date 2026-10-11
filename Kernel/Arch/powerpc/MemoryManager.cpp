@@ -23,6 +23,8 @@ extern u8 start_of_ro_after_init[];
 extern u8 end_of_ro_after_init[];
 extern u8 start_of_kernel_ksyms[];
 extern u8 end_of_kernel_ksyms[];
+extern u8 start_of_unmap_after_init[];
+extern u8 end_of_unmap_after_init[];
 
 namespace Kernel::Memory {
 
@@ -52,6 +54,23 @@ UNMAP_AFTER_INIT void MemoryManager::protect_ksyms_after_init()
     SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
     VERIFY(powerpc_protect_kernel_page_range(kernel_page_directory().backend().table, start, end));
     dmesgln("Write-protected kernel symbols after init.");
+}
+
+UNMAP_AFTER_INIT void MemoryManager::unmap_prekernel()
+{
+    // FirmwareMemoryMap boots directly into the kernel image. Its physical
+    // vector pages stay reserved and there is no mapped prekernel image.
+    VERIFY(g_boot_info.boot_method == BootMethod::FirmwareMemoryMap);
+}
+
+void MemoryManager::unmap_text_after_init()
+{
+    auto start = page_round_down(FlatPtr(start_of_unmap_after_init));
+    auto end = page_round_up(FlatPtr(end_of_unmap_after_init)).release_value_but_fixme_should_propagate_errors();
+    SpinlockLocker page_lock(kernel_page_directory().get_lock());
+    SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
+    VERIFY(powerpc_unmap_kernel_page_range(kernel_page_directory().backend().table, start, end));
+    dmesgln("Unmapped {} KiB of kernel text after init! :^)", (end - start) / KiB);
 }
 
 UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& global_data)
