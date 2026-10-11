@@ -30,6 +30,7 @@ def main():
         b"SerenityOS PowerPC: page mapping transaction passed",
         b"SerenityOS PowerPC: cache maintenance passed",
         b"SerenityOS PowerPC: big-endian short string passed",
+        b"SerenityOS PowerPC: big-endian bitmap search passed",
         b"SerenityOS PowerPC: big-endian float digits passed",
         b"SerenityOS PowerPC: big-endian float parser passed",
         b"SerenityOS PowerPC: PCI Open Firmware address passed",

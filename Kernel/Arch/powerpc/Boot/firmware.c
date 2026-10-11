@@ -47,6 +47,7 @@ extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
+extern int powerpc_bitmap_endian_test(void);
 extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
 extern int pci_open_firmware_address_test(void);
@@ -566,6 +567,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: big-endian short string passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian short string failed\r\n");
+        if (powerpc_bitmap_endian_test())
+            serial_write("SerenityOS PowerPC: big-endian bitmap search passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: big-endian bitmap search failed\r\n");
         if (powerpc_float_digit_packing_test())
             serial_write("SerenityOS PowerPC: big-endian float digits passed\r\n");
         else

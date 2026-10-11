@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,6 +8,7 @@
 
 #include <AK/Array.h>
 #include <AK/BuiltinWrappers.h>
+#include <AK/Endian.h>
 #include <AK/Optional.h>
 #include <AK/StdLibExtras.h>
 #include <AK/Types.h>
@@ -148,9 +149,9 @@ public:
                 return i * 8 + bit_scan_forward(byte) - 1;
             }
 
-            // NOTE: We don't really care about byte ordering. We found *one*
-            // free bit, just calculate the position and return it
-            val_large = *ptr_large;
+            // Bitmap bit zero is the low bit of the first byte, independent
+            // of the host's ordering of bytes in a machine word.
+            val_large = convert_between_host_and_little_endian(*ptr_large);
             if constexpr (!VALUE)
                 val_large = ~val_large;
             VERIFY(val_large != 0);
@@ -239,7 +240,7 @@ public:
                 continue;
             }
 
-            size_t bucket = bitmap[bucket_index];
+            size_t bucket = convert_between_host_and_little_endian(bitmap[bucket_index]);
             u8 viewed_bits = start_bucket_bit;
             u32 trailing_zeroes = 0;
 
