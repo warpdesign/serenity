@@ -1,12 +1,13 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <Kernel/API/Syscall.h>
 #include <Kernel/Arch/RegisterState.h>
+#include <Kernel/Arch/SyscallEntry.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Library/Panic.h>
 #include <Kernel/Memory/MemoryManager.h>
@@ -103,16 +104,7 @@ ErrorOr<FlatPtr> handle(RegisterState& regs, FlatPtr function, FlatPtr arg1, Fla
 extern "C" NEVER_INLINE void syscall_handler(TrapFrame* trap);
 NEVER_INLINE void syscall_handler(TrapFrame* trap)
 {
-#if ARCH(X86_64)
-    // Make sure SMAP protection is enabled on syscall entry.
-    clac();
-#elif ARCH(AARCH64)
-    // SCTLR_EL1.SPAN == 0 ensures that PAN is set on syscall entry when the CPU has FEAT_PAN
-#elif ARCH(RISCV64)
-    RISCV64::CSR::clear_bits<RISCV64::CSR::Address::SSTATUS>(RISCV64::CSR::SSTATUS::Bit::SUM);
-#else
-#    error Unknown architecture
-#endif
+    prepare_syscall_entry();
 
     auto& regs = *trap->regs;
     auto* current_thread = Thread::current();
@@ -137,14 +129,7 @@ NEVER_INLINE void syscall_handler(TrapFrame* trap)
     auto* ptr = static_cast<char*>(__builtin_alloca(get_fast_random<u8>()));
     AK::taint_for_optimizer(ptr);
 
-#if ARCH(X86_64)
-    constexpr FlatPtr iopl_mask = 3u << 12;
-
-    FlatPtr flags = regs.flags();
-    if ((flags & (iopl_mask)) != 0) {
-        PANIC("Syscall from process with IOPL != 0");
-    }
-#endif
+    validate_syscall_entry_registers(regs);
 
     Memory::MemoryManager::validate_syscall_preconditions(process, regs);
 
