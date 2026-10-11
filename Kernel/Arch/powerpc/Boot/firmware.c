@@ -82,6 +82,8 @@ extern int powerpc_hpt_read_only_fault_roundtrip(void);
 extern int powerpc_hpt_vsid_switch_roundtrip(void);
 extern int powerpc_hpt_kernel_protection_roundtrip(void);
 extern int powerpc_hpt_user_mode_roundtrip(void);
+extern int powerpc_hpt_user_high_vsid_isolation_roundtrip(void);
+extern volatile Cell powerpc_hpt_user_high_debug;
 extern int powerpc_user_stack_observed(void);
 extern int powerpc_user_syscall_resume_observed(void);
 extern int powerpc_user_exception_frame_observed(void);
@@ -512,6 +514,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: user-mode exception frame passed\r\n");
         else
             serial_write("SerenityOS PowerPC: user-mode exception frame failed\r\n");
+        if (powerpc_hpt_user_high_vsid_isolation_roundtrip())
+            serial_write("SerenityOS PowerPC: user high VSID isolation passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: user high VSID isolation failed checks 0x");
+            serial_write_hex(powerpc_hpt_user_high_debug);
+            serial_write("\r\n");
+        }
         if (powerpc_register_state_test())
             serial_write("SerenityOS PowerPC: register state from user trap passed\r\n");
         else

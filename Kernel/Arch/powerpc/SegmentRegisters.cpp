@@ -44,6 +44,38 @@ int powerpc_activate_user_segments(PowerPCSegmentWord base)
     return 1;
 }
 
+int powerpc_activate_user_high_segments(PowerPCSegmentWord base)
+{
+    if (!powerpc_user_vsid_base_valid(base))
+        return 0;
+
+    PowerPCSegmentWord msr;
+    __asm__ volatile("mfmsr %0" : "=r"(msr));
+    if ((msr & 0x30u) != 0)
+        return 0;
+
+    // Call from the real-mode exception return path. No user HPT entry can
+    // use these VSIDs because user mappings are limited to segments 0-11.
+    __asm__ volatile("sync" : : : "memory");
+    for (PowerPCSegmentWord segment = POWERPC_USER_SEGMENT_COUNT; segment < 16; ++segment)
+        powerpc_write_segment_register(segment, 0x20000000u | (base + segment));
+    return 1;
+}
+
+void powerpc_activate_kernel_high_segments(void)
+{
+    PowerPCSegmentWord msr;
+    __asm__ volatile("mfmsr %0" : "=r"(msr));
+    if ((msr & 0x30u) != 0)
+        __builtin_trap();
+
+    // Call from the real-mode exception entry path before using high kernel
+    // addresses. The shared HPT reserves VSIDs 12-15 for the kernel.
+    __asm__ volatile("sync" : : : "memory");
+    for (PowerPCSegmentWord segment = POWERPC_USER_SEGMENT_COUNT; segment < 16; ++segment)
+        powerpc_write_segment_register(segment, 0x20000000u | segment);
+}
+
 void powerpc_activate_kernel_segments(void)
 {
     // Reserved VSIDs 0-11 have no user mappings. Kernel segments 12-15 use

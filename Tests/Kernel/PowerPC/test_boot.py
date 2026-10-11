@@ -79,6 +79,7 @@ def main():
         b"SerenityOS PowerPC: user-mode stack passed",
         b"SerenityOS PowerPC: user-mode syscall resume passed",
         b"SerenityOS PowerPC: user-mode exception frame passed",
+        b"SerenityOS PowerPC: user high VSID isolation passed",
         b"SerenityOS PowerPC: register state from user trap passed",
         b"SerenityOS PowerPC: thread register setup passed",
         b"SerenityOS PowerPC: stack backchain unwinder passed",

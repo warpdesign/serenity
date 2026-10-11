@@ -79,6 +79,7 @@ static int s_user_stack_observed;
 static int s_user_syscall_resume_observed;
 static int s_user_exception_frame_observed;
 static int s_user_external_irq_observed;
+volatile Word powerpc_hpt_user_high_debug;
 
 volatile struct PowerPCExceptionState powerpc_user_probe_frame;
 
@@ -643,7 +644,9 @@ int powerpc_hpt_vsid_switch_roundtrip(void)
         || powerpc_page_directory_backend_vsid_for(&first_directory, HighDataPage) != 0
         || !powerpc_user_vsid_base_valid(0x00fffff0u)
         || powerpc_activate_user_segments(first_vsid)
-        || powerpc_read_segment_register(1) != original_segments[1])
+        || powerpc_read_segment_register(1) != original_segments[1]
+        || powerpc_activate_user_high_segments(first_vsid)
+        || powerpc_read_segment_register(12) != original_kernel_segment)
         return 0;
 
     Word first_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_payload_word;
@@ -846,6 +849,113 @@ int powerpc_hpt_user_mode_roundtrip(void)
         && powerpc_user_probe_observed_srr0 == UserProbeCodePage + first_resume_offset
         && (returned_state & 0x4030u) == 0 && s_hpt_payload_word == 0x89abcdefu
         && unmapped;
+}
+
+int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
+{
+    Word machine_state;
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
+    if ((machine_state & 0x4030u) != 0)
+        return 0;
+
+    Word user_base = UserProbeVSID & ~(Word)(POWERPC_VSID_BLOCK_SIZE - 1);
+    if (!powerpc_user_vsid_base_valid(user_base))
+        return 0;
+    struct PowerPCHPTEntry* kernel_entry = find_high_page(HighDataPage);
+    if (!kernel_entry || (kernel_entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY)
+        return 0;
+    Word original_lower = kernel_entry->lower;
+    Word physical = original_lower & ~(Word)(PageSize - 1);
+    Word read_only_flags = (original_lower & (PageSize - 1) & ~3u) | POWERPC_HPT_READ_ONLY;
+    if (!powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, read_only_flags))
+        return 0;
+
+    Word code_physical = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_start;
+    Word data_physical = (Word)(__UINTPTR_TYPE__)s_user_data_page;
+    Word stack_physical = (Word)(__UINTPTR_TYPE__)s_user_stack;
+    int mapped_code = powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeCodePage, code_physical, UserPageFlags);
+    int mapped_data = mapped_code && powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeDataPage, data_physical, UserPageFlags);
+    int mapped_stack = mapped_data && powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeStackPage, stack_physical, UserPageFlags);
+    if (!mapped_stack) {
+        if (mapped_data)
+            (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage);
+        if (mapped_code)
+            (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage);
+        (void)powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, original_lower & (PageSize - 1));
+        return 0;
+    }
+
+    Word original_user_segment = powerpc_read_segment_register(1);
+    Word original_high_segments[4];
+    for (Word segment = 12; segment < 16; ++segment)
+        original_high_segments[segment - 12] = powerpc_read_segment_register(segment);
+    powerpc_write_segment_register(1, 0x20000000u | UserProbeVSID);
+
+    powerpc_enable_boot_translation();
+    Word supervisor_read = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    int rejected_translated_switch = !powerpc_activate_user_high_segments(user_base)
+        && powerpc_read_segment_register(12) == original_high_segments[0];
+    powerpc_disable_boot_translation();
+
+    // With the shared high VSID, PP=3 would expose a read-only kernel page.
+    powerpc_user_probe_syscall_count = 0;
+    Word exposed_faults_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(exposed_faults_before));
+    Word exposed_read = powerpc_enter_user_probe(UserProbeCodePage, HighDataPage, UserProbeDataPage,
+        0x2468ace0u, UserProbeStackPage + PageSize - 16, 0);
+    Word exposed_faults_after;
+    __asm__ volatile("mfspr %0,272" : "=r"(exposed_faults_after));
+
+    int isolated_segments = powerpc_activate_user_high_segments(user_base);
+    for (Word segment = 12; segment < 16; ++segment) {
+        if (powerpc_read_segment_register(segment) != (0x20000000u | (user_base + segment)))
+            isolated_segments = 0;
+    }
+    int user_low_segment_unchanged = powerpc_read_segment_register(1) == (0x20000000u | UserProbeVSID);
+    int no_user_high_mapping = powerpc_hpt_find(&s_hpt, user_base + 12, HighDataPage) == 0;
+
+    powerpc_user_probe_syscall_count = 0;
+    Word isolated_faults_before;
+    __asm__ volatile("mfspr %0,272" : "=r"(isolated_faults_before));
+    Word isolated_read = powerpc_enter_user_probe(UserProbeCodePage, HighDataPage, UserProbeDataPage,
+        0x2468ace0u, UserProbeStackPage + PageSize - 16, 0);
+    Word isolated_faults_after;
+    Word fault_address;
+    Word fault_status;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
+        : "=r"(isolated_faults_after), "=r"(fault_address), "=r"(fault_status));
+
+    powerpc_activate_kernel_high_segments();
+    int kernel_segments_restored = 1;
+    for (Word segment = 12; segment < 16; ++segment) {
+        if (powerpc_read_segment_register(segment) != (0x20000000u | segment))
+            kernel_segments_restored = 0;
+        powerpc_write_segment_register(segment, original_high_segments[segment - 12]);
+    }
+    powerpc_write_segment_register(1, original_user_segment);
+    powerpc_enable_boot_translation();
+    Word supervisor_read_again = *(volatile Word*)(__UINTPTR_TYPE__)HighDataPage;
+    powerpc_disable_boot_translation();
+
+    int restored = powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, original_lower & (PageSize - 1));
+    int unmapped = powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeStackPage);
+    powerpc_hpt_user_high_debug = (supervisor_read == 0x89abcdefu && supervisor_read_again == 0x89abcdefu ? 1u : 0u)
+        | (exposed_read == 0x89abcdefu ? 1u << 1 : 0u)
+        | (exposed_faults_after == exposed_faults_before ? 1u << 2 : 0u)
+        | (isolated_segments ? 1u << 3 : 0u)
+        | (user_low_segment_unchanged ? 1u << 4 : 0u)
+        | (no_user_high_mapping ? 1u << 5 : 0u)
+        | (isolated_read == 0x2468ace0u ? 1u << 6 : 0u)
+        | (isolated_faults_after == isolated_faults_before + 1 ? 1u << 7 : 0u)
+        | (fault_address == HighDataPage ? 1u << 8 : 0u)
+        | ((fault_status & 0x40000000u) != 0 ? 1u << 9 : 0u)
+        | (kernel_segments_restored ? 1u << 10 : 0u)
+        | (restored ? 1u << 11 : 0u)
+        | (unmapped ? 1u << 12 : 0u)
+        | (rejected_translated_switch ? 1u << 13 : 0u);
+    return powerpc_hpt_user_high_debug == 0x3fffu;
 }
 
 int powerpc_user_stack_observed(void)
