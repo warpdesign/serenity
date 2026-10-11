@@ -6,6 +6,7 @@
 
 #include <AK/Types.h>
 #include <Kernel/Arch/powerpc/ExceptionState.h>
+#include <Kernel/Arch/powerpc/ExceptionVectorAddresses.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/Time/Timebase.h>
@@ -42,10 +43,13 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     if (powerpc_quickmap_probe_address() != KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE)
         return 0;
 
-    BootMemoryRange hpt_reservation { powerpc_hpt_table_physical(), 64 * 1024 };
+    BootMemoryRange reservations[] = {
+        { 0, POWERPC_EXCEPTION_CODE_LIMIT },
+        { powerpc_hpt_table_physical(), 64 * 1024 },
+    };
     Kernel::BootInfo boot_info {};
     boot_info.boot_method = Kernel::BootMethod::FirmwareMemoryMap;
-    boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap { ranges, range_count, &hpt_reservation, 1 };
+    boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap { ranges, range_count, reservations, 2 };
     boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
     boot_info.arch_specific.hpt_virtual_address = powerpc_hpt_table_physical();
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() };
@@ -80,8 +84,17 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
         || table.entries != reinterpret_cast<PowerPCHPTEntry*>(boot_info.arch_specific.hpt_virtual_address)
         || table.group_count != 1024
         || boot_info.boot_method_specific.firmware_memory_map.usable_ranges != ranges
-        || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[0].physical_start != powerpc_hpt_table_physical())
+        || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[0].physical_start != 0
+        || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[1].physical_start != powerpc_hpt_table_physical())
         return 0;
+
+    auto first_reservation = reservations[0];
+    reservations[0] = reservations[1];
+    reservations[1] = first_reservation;
+    if (!Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
+        return 0;
+    reservations[1] = reservations[0];
+    reservations[0] = first_reservation;
 
     boot_info.kernel_mapping_base = 0xd0000000u;
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
@@ -91,18 +104,25 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
         return 0;
     boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 1;
-    hpt_reservation.physical_start += 0x20000u;
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
         return 0;
-    hpt_reservation.physical_start -= 0x20000u;
+    boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 2;
+    reservations[0].length = POWERPC_EXCEPTION_CODE_LIMIT / 2;
+    if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
+        return 0;
+    reservations[0].length = POWERPC_EXCEPTION_CODE_LIMIT;
+    reservations[1].physical_start += 0x20000u;
+    if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
+        return 0;
+    reservations[1].physical_start -= 0x20000u;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() + 0x1000u };
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
         return 0;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() + 0x10000u };
-    hpt_reservation.physical_start += 0x10000u;
+    reservations[1].physical_start += 0x10000u;
     if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
         return 0;
-    hpt_reservation.physical_start -= 0x10000u;
+    reservations[1].physical_start -= 0x10000u;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() };
     boot_info.arch_specific.hpt_group_count = 512;
     return !Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table);

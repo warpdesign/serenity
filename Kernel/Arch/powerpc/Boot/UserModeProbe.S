@@ -5,6 +5,7 @@
  */
 
 #include "../HighSegmentSwitch.inc"
+#include "../ExceptionVectorAddresses.h"
 
 // Copied to the low system-call vector after firmware access is complete.
 .section .text.system_call_probe, "ax"
@@ -42,7 +43,7 @@ powerpc_system_call_probe_handler:
     stw 11,powerpc_probe_supervisor_return_srr0@l(12)
     cmpwi 0,0x5353
     bne .Lrestore_physical_user_frame
-    b powerpc_restore_user_exception_state_from_high_real_mode
+    ba POWERPC_USER_RETURN_TRAMPOLINE_ADDRESS
 .Lrestore_physical_user_frame:
     b powerpc_restore_user_exception_state_real_mode
 

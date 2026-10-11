@@ -13,6 +13,9 @@ extern "C" {
 // Copy a template into a low PowerPC exception slot. In translated mode the
 // caller must have a supervisor mapping of the low slot and template.
 int powerpc_install_exception_vector(unsigned vector_address, void const* template_start, void const* template_end);
+// The trampoline template must use position-independent branches and fit in
+// the reserved remainder of the second physical exception page.
+int powerpc_install_user_return_trampoline(void const* template_start, void const* template_end);
 
 #ifdef __cplusplus
 }

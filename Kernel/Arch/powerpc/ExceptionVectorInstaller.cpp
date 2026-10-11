@@ -5,18 +5,18 @@
  */
 
 #include <Kernel/Arch/powerpc/ExceptionVectorInstaller.h>
+#include <Kernel/Arch/powerpc/ExceptionVectorAddresses.h>
 
 enum {
     VectorSlotSize = 0x100,
     CacheLineSize = 32,
 };
 
-int powerpc_install_exception_vector(unsigned vector_address, void const* template_start, void const* template_end)
+static int copy_exception_code(unsigned destination_address, void const* template_start, void const* template_end, unsigned maximum_size)
 {
     __UINTPTR_TYPE__ start = (__UINTPTR_TYPE__)template_start;
     __UINTPTR_TYPE__ end = (__UINTPTR_TYPE__)template_end;
-    if (vector_address < 0x100 || vector_address > 0x1700 || (vector_address & (VectorSlotSize - 1)) != 0
-        || end <= start || (start & 3u) != 0 || (end & 3u) != 0 || end - start > VectorSlotSize)
+    if (end <= start || (start & 3u) != 0 || (end & 3u) != 0 || end - start > maximum_size)
         return 0;
 
     unsigned machine_state;
@@ -25,15 +25,28 @@ int powerpc_install_exception_vector(unsigned vector_address, void const* templa
         return 0;
 
     unsigned const* source = (unsigned const*)template_start;
-    volatile unsigned* destination = (volatile unsigned*)(__UINTPTR_TYPE__)vector_address;
+    volatile unsigned* destination = (volatile unsigned*)(__UINTPTR_TYPE__)destination_address;
     for (unsigned index = 0; index < (end - start) / sizeof(unsigned); ++index)
         destination[index] = source[index];
 
-    for (unsigned address = vector_address; address < vector_address + end - start; address += CacheLineSize)
+    for (unsigned address = destination_address; address < destination_address + end - start; address += CacheLineSize)
         __asm__ volatile("dcbst 0,%0" : : "r"(address) : "memory");
     __asm__ volatile("sync" : : : "memory");
-    for (unsigned address = vector_address; address < vector_address + end - start; address += CacheLineSize)
+    for (unsigned address = destination_address; address < destination_address + end - start; address += CacheLineSize)
         __asm__ volatile("icbi 0,%0" : : "r"(address) : "memory");
     __asm__ volatile("sync; isync" : : : "memory");
     return 1;
+}
+
+int powerpc_install_exception_vector(unsigned vector_address, void const* template_start, void const* template_end)
+{
+    if (vector_address < 0x100 || vector_address > 0x1700 || (vector_address & (VectorSlotSize - 1)) != 0)
+        return 0;
+    return copy_exception_code(vector_address, template_start, template_end, VectorSlotSize);
+}
+
+int powerpc_install_user_return_trampoline(void const* template_start, void const* template_end)
+{
+    return copy_exception_code(POWERPC_USER_RETURN_TRAMPOLINE_ADDRESS, template_start, template_end,
+        POWERPC_EXCEPTION_CODE_LIMIT - POWERPC_USER_RETURN_TRAMPOLINE_ADDRESS);
 }

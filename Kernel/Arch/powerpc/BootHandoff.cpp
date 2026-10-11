@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/BootHandoff.h>
+#include <Kernel/Arch/powerpc/ExceptionVectorAddresses.h>
 #include <Kernel/Arch/powerpc/Time/Timebase.h>
 
 namespace Kernel::PowerPC {
@@ -34,16 +35,17 @@ bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& ta
         || !memory_map.reserved_ranges || memory_map.reserved_range_count == 0)
         return false;
     bool hpt_reserved = false;
+    bool exception_code_reserved = false;
     for (u32 index = 0; index < memory_map.reserved_range_count; ++index) {
         auto const& range = memory_map.reserved_ranges[index];
+        if (range.physical_start == 0 && range.length >= POWERPC_EXCEPTION_CODE_LIMIT)
+            exception_code_reserved = true;
         if (range.physical_start <= physical && range.length >= table_size
             && range.physical_start <= ~0ull - range.length
-            && range.physical_start + range.length >= physical + table_size) {
+            && range.physical_start + range.length >= physical + table_size)
             hpt_reserved = true;
-            break;
-        }
     }
-    if (!hpt_reserved)
+    if (!hpt_reserved || !exception_code_reserved)
         return false;
 
     u32 sdr1;

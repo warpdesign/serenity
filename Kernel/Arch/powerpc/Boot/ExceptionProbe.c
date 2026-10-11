@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/ExceptionVectorInstaller.h>
+#include <Kernel/Arch/powerpc/ExceptionVectorAddresses.h>
 
 typedef unsigned int Word;
 
@@ -31,6 +32,8 @@ extern Word decrementer_exception_vector_start[];
 extern Word decrementer_exception_vector_end[];
 extern Word system_call_probe_vector_start[];
 extern Word system_call_probe_vector_end[];
+extern Word powerpc_restore_user_exception_state_from_high_real_mode[];
+extern Word powerpc_restore_user_exception_state_from_high_real_mode_end[];
 extern void trigger_program_exception(void);
 
 int powerpc_install_decrementer_probe_vector(void)
@@ -52,7 +55,9 @@ int powerpc_program_exception_roundtrip(void)
 
     if (!powerpc_install_exception_vector(DataStorageExceptionVector, data_storage_exception_vector_start, data_storage_exception_vector_end)
         || !powerpc_install_exception_vector(ProgramExceptionVector, program_exception_vector_start, program_exception_vector_end)
-        || !powerpc_install_exception_vector(SystemCallExceptionVector, system_call_probe_vector_start, system_call_probe_vector_end))
+        || !powerpc_install_exception_vector(SystemCallExceptionVector, system_call_probe_vector_start, system_call_probe_vector_end)
+        || !powerpc_install_user_return_trampoline(powerpc_restore_user_exception_state_from_high_real_mode,
+            powerpc_restore_user_exception_state_from_high_real_mode_end))
         return 0;
 
     // Reject invalid slots and templates without changing the installed

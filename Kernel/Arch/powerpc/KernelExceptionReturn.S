@@ -158,4 +158,6 @@ powerpc_restore_user_exception_state_from_high_real_mode:
 .Linvalid_high_user_return:
     tw 31,0,0
     b .Linvalid_high_user_return
+.globl powerpc_restore_user_exception_state_from_high_real_mode_end
+powerpc_restore_user_exception_state_from_high_real_mode_end:
 .size powerpc_restore_user_exception_state_from_high_real_mode, .-powerpc_restore_user_exception_state_from_high_real_mode

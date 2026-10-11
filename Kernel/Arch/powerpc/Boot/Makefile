@@ -73,16 +73,16 @@ $(BUILD_DIR)/boot.o: boot.S | $(BUILD_DIR)
 $(BUILD_DIR)/firmware.o: firmware.c ../OpenFirmwareMemoryMap.h ../Pegasos2/HardwareAddresses.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/exception_probe.o: ExceptionProbe.c ../ExceptionVectorInstaller.h | $(BUILD_DIR)
+$(BUILD_DIR)/exception_probe.o: ExceptionProbe.c ../ExceptionVectorInstaller.h ../ExceptionVectorAddresses.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/exception_vector_installer.o: ../ExceptionVectorInstaller.cpp ../ExceptionVectorInstaller.h | $(BUILD_DIR)
+$(BUILD_DIR)/exception_vector_installer.o: ../ExceptionVectorInstaller.cpp ../ExceptionVectorInstaller.h ../ExceptionVectorAddresses.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/exception_probe_vector.o: ExceptionProbe.S ProbeAddresses.h ../HighSegmentSwitch.inc | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/user_mode_probe.o: UserModeProbe.S ../HighSegmentSwitch.inc | $(BUILD_DIR)
+$(BUILD_DIR)/user_mode_probe.o: UserModeProbe.S ../HighSegmentSwitch.inc ../ExceptionVectorAddresses.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/mmu_probe.o: MMUProbe.c ../MemoryLayout.h | $(BUILD_DIR)
@@ -118,10 +118,10 @@ $(BUILD_DIR)/open_firmware_memory_map.o: ../OpenFirmwareMemoryMap.cpp ../OpenFir
 $(BUILD_DIR)/test_firmware_memory_map.o: ../../../../Tests/Kernel/PowerPC/TestFirmwareMemoryMap.c ../OpenFirmwareMemoryMap.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
+$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_vsid_allocator.o: ../../../../Tests/Kernel/PowerPC/TestVSIDAllocator.cpp ../VSIDAllocator.h | $(BUILD_DIR)
