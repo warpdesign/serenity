@@ -53,3 +53,26 @@ set_source_files_properties(TestFenv.cpp PROPERTIES COMPILE_FLAGS "-frounding-ma
 foreach(source IN LISTS TEST_SOURCES)
     serenity_test("${source}" LibC)
 endforeach()
+
+if (SERENITY_ARCH STREQUAL "powerpc")
+    set(powerpc_rtti_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_rtti_runtime.py")
+    set(powerpc_kernel_loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf")
+    set(powerpc_rtti_arguments
+        --compiler "${CMAKE_CXX_COMPILER}" --readelf "${CMAKE_READELF}"
+        --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --libc "$<TARGET_FILE:LibC>" --libsystem "$<TARGET_FILE:LibSystem>"
+    )
+    add_custom_target(PowerPCLibCCheckQuick
+        COMMAND python3 "${powerpc_rtti_test}" ${powerpc_rtti_arguments}
+        DEPENDS PowerPCFirmwareLoader Loader.so LibC LibSystem
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCLibCCheck
+        COMMAND python3 "${powerpc_rtti_test}" ${powerpc_rtti_arguments} --memory 512 --cpu 750cxe
+        DEPENDS PowerPCLibCCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+endif()

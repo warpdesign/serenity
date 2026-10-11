@@ -131,9 +131,10 @@ target_link_libraries(LibC PRIVATE LibSystem LibTimeZone)
 target_link_options(LibC PRIVATE -nolibc)
 if (SERENITY_ARCH STREQUAL "powerpc")
     target_link_options(LibC PRIVATE -nodefaultlibs)
-    # Export the RTTI base classes expected by C++ shared libraries. The
+    # Export the RTTI entry points expected by C++ shared libraries. The
     # cross toolchain has libsupc++.a but no shared C++ ABI runtime.
     target_link_options(LibC PRIVATE
+        LINKER:--undefined=__dynamic_cast
         LINKER:--undefined=_ZTVN10__cxxabiv117__class_type_infoE
         LINKER:--undefined=_ZTVN10__cxxabiv120__si_class_type_infoE
         LINKER:--undefined=_ZTVN10__cxxabiv121__vmi_class_type_infoE)
