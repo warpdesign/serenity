@@ -5,6 +5,7 @@
  */
 
 #include "ProbeAddresses.h"
+#include "../HighSegmentSwitch.inc"
 
 // These templates are copied to physical vector slots after the last Open
 // Firmware call. Each must fit in one slot and retain a valid branch target.
@@ -22,17 +23,7 @@ data_storage_exception_vector_start:
 
     // The vector runs in real mode. Restore shared kernel high VSIDs before
     // any translated kernel access in a future full handler.
-    sync
-    lis 11, 0x2000
-    ori 11, 11, 12
-    mtsr 12, 11
-    addi 11, 11, 1
-    mtsr 13, 11
-    addi 11, 11, 1
-    mtsr 14, 11
-    addi 11, 11, 1
-    mtsr 15, 11
-    isync
+    POWERPC_USE_KERNEL_HIGH_SEGMENTS 11
     mfsr 11, 12
     lis 12, powerpc_probe_dsi_high_segment@ha
     stw 11, powerpc_probe_dsi_high_segment@l(12)
@@ -50,17 +41,7 @@ data_storage_exception_vector_start:
 
     // Low SR1 holds the process VSID base + 1. Restore its unused high VSIDs
     // before rfi to keep the read-only kernel alias absent in user mode.
-    sync
-    mfsr 11, 1
-    addi 11, 11, 11
-    mtsr 12, 11
-    addi 11, 11, 1
-    mtsr 13, 11
-    addi 11, 11, 1
-    mtsr 14, 11
-    addi 11, 11, 1
-    mtsr 15, 11
-    isync
+    POWERPC_USE_USER_HIGH_SEGMENTS 11
 
 .Lrestore_data_storage_state:
     mfspr 11, 273

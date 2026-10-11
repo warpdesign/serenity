@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include "../HighSegmentSwitch.inc"
+
 // Copied to the low system-call vector after firmware access is complete.
 .section .text.system_call_probe, "ax"
 .global system_call_probe_vector_start
@@ -53,17 +55,7 @@ powerpc_system_call_probe_handler:
     mfsr 11, 12
     lis 12, powerpc_user_probe_entry_high_segment@ha
     stw 11, powerpc_user_probe_entry_high_segment@l(12)
-    sync
-    lis 11, 0x2000
-    ori 11, 11, 12
-    mtsr 12, 11
-    addi 11, 11, 1
-    mtsr 13, 11
-    addi 11, 11, 1
-    mtsr 14, 11
-    addi 11, 11, 1
-    mtsr 15, 11
-    isync
+    POWERPC_USE_KERNEL_HIGH_SEGMENTS 11
 
     lis 12, powerpc_user_probe_syscall_count@ha
     lwz 11, powerpc_user_probe_syscall_count@l(12)
@@ -86,17 +78,7 @@ powerpc_system_call_probe_handler:
 .Lreturn_to_user:
     // Low SR1 still contains the process VSID base + 1. Restore the unused
     // high VSIDs before rfi so a read-only kernel mapping cannot be read.
-    sync
-    mfsr 11, 1
-    addi 11, 11, 11
-    mtsr 12, 11
-    addi 11, 11, 1
-    mtsr 13, 11
-    addi 11, 11, 1
-    mtsr 14, 11
-    addi 11, 11, 1
-    mtsr 15, 11
-    isync
+    POWERPC_USE_USER_HIGH_SEGMENTS 11
     lis 12, powerpc_user_probe_observed_user_stack@ha
     stw 1, powerpc_user_probe_observed_user_stack@l(12)
     mfspr 11, 26

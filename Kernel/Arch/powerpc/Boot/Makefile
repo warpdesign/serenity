@@ -67,10 +67,10 @@ $(BUILD_DIR)/firmware.o: firmware.c ../OpenFirmwareMemoryMap.h ../../../../Kerne
 $(BUILD_DIR)/exception_probe.o: ExceptionProbe.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/exception_probe_vector.o: ExceptionProbe.S ProbeAddresses.h | $(BUILD_DIR)
+$(BUILD_DIR)/exception_probe_vector.o: ExceptionProbe.S ProbeAddresses.h ../HighSegmentSwitch.inc | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/user_mode_probe.o: UserModeProbe.S | $(BUILD_DIR)
+$(BUILD_DIR)/user_mode_probe.o: UserModeProbe.S ../HighSegmentSwitch.inc | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/mmu_probe.o: MMUProbe.c ../MemoryLayout.h | $(BUILD_DIR)
