@@ -27,7 +27,9 @@ foreach(source IN LISTS TEST_SOURCES)
 endforeach()
 
 if (NOT CMAKE_CROSSCOMPILING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     add_custom_target(LibGfxCheckQuick
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_tiff_generator.py"
         COMMAND "$<TARGET_FILE:TestJPEGXLHalfFloat>"
         COMMAND "$<TARGET_FILE:TestFontHandling>"
         DEPENDS TestJPEGXLHalfFloat TestFontHandling

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2023, Lucas Chollet <lucas.chollet@serenityos.org>
+# Copyright (c) 2023-2026, Lucas Chollet <lucas.chollet@serenityos.org>
 #
 # SPDX-License-Identifier: BSD-2-Clause
 
@@ -641,6 +641,7 @@ def main():
     args = parser.parse_args()
 
     output_path = Path(args.output)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     update_file(output_path / 'TIFFMetadata.h', generate_metadata_file(known_tags))
     update_file(output_path / 'TIFFTagHandler.cpp', generate_tag_handler_file(known_tags))
