@@ -143,13 +143,14 @@ void _entry(int, char**, char**) __attribute__((used));
     auxv_t* auxvp = (auxv_t*)++env;
 
     bool at_random_found = false;
+    uintptr_t stack_chk_guard = 0;
     FlatPtr base_address = 0;
     bool base_address_found = false;
 
     for (auxv_t* entry = auxvp; entry->a_type != AT_NULL; ++entry) {
         if (entry->a_type == ELF::AuxiliaryValue::Random) {
             at_random_found = true;
-            __stack_chk_guard = *reinterpret_cast<u64*>(entry->a_un.a_ptr);
+            stack_chk_guard = *reinterpret_cast<u64*>(entry->a_un.a_ptr);
         } else if (entry->a_type == ELF::AuxiliaryValue::BaseAddress) {
             base_address_found = true;
             base_address = entry->a_un.a_val;
@@ -157,8 +158,8 @@ void _entry(int, char**, char**) __attribute__((used));
     }
     VERIFY(at_random_found && base_address_found);
 
-    // Make sure compiler won't move any functions calls above __stack_chk_guard initialization even
-    // if their definitions somehow become available.
+    // The GOT entry for __stack_chk_guard may itself need a relative
+    // relocation. Keep the value local until the loader has relocated itself.
     optimizer_fence();
 
     // We need to relocate ourselves.
@@ -167,6 +168,7 @@ void _entry(int, char**, char**) __attribute__((used));
         syscall(SC_dbgputstr, "Unable to perform relative relocations!\n", 40);
         VERIFY_NOT_REACHED();
     }
+    __stack_chk_guard = stack_chk_guard;
 
     // Similarly, make sure no non-offset-agnostic language features are used above this point.
     optimizer_fence();
