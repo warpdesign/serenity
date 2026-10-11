@@ -11,6 +11,7 @@ set(TEST_SOURCES
     TestICCProfile.cpp
     TestImageDecoder.cpp
     TestImageWriter.cpp
+    TestJPEGXLHalfFloat.cpp
     TestMedianCut.cpp
     TestPainter.cpp
     TestParseISOBMFF.cpp
@@ -24,5 +25,21 @@ set(TEST_SOURCES
 foreach(source IN LISTS TEST_SOURCES)
     serenity_test("${source}" LibGfx LIBS LibGfx)
 endforeach()
+
+if (NOT CMAKE_CROSSCOMPILING)
+    add_custom_target(LibGfxCheckQuick
+        COMMAND "$<TARGET_FILE:TestJPEGXLHalfFloat>"
+        COMMAND "$<TARGET_FILE:TestFontHandling>"
+        DEPENDS TestJPEGXLHalfFloat TestFontHandling
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL
+    )
+    add_custom_target(LibGfxCheck
+        COMMAND "$<TARGET_FILE:TestImageDecoder>"
+        DEPENDS LibGfxCheckQuick TestImageDecoder
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        USES_TERMINAL
+    )
+endif()
 
 install(DIRECTORY test-inputs DESTINATION usr/Tests/LibGfx)

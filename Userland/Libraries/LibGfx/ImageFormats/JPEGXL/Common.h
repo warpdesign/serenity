@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Lucas Chollet <lucas.chollet@serenityos.org>
+ * Copyright (c) 2024-2026, Lucas Chollet <lucas.chollet@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -72,7 +72,23 @@ ALWAYS_INLINE ErrorOr<f32> F16(LittleEndianInputBitStream& stream)
     u16 const bits16 = TRY(stream.read_bits(16));
     auto const biased_exp = (bits16 >> 10) & 0x1F;
     VERIFY(biased_exp != 31);
-    return bit_cast<_Float16>(bits16);
+
+    u32 const sign = static_cast<u32>(bits16 & 0x8000) << 16;
+    u32 fraction = bits16 & 0x3ff;
+    if (biased_exp == 0) {
+        if (fraction == 0)
+            return bit_cast<f32>(sign);
+
+        i32 exponent = -14;
+        while ((fraction & 0x400) == 0) {
+            fraction <<= 1;
+            --exponent;
+        }
+        fraction &= 0x3ff;
+        return bit_cast<f32>(sign | (static_cast<u32>(exponent + 127) << 23) | (fraction << 13));
+    }
+
+    return bit_cast<f32>(sign | ((biased_exp + 112) << 23) | (fraction << 13));
 }
 
 template<Enum E>
