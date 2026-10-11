@@ -86,11 +86,13 @@ check-quick: all
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE)
 	python3 ../../../../Tests/Kernel/PowerPC/test_kernel_entry.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf
 	python3 ../../../../Tests/Kernel/PowerPC/test_virtio_block.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf
+	python3 ../../../../Tests/Kernel/PowerPC/test_ext2_mount.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf
 
 check: check-quick
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE) --memory 512 --cpu 750cxe
 	python3 ../../../../Tests/Kernel/PowerPC/test_kernel_entry.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --memory 512 --cpu 750cxe
 	python3 ../../../../Tests/Kernel/PowerPC/test_virtio_block.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --memory 512 --cpu 750cxe
+	python3 ../../../../Tests/Kernel/PowerPC/test_ext2_mount.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --memory 512 --cpu 750cxe
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE) --corrupt-only
 
 clean:

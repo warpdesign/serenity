@@ -11,6 +11,8 @@
  *  linux/include/linux/minix_fs.h
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *
+ * Copyright (c) 2026, SerenityOS developers.
  */
 
 #ifndef _LINUX_EXT2_FS_H
@@ -87,8 +89,8 @@ static constexpr size_t super_block_offset_on_device = 1024;
 #else
 #    define EXT2_BLOCK_SIZE(s) (EXT2_MIN_BLOCK_SIZE << (s)->s_log_block_size)
 #    define EXT2_BLOCK_SIZE_BITS(s) ((s)->s_log_block_size + 10)
-#    define EXT2_INODE_SIZE(s) (((s)->s_rev_level == EXT2_GOOD_OLD_REV) ? EXT2_GOOD_OLD_INODE_SIZE : (s)->s_inode_size)
-#    define EXT2_FIRST_INO(s) (((s)->s_rev_level == EXT2_GOOD_OLD_REV) ? EXT2_GOOD_OLD_FIRST_INO : (s)->s_first_ino)
+#    define EXT2_INODE_SIZE(s) (((s)->s_rev_level == EXT2_GOOD_OLD_REV) ? EXT2_GOOD_OLD_INODE_SIZE : static_cast<u16>((s)->s_inode_size))
+#    define EXT2_FIRST_INO(s) (((s)->s_rev_level == EXT2_GOOD_OLD_REV) ? EXT2_GOOD_OLD_FIRST_INO : static_cast<u32>((s)->s_first_ino))
 #endif
 #define EXT2_ADDR_PER_BLOCK(s) (EXT2_BLOCK_SIZE(s) / sizeof(__u32))
 
@@ -215,7 +217,7 @@ struct ext2_dx_countlimit {
 #define EXT2_MIN_DESC_SIZE_64BIT 64
 #define EXT2_MAX_DESC_SIZE EXT2_MIN_BLOCK_SIZE
 #define EXT2_DESC_SIZE(s) \
-    ((EXT2_SB(s)->s_feature_incompat & EXT4_FEATURE_INCOMPAT_64BIT) ? (s)->s_desc_size : EXT2_MIN_DESC_SIZE)
+    ((EXT2_SB(s)->s_feature_incompat & EXT4_FEATURE_INCOMPAT_64BIT) ? static_cast<u16>((s)->s_desc_size) : EXT2_MIN_DESC_SIZE)
 
 #define EXT2_BLOCKS_PER_GROUP(s) (EXT2_SB(s)->s_blocks_per_group)
 #define EXT2_INODES_PER_GROUP(s) (EXT2_SB(s)->s_inodes_per_group)

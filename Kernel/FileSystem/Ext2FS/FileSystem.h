@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -138,7 +138,7 @@ private:
     };
 
     ErrorOr<CachedBitmap*> get_bitmap_block(BlockIndex);
-    ErrorOr<void> update_bitmap_block(BlockIndex bitmap_block, size_t bit_index, bool new_state, u32& super_block_counter, u16& group_descriptor_counter);
+    ErrorOr<void> update_bitmap_block(BlockIndex bitmap_block, size_t bit_index, bool new_state, __u32& super_block_counter, __u16& group_descriptor_counter);
 
     Vector<OwnPtr<CachedBitmap>> m_cached_bitmaps;
     RefPtr<Ext2FSInode> m_root_inode;

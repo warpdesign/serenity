@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -28,10 +28,10 @@
 
 #define USHRT_MAX 65535
 
-#define LONG_MAX 9223372036854775807L
+#define LONG_MAX __LONG_MAX__
 #define LONG_MIN (-LONG_MAX - 1L)
 
-#define ULONG_MAX 18446744073709551615UL
+#define ULONG_MAX (2UL * LONG_MAX + 1UL)
 
 #define LONG_LONG_MAX 9223372036854775807LL
 #define LONG_LONG_MIN (-LONG_LONG_MAX - 1LL)
@@ -60,8 +60,8 @@
 #define INT_WIDTH 32
 #define UINT_WIDTH 32
 
-#define LONG_WIDTH 64
-#define ULONG_WIDTH 64
+#define LONG_WIDTH (__SIZEOF_LONG__ * CHAR_BIT)
+#define ULONG_WIDTH (__SIZEOF_LONG__ * CHAR_BIT)
 
 #define LLONG_WIDTH 64
 #define ULLONG_WIDTH 64

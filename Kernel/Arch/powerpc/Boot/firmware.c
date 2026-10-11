@@ -48,7 +48,10 @@ extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
 extern int powerpc_bitmap_endian_test(void);
+extern int powerpc_mbr_wire_format_test(void);
+extern int powerpc_ext2_wire_format_test(void);
 extern int powerpc_float_digit_packing_test(void);
+extern int powerpc_float_extractor_endian_test(void);
 extern int powerpc_float_parser_test(void);
 extern int pci_open_firmware_address_test(void);
 extern int pci_address_assignment_test(void);
@@ -571,10 +574,22 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: big-endian bitmap search passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian bitmap search failed\r\n");
+        if (powerpc_mbr_wire_format_test())
+            serial_write("SerenityOS PowerPC: little-endian MBR fields passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: little-endian MBR fields failed\r\n");
+        if (powerpc_ext2_wire_format_test())
+            serial_write("SerenityOS PowerPC: little-endian ext2 fields passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: little-endian ext2 fields failed\r\n");
         if (powerpc_float_digit_packing_test())
             serial_write("SerenityOS PowerPC: big-endian float digits passed\r\n");
         else
             serial_write("SerenityOS PowerPC: big-endian float digits failed\r\n");
+        if (powerpc_float_extractor_endian_test())
+            serial_write("SerenityOS PowerPC: big-endian float extraction passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: big-endian float extraction failed\r\n");
         if (powerpc_float_parser_test())
             serial_write("SerenityOS PowerPC: big-endian float parser passed\r\n");
         else

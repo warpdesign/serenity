@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Error.h>
+#include <AK/Endian.h>
 #include <AK/StdLibExtraDetails.h>
 #include <LibPartition/PartitionTable.h>
 
@@ -19,22 +20,22 @@ public:
         u8 chs1[3];
         u8 type;
         u8 chs2[3];
-        u32 offset;
-        u32 length;
+        LittleEndian<u32> offset;
+        LittleEndian<u32> length;
     };
     static_assert(AssertSize<Entry, 16>());
-    struct [[gnu::packed]] Header {
+    struct Header {
         u8 code1[218];
-        u16 ts_zero;
+        LittleEndian<u16> ts_zero;
         u8 ts_drive;
         u8 ts_seconds;
         u8 ts_minutes;
         u8 ts_hours;
         u8 code2[216];
-        u32 disk_signature;
-        u16 disk_signature_zero;
+        LittleEndian<u32> disk_signature;
+        LittleEndian<u16> disk_signature_zero;
         Entry entry[4];
-        u16 mbr_signature;
+        LittleEndian<u16> mbr_signature;
     };
     static_assert(AssertSize<Header, 512>());
 

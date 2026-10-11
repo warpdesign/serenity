@@ -19,6 +19,7 @@ check-quick:
 	../../../Kernel/generate-version-file.sh $(BUILD_DIR)/Kernel/Version.h
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -DTEST_POWERPC_LAYOUT -fsyntax-only Test32BitLayout.c
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -fsyntax-only Test32BitLayout.c
+	$(CC) $(CFLAGS) -std=c11 -I../../../Userland/Libraries/LibC -I../../.. -fsyntax-only TestLibCLimits.c
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/SegmentRegisters.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/ExceptionVectorInstaller.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/HashPageTable.cpp
@@ -93,6 +94,7 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Devices/Storage/NVMe/NVMeQueue.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Devices/Storage/SD/SDHostController.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/FileSystem/Ext2FS/Inode.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestExt2WireFormat.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only ../SD/TestADMAAddress.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Bus/PCI/DeviceTreeHelpers.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only TestMemoryFences.cpp
@@ -126,6 +128,7 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries -fsyntax-only TestELFBreakpoint.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries -fsyntax-only TestSecurePLT.cpp
 	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicLoader.cpp
+	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicObject.cpp
 	$(CXX) $(CXXFLAGS) -msecure-plt -I$(BUILD_DIR) -I../../../Userland/Libraries/LibSystem -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Userland/Libraries/LibELF/DynamicLinker.cpp
 	$(CXX) $(CXXFLAGS) -I../../../Userland/Libraries/LibC -fsyntax-only TestLibCHeaders.cpp
 	$(CC) $(CFLAGS) -c ../../../Userland/Libraries/LibC/arch/powerpc/setjmp.S -o $(BUILD_DIR)/setjmp.o

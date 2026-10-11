@@ -68,11 +68,10 @@ constexpr T log2(T x)
     if (ext.mantissa == 0)
         return exponent;
 
-    FloatExtractor<T> mantissa_ext {
-        .mantissa = ext.mantissa,
-        .exponent = FloatExtractor<T>::exponent_bias,
-        .sign = ext.sign
-    };
+    FloatExtractor<T> mantissa_ext {};
+    mantissa_ext.mantissa = ext.mantissa;
+    mantissa_ext.exponent = FloatExtractor<T>::exponent_bias;
+    mantissa_ext.sign = ext.sign;
 
     // (1 <= mantissa < 2)
     T m = mantissa_ext.to_float();

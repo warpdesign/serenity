@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Jelle Raaijmakers <jelle@gmta.nl>
+ * Copyright (c) 2022-2026, Jelle Raaijmakers <jelle@gmta.nl>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -28,9 +28,15 @@ struct FloatExtractor<f128> {
     static constexpr int exponent_bits = 15;
     static constexpr unsigned exponent_max = 32767;
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    ComponentType sign : 1;
+    ComponentType exponent : 15;
+    ComponentType mantissa : 112;
+#else
     ComponentType mantissa : 112;
     ComponentType exponent : 15;
     ComponentType sign : 1;
+#endif
 };
 // Validate that f128 and the FloatExtractor struct are 128 bits.
 static_assert(AssertSize<f128, 16>());
@@ -81,11 +87,23 @@ struct FloatExtractor<f64> {
     //        very intuitive and portable behaviour on windows, but it doesn't
     //        work with the msvc ABI.
     //        See <https://github.com/llvm/llvm-project/issues/24757>
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    ComponentType sign : 1;
+    ComponentType exponent : 11;
+    ComponentType mantissa : 52;
+#else
     ComponentType mantissa : 52;
     ComponentType exponent : 11;
     ComponentType sign : 1;
+#endif
 };
 static_assert(AssertSize<FloatExtractor<f64>, sizeof(f64)>());
+
+#if __LDBL_MANT_DIG__ == __DBL_MANT_DIG__ && __LDBL_MAX_EXP__ == __DBL_MAX_EXP__
+// Some 32-bit ABIs use the binary64 format for both double and long double.
+template<>
+struct FloatExtractor<long double> : FloatExtractor<f64> { };
+#endif
 
 template<>
 struct FloatExtractor<f32> {
@@ -99,9 +117,15 @@ struct FloatExtractor<f32> {
     static constexpr int exponent_bits = 8;
     static constexpr ComponentType exponent_max = 255;
 
+#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    ComponentType sign : 1;
+    ComponentType exponent : 8;
+    ComponentType mantissa : 23;
+#else
     ComponentType mantissa : 23;
     ComponentType exponent : 8;
     ComponentType sign : 1;
+#endif
 };
 static_assert(AssertSize<FloatExtractor<f32>, sizeof(f32)>());
 

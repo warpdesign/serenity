@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, sin-ack <sin-ack@protonmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, sin-ack <sin-ack@protonmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -175,7 +175,7 @@ ErrorOr<void> Ext2FS::initialize_while_locked()
 
     m_i_blocks_increment = logical_block_size() / 512;
 
-    m_block_group_count = ceil_div(super_block.s_blocks_count, super_block.s_blocks_per_group);
+    m_block_group_count = ceil_div(static_cast<u32>(super_block.s_blocks_count), static_cast<u32>(super_block.s_blocks_per_group));
 
     if (m_block_group_count == 0) {
         dmesgln("Ext2FS: no block groups :(");
@@ -217,7 +217,7 @@ bool Ext2FS::find_block_containing_inode(InodeIndex inode, BlockIndex& block_ind
     if (inode != EXT2_ROOT_INO && inode < EXT2_FIRST_INO(&super_block))
         return false;
 
-    if (inode > super_block.s_inodes_count)
+    if (inode.value() > super_block.s_inodes_count)
         return false;
 
     auto const& bgd = group_descriptor(group_index_from_inode(inode));
@@ -254,14 +254,14 @@ u8 Ext2FS::internal_file_type_to_directory_entry_type(DirectoryEntryView const& 
 Ext2FS::FeaturesOptional Ext2FS::get_features_optional() const
 {
     if (m_super_block.s_rev_level > 0)
-        return static_cast<Ext2FS::FeaturesOptional>(m_super_block.s_feature_compat);
+        return static_cast<Ext2FS::FeaturesOptional>(static_cast<u32>(m_super_block.s_feature_compat));
     return Ext2FS::FeaturesOptional::None;
 }
 
 Ext2FS::FeaturesReadOnly Ext2FS::get_features_readonly() const
 {
     if (m_super_block.s_rev_level > 0)
-        return static_cast<Ext2FS::FeaturesReadOnly>(m_super_block.s_feature_ro_compat);
+        return static_cast<Ext2FS::FeaturesReadOnly>(static_cast<u32>(m_super_block.s_feature_ro_compat));
     return Ext2FS::FeaturesReadOnly::None;
 }
 
@@ -372,7 +372,7 @@ auto Ext2FS::allocate_blocks(GroupIndex preferred_group_index, size_t count) -> 
         VERIFY(found_a_group);
         auto const& bgd = group_descriptor(group_index);
 
-        auto* cached_bitmap = TRY(get_bitmap_block(bgd.bg_block_bitmap));
+        auto* cached_bitmap = TRY(get_bitmap_block(static_cast<u32>(bgd.bg_block_bitmap)));
 
         int blocks_in_group = min(blocks_per_group(), super_block().s_blocks_count);
         auto block_bitmap = cached_bitmap->bitmap(blocks_in_group);
@@ -429,7 +429,7 @@ ErrorOr<InodeIndex> Ext2FS::allocate_inode(GroupIndex preferred_group)
     unsigned inodes_in_group = min(inodes_per_group(), super_block().s_inodes_count);
     InodeIndex first_inode_in_group = (group_index.value() - 1) * inodes_per_group() + 1;
 
-    auto* cached_bitmap = TRY(get_bitmap_block(bgd.bg_inode_bitmap));
+    auto* cached_bitmap = TRY(get_bitmap_block(static_cast<u32>(bgd.bg_inode_bitmap)));
     auto inode_bitmap = cached_bitmap->bitmap(inodes_in_group);
     for (size_t i = 0; i < inode_bitmap.size(); ++i) {
         if (inode_bitmap.get(i))
@@ -439,9 +439,9 @@ ErrorOr<InodeIndex> Ext2FS::allocate_inode(GroupIndex preferred_group)
         auto inode_index = InodeIndex(first_inode_in_group.value() + i);
 
         cached_bitmap->dirty = true;
-        m_super_block.s_free_inodes_count--;
+        m_super_block.s_free_inodes_count = static_cast<u32>(m_super_block.s_free_inodes_count) - 1;
         m_super_block_dirty = true;
-        const_cast<ext2_group_desc&>(bgd).bg_free_inodes_count--;
+        const_cast<ext2_group_desc&>(bgd).bg_free_inodes_count = static_cast<u16>(bgd.bg_free_inodes_count) - 1;
         m_block_group_descriptors_dirty = true;
 
         // In case the inode cache had this cached as "non-existent", uncache that info.
@@ -488,11 +488,11 @@ ErrorOr<bool> Ext2FS::get_inode_allocation_state(InodeIndex index) const
     unsigned index_in_group = index.value() - ((group_index.value() - 1) * inodes_per_group());
     unsigned bit_index = (index_in_group - 1) % inodes_per_group();
 
-    auto* cached_bitmap = TRY(const_cast<Ext2FS&>(*this).get_bitmap_block(bgd.bg_inode_bitmap));
+    auto* cached_bitmap = TRY(const_cast<Ext2FS&>(*this).get_bitmap_block(static_cast<u32>(bgd.bg_inode_bitmap)));
     return cached_bitmap->bitmap(inodes_per_group()).get(bit_index);
 }
 
-ErrorOr<void> Ext2FS::update_bitmap_block(BlockIndex bitmap_block, size_t bit_index, bool new_state, u32& super_block_counter, u16& group_descriptor_counter)
+ErrorOr<void> Ext2FS::update_bitmap_block(BlockIndex bitmap_block, size_t bit_index, bool new_state, __u32& super_block_counter, __u16& group_descriptor_counter)
 {
     auto* cached_bitmap = TRY(get_bitmap_block(bitmap_block));
     bool current_state = cached_bitmap->bitmap(blocks_per_group()).get(bit_index);
@@ -504,11 +504,11 @@ ErrorOr<void> Ext2FS::update_bitmap_block(BlockIndex bitmap_block, size_t bit_in
     cached_bitmap->dirty = true;
 
     if (new_state) {
-        --super_block_counter;
-        --group_descriptor_counter;
+        super_block_counter = static_cast<u32>(super_block_counter) - 1;
+        group_descriptor_counter = static_cast<u16>(group_descriptor_counter) - 1;
     } else {
-        ++super_block_counter;
-        ++group_descriptor_counter;
+        super_block_counter = static_cast<u32>(super_block_counter) + 1;
+        group_descriptor_counter = static_cast<u16>(group_descriptor_counter) + 1;
     }
 
     m_super_block_dirty = true;
@@ -525,7 +525,7 @@ ErrorOr<void> Ext2FS::set_inode_allocation_state(InodeIndex inode_index, bool ne
 
     dbgln_if(EXT2_DEBUG, "Ext2FS: set_inode_allocation_state: Inode {} -> {}", inode_index, new_state);
     auto& bgd = const_cast<ext2_group_desc&>(group_descriptor(group_index));
-    return update_bitmap_block(bgd.bg_inode_bitmap, bit_index, new_state, m_super_block.s_free_inodes_count, bgd.bg_free_inodes_count);
+    return update_bitmap_block(static_cast<u32>(bgd.bg_inode_bitmap), bit_index, new_state, m_super_block.s_free_inodes_count, bgd.bg_free_inodes_count);
 }
 
 Ext2FS::BlockIndex Ext2FS::first_block_index() const
@@ -559,7 +559,7 @@ ErrorOr<void> Ext2FS::set_block_allocation_state(BlockIndex block_index, bool ne
     auto& bgd = const_cast<ext2_group_desc&>(group_descriptor(group_index));
 
     dbgln_if(EXT2_DEBUG, "Ext2FS: Block {} state -> {} (in bitmap block {})", block_index, new_state, bgd.bg_block_bitmap);
-    return update_bitmap_block(bgd.bg_block_bitmap, bit_index, new_state, m_super_block.s_free_blocks_count, bgd.bg_free_blocks_count);
+    return update_bitmap_block(static_cast<u32>(bgd.bg_block_bitmap), bit_index, new_state, m_super_block.s_free_blocks_count, bgd.bg_free_blocks_count);
 }
 
 ErrorOr<NonnullRefPtr<Inode>> Ext2FS::create_directory(Ext2FSInode& parent_inode, StringView name, mode_t mode, UserID uid, GroupID gid)
@@ -581,7 +581,7 @@ ErrorOr<NonnullRefPtr<Inode>> Ext2FS::create_directory(Ext2FSInode& parent_inode
     TRY(parent_inode.increment_link_count());
 
     auto& bgd = const_cast<ext2_group_desc&>(group_descriptor(group_index_from_inode(inode->identifier().index())));
-    ++bgd.bg_used_dirs_count;
+    bgd.bg_used_dirs_count = static_cast<u16>(bgd.bg_used_dirs_count) + 1;
     m_block_group_descriptors_dirty = true;
 
     return inode;
@@ -712,13 +712,13 @@ ErrorOr<void> Ext2FS::free_inode(Ext2FSInode& inode)
     // If the inode being freed is a directory, update block group directory counter.
     if (inode.is_directory()) {
         auto& bgd = const_cast<ext2_group_desc&>(group_descriptor(group_index_from_inode(inode.index())));
-        --bgd.bg_used_dirs_count;
+        bgd.bg_used_dirs_count = static_cast<u16>(bgd.bg_used_dirs_count) - 1;
         dbgln_if(EXT2_DEBUG, "Ext2FS[{}]::free_inode(): Decremented bg_used_dirs_count to {} for inode {}", fsid(), bgd.bg_used_dirs_count, inode.index());
         m_block_group_descriptors_dirty = true;
     }
 
     // NOTE: After this point, the inode metadata is wiped.
-    memset(&inode.m_raw_inode, 0, sizeof(ext2_inode_large));
+    inode.m_raw_inode = {};
     inode.m_raw_inode.i_dtime = kgettimeofday().truncated_seconds_since_epoch();
     TRY(write_ext2_inode(inode.index(), inode.m_raw_inode));
 

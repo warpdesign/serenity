@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2019-2020, Andrew Kaster <akaster@serenityos.org>
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2019-2026, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -25,14 +25,15 @@ DynamicObject::DynamicObject(ByteString const& filepath, VirtualAddress base_add
     auto* const phdrs = program_headers();
 
     // Calculate the base address using the PT_LOAD element with the lowest `p_vaddr` (which is the first element)
-    for (size_t i = 0; i < program_header_count(); ++i) {
+    auto program_header_count = static_cast<size_t>(this->program_header_count());
+    for (size_t i = 0; i < program_header_count; ++i) {
         auto pheader = phdrs[i];
         if (pheader.p_type == PT_LOAD) {
             m_elf_base_address = VirtualAddress { pheader.p_vaddr - pheader.p_offset };
             break;
         }
 
-        if (i == program_header_count() - 1) {
+        if (i + 1 == program_header_count) {
             VERIFY_NOT_REACHED();
         }
     }
