@@ -79,6 +79,8 @@ extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_debug_output_test(void);
 extern int powerpc_current_time_fallback_test(void);
 extern int powerpc_kernel_context_test(void);
+extern int powerpc_assume_context_test(void);
+extern volatile Cell powerpc_assume_context_debug;
 extern int powerpc_supervisor_exception_return_test(void);
 extern int powerpc_initial_thread_context_test(void);
 extern int powerpc_hpt_external_irq_stack_roundtrip(Cell);
@@ -99,6 +101,7 @@ extern int powerpc_hpt_user_high_vsid_isolation_roundtrip(void);
 extern int powerpc_hpt_user_exception_return_roundtrip(void);
 extern int powerpc_hpt_translated_user_exception_return_roundtrip(void);
 extern int powerpc_hpt_high_frame_user_exception_return_roundtrip(void);
+extern int powerpc_hpt_high_frame_atomic_user_return_roundtrip(void);
 extern volatile Cell powerpc_hpt_user_high_debug;
 extern volatile Cell powerpc_hpt_user_return_debug;
 extern int powerpc_user_stack_observed(void);
@@ -562,6 +565,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: kernel context switch passed\r\n");
         else
             serial_write("SerenityOS PowerPC: kernel context switch failed\r\n");
+        if (powerpc_assume_context_test())
+            serial_write("SerenityOS PowerPC: assumed context stack transfer passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: assumed context stack transfer failed 0x");
+            serial_write_hex(powerpc_assume_context_debug);
+            serial_write("\r\n");
+        }
         if (powerpc_supervisor_exception_return_test())
             serial_write("SerenityOS PowerPC: supervisor exception return passed\r\n");
         else
@@ -671,6 +681,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: high-frame user return passed\r\n");
         else {
             serial_write("SerenityOS PowerPC: high-frame user return failed checks 0x");
+            serial_write_hex(powerpc_hpt_user_return_debug);
+            serial_write("\r\n");
+        }
+        if (powerpc_hpt_high_frame_atomic_user_return_roundtrip())
+            serial_write("SerenityOS PowerPC: high-frame atomic user return passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: high-frame atomic user return failed checks 0x");
             serial_write_hex(powerpc_hpt_user_return_debug);
             serial_write("\r\n");
         }

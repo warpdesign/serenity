@@ -59,6 +59,14 @@ struct ThreadRegisters : PowerPCExceptionState {
         set_machine_state(false);
     }
 
+    void set_return_interrupts_enabled(bool enabled)
+    {
+        if (enabled)
+            srr1 |= 0x8000u;
+        else
+            srr1 &= ~0x8000u;
+    }
+
 private:
     void set_machine_state(bool is_kernel_process)
     {

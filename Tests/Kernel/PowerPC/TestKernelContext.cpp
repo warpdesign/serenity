@@ -11,6 +11,7 @@
 #include <Kernel/Arch/powerpc/RegisterState.h>
 #include <Kernel/Arch/powerpc/ThreadRegisters.h>
 #include <Kernel/Arch/TrapFrame.h>
+#include <setjmp.h>
 
 static_assert(__builtin_offsetof(PowerPCExceptionState, gpr[1]) == PPC_CONTEXT_GPR1);
 static_assert(__builtin_offsetof(PowerPCExceptionState, gpr[2]) == PPC_CONTEXT_GPR2);
@@ -25,9 +26,17 @@ static_assert(__builtin_offsetof(PowerPCExceptionState, srr1) == PPC_CONTEXT_SRR
 static Kernel::ThreadRegisters s_main_context {};
 static Kernel::ThreadRegisters s_worker_context {};
 static Kernel::ThreadRegisters s_initial_worker_context {};
+static Kernel::ThreadRegisters s_assumed_context {};
 alignas(16) static u8 s_worker_stack[4096] {};
 alignas(16) static u8 s_initial_worker_stack[4096] {};
+alignas(16) static u8 s_assumed_stack[4096] {};
 static Kernel::TrapFrame* s_initial_trap;
+static Kernel::TrapFrame* s_assumed_trap;
+static jmp_buf s_assume_escape;
+static volatile u32 s_assume_active;
+static volatile u32 s_assume_prepares;
+static volatile u32 s_assume_entries;
+static volatile u32 s_assume_first_inits;
 static u32 s_main_tag;
 static u32 s_worker_tag;
 static volatile u32 s_phase;
@@ -35,6 +44,8 @@ static volatile u32 s_worker_failed;
 static volatile u32 s_transitions;
 static volatile u32 s_first_init_calls;
 static u32 s_original_msr;
+extern "C" volatile u32 powerpc_assume_context_debug;
+volatile u32 powerpc_assume_context_debug;
 
 static Kernel::Thread* main_tag()
 {
@@ -50,6 +61,14 @@ extern "C" void powerpc_enter_thread_context(Kernel::Thread* from, Kernel::Threa
 {
     FlatPtr stack_pointer;
     asm volatile("mr %0,1" : "=r"(stack_pointer));
+    if (s_assume_active) {
+        auto stack_start = reinterpret_cast<FlatPtr>(s_assumed_stack);
+        if (from != worker_tag() || to != worker_tag()
+            || stack_pointer < stack_start || stack_pointer >= stack_start + sizeof(s_assumed_stack))
+            s_worker_failed = 1;
+        s_assume_entries = s_assume_entries + 1;
+        return;
+    }
     auto worker_stack_start = reinterpret_cast<FlatPtr>(s_worker_stack);
     auto initial_worker_stack_start = reinterpret_cast<FlatPtr>(s_initial_worker_stack);
     bool on_worker_stack = (stack_pointer >= worker_stack_start && stack_pointer < worker_stack_start + sizeof(s_worker_stack))
@@ -64,6 +83,14 @@ extern "C" void context_first_init(Kernel::Thread* from, Kernel::Thread* to)
 {
     FlatPtr stack_pointer;
     asm volatile("mr %0,1" : "=r"(stack_pointer));
+    if (s_assume_active) {
+        auto stack_start = reinterpret_cast<FlatPtr>(s_assumed_stack);
+        if (from != worker_tag() || to != worker_tag()
+            || stack_pointer < stack_start || stack_pointer >= stack_start + sizeof(s_assumed_stack))
+            s_worker_failed = 1;
+        s_assume_first_inits = s_assume_first_inits + 1;
+        return;
+    }
     auto stack_start = reinterpret_cast<FlatPtr>(s_initial_worker_stack);
     if (from != main_tag() || to != worker_tag()
         || stack_pointer < stack_start || stack_pointer >= stack_start + sizeof(s_initial_worker_stack))
@@ -73,9 +100,72 @@ extern "C" void context_first_init(Kernel::Thread* from, Kernel::Thread* to)
 
 extern "C" [[noreturn]] void powerpc_finish_first_thread_context(Kernel::TrapFrame* trap)
 {
+    if (s_assume_active) {
+        if (trap != s_assumed_trap || !trap->regs || trap->regs->previous_mode() != Kernel::ExecutionMode::Kernel)
+            s_worker_failed = 1;
+        Kernel::powerpc_restore_supervisor_exception_state(*trap->regs);
+    }
     if (trap != s_initial_trap || !trap->regs || trap->regs->previous_mode() != Kernel::ExecutionMode::Kernel)
         s_worker_failed = 1;
     Kernel::powerpc_restore_supervisor_exception_state(*trap->regs);
+}
+
+extern "C" FlatPtr powerpc_prepare_assume_context(Kernel::Thread* thread, u32 state)
+{
+    if (!s_assume_active || thread != worker_tag() || state != 1)
+        s_worker_failed = 1;
+    s_assume_prepares = s_assume_prepares + 1;
+    return s_assumed_context.sp();
+}
+
+extern "C" [[noreturn]] void powerpc_assumed_context_worker(u32 argument)
+{
+    u32 thread_pointer;
+    u32 machine_state;
+    asm volatile("mr %0,2; mfmsr %1" : "=r"(thread_pointer), "=r"(machine_state));
+    if (argument != 0x56781234u || thread_pointer != 0x10293847u
+        || machine_state != s_original_msr)
+        powerpc_assume_context_debug = (argument != 0x56781234u ? 1u : 0u)
+            | (thread_pointer != 0x10293847u ? 2u : 0u)
+            | (machine_state != s_original_msr ? 4u : 0u);
+    if (powerpc_assume_context_debug)
+        s_worker_failed = 1;
+    longjmp(s_assume_escape, 1);
+}
+
+extern "C" int powerpc_assume_context_test()
+{
+    s_assume_prepares = 0;
+    s_assume_entries = 0;
+    s_assume_first_inits = 0;
+    powerpc_assume_context_debug = 0;
+    auto stack_top = reinterpret_cast<FlatPtr>(s_assumed_stack + sizeof(s_assumed_stack));
+    s_assumed_context.set_ip(FlatPtr(&powerpc_assumed_context_worker));
+    s_assumed_context.set_sp(stack_top);
+    s_assumed_context.gpr[2] = 0x10293847u;
+    s_assumed_context.gpr[3] = 0x56781234u;
+    asm volatile("mfmsr %0" : "=r"(s_original_msr));
+    s_assumed_context.srr1 = s_original_msr;
+    Kernel::prepare_initial_thread_context(s_assumed_context, stack_top, s_assumed_trap);
+    int result = setjmp(s_assume_escape);
+    if (result == 0) {
+        s_assume_active = 1;
+        Kernel::do_assume_context(worker_tag(), 1);
+        return 0;
+    }
+    s_assume_active = 0;
+    if (result != 1)
+        powerpc_assume_context_debug = 0x100u | static_cast<u32>(result);
+    else if (s_assume_prepares != 1)
+        powerpc_assume_context_debug = 0x200u | s_assume_prepares;
+    else if (s_assume_entries != 1)
+        powerpc_assume_context_debug = 0x300u | s_assume_entries;
+    else if (s_assume_first_inits != 1)
+        powerpc_assume_context_debug = 0x400u | s_assume_first_inits;
+    else if (s_worker_failed)
+        powerpc_assume_context_debug = 0x500u | s_worker_failed;
+    return result == 1 && s_assume_prepares == 1 && s_assume_entries == 1
+        && s_assume_first_inits == 1 && !s_worker_failed;
 }
 
 extern "C" [[noreturn]] void powerpc_initial_context_worker(u32 argument)

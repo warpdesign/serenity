@@ -45,6 +45,12 @@ extern "C" int powerpc_thread_registers_test()
         || registers.page_directory != &second_directory || registers.gpr[2] != 0
         || (registers.srr1 & 0x4000u) == 0 || (registers.srr1 & 0x30u) != 0x30u)
         return 0;
+    registers.set_return_interrupts_enabled(false);
+    if ((registers.srr1 & 0x8000u) != 0 || (registers.srr1 & 0x6030u) != 0x6030u)
+        return 0;
+    registers.set_return_interrupts_enabled(true);
+    if ((registers.srr1 & 0xe030u) != 0xe030u)
+        return 0;
     Kernel::set_process_entry_arguments(registers, 3, 0x10030000u, 0x10030100u);
     if (registers.gpr[3] != 3 || registers.gpr[4] != 0x10030000u
         || registers.gpr[5] != 0x10030100u || registers.sp() != 0x10030ff0u

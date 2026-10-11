@@ -6,6 +6,7 @@
 
 #include "KernelContextOffsets.h"
 #include "HighSegmentSwitch.inc"
+#include "ExceptionVectorAddresses.h"
 
 .macro POWERPC_RESTORE_EXCEPTION_FRAME
     lwz 11,PPC_CONTEXT_IP(12)
@@ -40,6 +41,24 @@
 
 .section .text, "ax"
 .p2align 2
+.globl powerpc_return_to_user_from_high
+.type powerpc_return_to_user_from_high,@function
+powerpc_return_to_user_from_high:
+    // r3 is a high kernel virtual address of the saved user frame. rfi
+    // switches to physical 0x1800 without fetching high code in real mode.
+    // The trampoline briefly enables DR to read the frame, then restores
+    // the user's private high VSIDs before its final rfi.
+    mfmsr 11
+    lis 12,0xffff
+    ori 12,12,0x3fcf // Clear EE, PR, IR and DR.
+    and 11,11,12
+    li 12,POWERPC_USER_RETURN_TRAMPOLINE_ADDRESS
+    mtspr 26,12
+    mtspr 27,11
+    sync
+    rfi
+.size powerpc_return_to_user_from_high, .-powerpc_return_to_user_from_high
+
 .globl powerpc_restore_supervisor_exception_state
 .type powerpc_restore_supervisor_exception_state,@function
 powerpc_restore_supervisor_exception_state:

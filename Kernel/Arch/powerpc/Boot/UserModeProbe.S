@@ -252,7 +252,11 @@ powerpc_enter_user_translated_exception_frame_probe:
     // r3 may name a high kernel alias, so write the saved return register
     // only after data translation makes that alias accessible.
     stw 0,0(3)
-    mr 0,4 // 0x5352 for a physical frame, 0x5353 for a high virtual frame.
+    mr 0,4 // 0x5352 physical, 0x5353 high via sc, 0x5354 high via rfi.
+    cmpwi 4,0x5354
+    bne .Lreturn_probe_via_sc
+    b powerpc_return_to_user_from_high
+.Lreturn_probe_via_sc:
     sc
 .global powerpc_user_translated_return_resume
 powerpc_user_translated_return_resume:

@@ -32,9 +32,10 @@ extern "C" [[noreturn]] void powerpc_finish_first_thread_context(TrapFrame* trap
     VERIFY_INTERRUPTS_DISABLED();
 
     auto* registers = trap->regs;
-    // User return also has to replace the high kernel VSIDs in real mode.
-    VERIFY(registers->previous_mode() == ExecutionMode::Kernel);
+    auto return_mode = registers->previous_mode();
     Processor::current().exit_trap(*trap);
+    if (return_mode == ExecutionMode::User)
+        powerpc_return_to_user_from_high(*registers);
     powerpc_restore_supervisor_exception_state(*registers);
 }
 
@@ -75,6 +76,26 @@ void ProcessorBase::switch_context(Thread*& from_thread, Thread*& to_thread)
     to_thread = Thread::current();
 }
 
+extern "C" FlatPtr powerpc_prepare_assume_context(Thread* thread, u32 interrupt_state)
+{
+    VERIFY_INTERRUPTS_DISABLED();
+    VERIFY(thread == Thread::current());
+    VERIFY(thread->regs().page_directory);
+    VERIFY(thread->regs().srr1 & 0x4000u);
+    VERIFY(interrupt_state <= to_underlying(InterruptsState::Disabled));
+    thread->regs().set_return_interrupts_enabled(interrupt_state == to_underlying(InterruptsState::Enabled));
+    return Processor::current().init_context(*thread, true);
+}
+
+[[noreturn]] void ProcessorBase::assume_context(Thread& thread, InterruptsState new_interrupts_state)
+{
+    VERIFY_INTERRUPTS_DISABLED();
+    Scheduler::prepare_after_exec();
+    VERIFY(in_critical() == 2);
+    do_assume_context(&thread, to_underlying(new_interrupts_state));
+    VERIFY_NOT_REACHED();
+}
+
 extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thread)
 {
     VERIFY(from_thread == to_thread || from_thread->state() != Thread::State::Running);
@@ -82,13 +103,15 @@ extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thr
     VERIFY(!Processor::are_interrupts_enabled());
 
     Processor::set_current_thread(*to_thread);
-    Processor::store_fpu_state(from_thread->fpu_state());
+    // Exec replaces the current thread's register and FPU state in place.
+    if (from_thread != to_thread)
+        Processor::store_fpu_state(from_thread->fpu_state());
 
     auto const* from_directory = from_thread->regs().page_directory;
     auto const* to_directory = to_thread->regs().page_directory;
     VERIFY(from_directory);
     VERIFY(to_directory);
-    if (from_directory != to_directory) {
+    if (from_thread == to_thread || from_directory != to_directory) {
         if (to_thread->process().is_kernel_process())
             Memory::activate_kernel_page_directory(*to_directory);
         else

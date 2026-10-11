@@ -30,3 +30,34 @@ powerpc_start_initial_context:
     mr 3,4
     bctr
 .size powerpc_start_initial_context, .-powerpc_start_initial_context
+
+.globl do_assume_context
+.type do_assume_context,@function
+do_assume_context:
+    // r3: current Thread, r4: requested interrupt state. Reserve space
+    // below the old kernel stack before building a fresh frame above it.
+    mr 30,3
+    stwu 1,-192(1)
+    bl powerpc_prepare_assume_context
+    mr 4,30
+    b powerpc_start_assumed_context
+.size do_assume_context, .-do_assume_context
+
+.globl powerpc_start_assumed_context
+.type powerpc_start_assumed_context,@function
+powerpc_start_assumed_context:
+    // r3: prepared TrapFrame stack pointer, r4: the same Thread as both
+    // source and destination. Continue through the normal first entry path.
+    mr 30,4
+    mr 1,3
+    stwu 1,-64(1)
+    stw 30,48(1)
+    mr 3,30
+    mr 4,30
+    bl powerpc_enter_thread_context
+    lwz 30,48(1)
+    lwz 1,0(1)
+    mr 3,30
+    mr 4,30
+    b thread_context_first_enter
+.size powerpc_start_assumed_context, .-powerpc_start_assumed_context
