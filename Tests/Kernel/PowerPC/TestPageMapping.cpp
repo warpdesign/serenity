@@ -135,11 +135,28 @@ extern "C" int powerpc_page_mapping_test()
         if (!powerpc_apply_kernel_mapping(&table, heap_address + index * POWERPC_HPT_PAGE_SIZE, kernel_request))
             return 0;
     }
+    auto third_address = heap_address + 2 * POWERPC_HPT_PAGE_SIZE;
+    if (!powerpc_hpt_unmap(&table, third_address >> 28, third_address)
+        || powerpc_protect_kernel_page_range(&table, heap_address, heap_address + 3 * POWERPC_HPT_PAGE_SIZE))
+        return 0;
+    for (unsigned index = 0; index < 2; ++index) {
+        auto page_address = heap_address + index * POWERPC_HPT_PAGE_SIZE;
+        auto* entry = powerpc_hpt_find(&table, page_address >> 28, page_address);
+        if (!entry || (entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY)
+            return 0;
+    }
+    if (!powerpc_apply_kernel_mapping(&table, third_address, kernel_request)
+        || !powerpc_protect_kernel_page_range(&table, heap_address, heap_address + 2 * POWERPC_HPT_PAGE_SIZE)
+        || powerpc_protect_kernel_page_range(&table, address, address + POWERPC_HPT_PAGE_SIZE)
+        || powerpc_protect_kernel_page_range(&table, heap_address + 1, heap_address + POWERPC_HPT_PAGE_SIZE))
+        return 0;
     for (unsigned index = 0; index < 3; ++index) {
         auto address = heap_address + index * POWERPC_HPT_PAGE_SIZE;
         auto* entry = powerpc_hpt_find(&table, address >> 28, address);
         if (!entry || (entry->lower & 0xfffff000u) != heap_physical_address + index * POWERPC_HPT_PAGE_SIZE
-            || (entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY)
+            || (entry->lower & 3u) != (index < 2 ? POWERPC_HPT_READ_ONLY : POWERPC_HPT_SUPERVISOR_ONLY))
+            return 0;
+        if (index < 2 && !powerpc_set_kernel_page_writable(&table, address, 1))
             return 0;
         if (!powerpc_hpt_unmap(&table, address >> 28, address))
             return 0;

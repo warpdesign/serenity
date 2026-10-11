@@ -141,6 +141,30 @@ int powerpc_set_kernel_page_writable(PowerPCHashPageTable const* table, PowerPCH
         (lower & 0xfffu & ~3u) | desired_protection);
 }
 
+int powerpc_protect_kernel_page_range(PowerPCHashPageTable const* table, PowerPCHPTWord start, PowerPCHPTWord end)
+{
+    if (!table || start < 0xc0000000u || end < start
+        || (start & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || (end & (POWERPC_HPT_PAGE_SIZE - 1)) != 0)
+        return 0;
+
+    // Validate the complete range before changing any entry. The caller
+    // serializes the shared HPT throughout both passes.
+    for (auto address = start; address < end; address += POWERPC_HPT_PAGE_SIZE) {
+        auto* entry = powerpc_hpt_find(table, address >> 28, address);
+        if (!entry)
+            return 0;
+        auto protection = entry->lower & 3u;
+        if (protection != POWERPC_HPT_SUPERVISOR_ONLY && protection != POWERPC_HPT_READ_ONLY)
+            return 0;
+    }
+    for (auto address = start; address < end; address += POWERPC_HPT_PAGE_SIZE) {
+        if (!powerpc_set_kernel_page_writable(table, address, 0))
+            return 0;
+    }
+    return 1;
+}
+
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address)
 {
     auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);

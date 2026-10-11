@@ -587,7 +587,7 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
 {
     Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
     if (!powerpc_test_map_kernel_page(&s_hpt, ReadOnlyPage, replacement_physical)
-        || !powerpc_set_kernel_page_writable(&s_hpt, ReadOnlyPage, 0))
+        || !powerpc_protect_kernel_page_range(&s_hpt, ReadOnlyPage, ReadOnlyPage + PageSize))
         return 0;
 
     powerpc_enable_boot_translation();
@@ -612,7 +612,7 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
     Word writable_value = *alias;
     powerpc_disable_boot_translation();
     s_hpt_replacement_word = 0x13579bdfu;
-    int protected_again = powerpc_set_kernel_page_writable(&s_hpt, ReadOnlyPage, 0);
+    int protected_again = powerpc_protect_kernel_page_range(&s_hpt, ReadOnlyPage, ReadOnlyPage + PageSize);
 
     return value_before == 0x13579bdfu && value_after == value_before && physical_value == value_before
         && fault_count_after == fault_count_before + 1 && fault_address == ReadOnlyPage

@@ -17,8 +17,42 @@
 
 extern u8 start_of_kernel_image[];
 extern u8 end_of_kernel_image[];
+extern u8 start_of_kernel_text[];
+extern u8 start_of_kernel_data[];
+extern u8 start_of_ro_after_init[];
+extern u8 end_of_ro_after_init[];
+extern u8 start_of_kernel_ksyms[];
+extern u8 end_of_kernel_ksyms[];
 
 namespace Kernel::Memory {
+
+UNMAP_AFTER_INIT void MemoryManager::protect_kernel_image()
+{
+    SpinlockLocker page_lock(kernel_page_directory().get_lock());
+    SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
+    VERIFY(powerpc_protect_kernel_page_range(kernel_page_directory().backend().table,
+        FlatPtr(start_of_kernel_text), FlatPtr(start_of_kernel_data)));
+    // The 750 hashed MMU has no execute-disable bit for the writable data.
+}
+
+UNMAP_AFTER_INIT void MemoryManager::protect_readonly_after_init_memory()
+{
+    auto start = page_round_down(FlatPtr(start_of_ro_after_init));
+    auto end = page_round_up(FlatPtr(end_of_ro_after_init)).release_value_but_fixme_should_propagate_errors();
+    SpinlockLocker page_lock(kernel_page_directory().get_lock());
+    SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
+    VERIFY(powerpc_protect_kernel_page_range(kernel_page_directory().backend().table, start, end));
+}
+
+UNMAP_AFTER_INIT void MemoryManager::protect_ksyms_after_init()
+{
+    auto start = page_round_down(FlatPtr(start_of_kernel_ksyms));
+    auto end = page_round_up(FlatPtr(end_of_kernel_ksyms)).release_value_but_fixme_should_propagate_errors();
+    SpinlockLocker page_lock(kernel_page_directory().get_lock());
+    SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
+    VERIFY(powerpc_protect_kernel_page_range(kernel_page_directory().backend().table, start, end));
+    dmesgln("Write-protected kernel symbols after init.");
+}
 
 UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& global_data)
 {
