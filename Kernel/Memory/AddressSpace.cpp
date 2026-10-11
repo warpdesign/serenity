@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021-2022, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Leon Albrecht <leon2002.la@gmail.com>
+ * Copyright (c) 2021-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Leon Albrecht <leon2002.la@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -168,7 +168,11 @@ ErrorOr<Region*> AddressSpace::allocate_region(RandomizeVirtualAddress randomize
     } else {
         TRY(m_region_tree.place_specifically(*region, VirtualRange { requested_address, size }));
     }
+    ArmedScopeGuard remove_region_from_tree_on_failure = [&] {
+        m_region_tree.remove(*region);
+    };
     TRY(region->map(page_directory(), ShouldFlushTLB::No));
+    remove_region_from_tree_on_failure.disarm();
     return region.leak_ptr();
 }
 
