@@ -286,7 +286,9 @@ extern "C" void loader_main(FirmwareEntry firmware)
     write_console(firmware, stdout, "SerenityOS PowerPC loader: runtime base ");
     write_hex(firmware, stdout, static_cast<u32>(runtime_base));
 
-    constexpr u32 table_size = 256 * 1024;
+    // Until the HPT can evict entries, 256 KiB is too small to map /init
+    // and its shared libraries with 512 MiB of RAM.
+    constexpr u32 table_size = 1024 * 1024;
     u32 table_physical = claim_pages(firmware, table_size, table_size);
     Kernel::PowerPC::Loader::KernelMappings mappings;
     if (table_physical == 0 || table_physical == 0xffffffffu

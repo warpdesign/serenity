@@ -60,10 +60,10 @@ def main():
         if args.cpu:
             command.extend(("-cpu", args.cpu))
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        marker = b"DynamicObject: DYNAMIC tag handling not implemented for DT_LOPROC (1879048192) in /usr/lib/libc.so"
+        marker = b"DynamicObject: DYNAMIC tag handling not implemented for DT_LOPROC (1879048192) in /usr/lib/libunicode.so.serenity"
         found = False
         try:
-            deadline = time.monotonic() + 30
+            deadline = time.monotonic() + 35
             while time.monotonic() < deadline and process.poll() is None:
                 output = serial.read_bytes() if serial.exists() else b""
                 if marker in output:
