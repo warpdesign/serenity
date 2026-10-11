@@ -37,13 +37,25 @@ $(BUILD_DIR)/Kernel/Debug.h: ../../../../Kernel/Debug.h.in | $(BUILD_DIR)
 $(BUILD_DIR)/boot.o: boot.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/firmware.o: firmware.cpp KernelImagePlan.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+$(BUILD_DIR)/mmu_probe.o: MMUProbe.S | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/firmware.o: firmware.cpp KernelImagePlan.h KernelMappings.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/kernel_image_plan.o: KernelImagePlan.cpp KernelImagePlan.h ../../../../Userland/Libraries/LibELF/ELFABI.h ../../../../Userland/Libraries/LibELF/Relocation.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/relocation.o: ../../../../Userland/Libraries/LibELF/Relocation.cpp ../../../../Userland/Libraries/LibELF/Relocation.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/kernel_mappings.o: KernelMappings.cpp KernelMappings.h KernelImagePlan.h ../HashPageTable.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/hash_page_table.o: ../HashPageTable.cpp ../HashPageTable.h ../TLB.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/tlb.o: ../TLB.cpp ../TLB.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/runtime_assertions.o: ../Boot/RuntimeAssertions.cpp $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
@@ -58,13 +70,14 @@ $(BUILD_DIR)/kernel.elf: $(KERNEL_ELF) | $(BUILD_DIR)
 $(BUILD_DIR)/kernel_payload.o: $(BUILD_DIR)/kernel.elf
 	cd $(BUILD_DIR) && $(OBJCOPY) -I binary -O elf32-powerpc -B powerpc --rename-section .data=.rodata.kernel,alloc,load,readonly,data,contents kernel.elf kernel_payload.o
 
-$(BUILD_DIR)/serenity-powerpc-loader.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld
-	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o -o $@
+$(BUILD_DIR)/serenity-powerpc-loader.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld
+	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o -o $@
 
 check-quick: all
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE)
 
 check: check-quick
+	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE) --memory 512 --cpu 750cxe
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE) --corrupt-only
 
 clean:

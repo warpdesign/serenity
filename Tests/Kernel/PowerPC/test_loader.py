@@ -13,7 +13,7 @@ import tempfile
 import time
 
 
-def boot_and_capture(qemu: str, loader: Path, terminal_marker: bytes,
+def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, terminal_marker: bytes,
                      require_hex_after: bool = False, inspect=None) -> bytes:
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-loader-qemu-") as directory:
         trace = Path(directory) / "vof.log"
@@ -21,7 +21,7 @@ def boot_and_capture(qemu: str, loader: Path, terminal_marker: bytes,
         command = [
             qemu,
             "-M", "pegasos2",
-            "-m", "256",
+            "-m", str(memory),
             "-kernel", str(loader),
             "-display", "none",
             "-serial", "none",
@@ -30,6 +30,8 @@ def boot_and_capture(qemu: str, loader: Path, terminal_marker: bytes,
             "-d", "trace:vof_write",
             "-D", str(trace),
         ]
+        if cpu:
+            command.extend(("-cpu", cpu))
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         try:
             deadline = time.monotonic() + 20
@@ -81,6 +83,8 @@ def main():
     parser.add_argument("--kernel-elf", type=Path, required=True)
     parser.add_argument("--loader-dir", type=Path, required=True)
     parser.add_argument("--cross-compile", required=True)
+    parser.add_argument("--memory", type=int, default=256)
+    parser.add_argument("--cpu")
     parser.add_argument("--corrupt-only", action="store_true")
     args = parser.parse_args()
 
@@ -160,7 +164,8 @@ def main():
                     reads.append((target, bytearray(patch)))
             read_physical_memory(monitor, reads)
 
-        output = boot_and_capture(args.qemu, args.loader, b"SerenityOS PowerPC loader: runtime base", True, inspect)
+        output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
+                                  b"SerenityOS PowerPC loader: high kernel alias passed", inspect=inspect)
         for marker in (
             b"SerenityOS PowerPC loader: kernel ELF32 validated",
             b"SerenityOS PowerPC loader: load span",
@@ -170,6 +175,10 @@ def main():
             b"SerenityOS PowerPC loader: kernel relocations applied",
             b"SerenityOS PowerPC loader: relocation count",
             b"SerenityOS PowerPC loader: runtime base",
+            b"SerenityOS PowerPC loader: kernel high mappings prepared",
+            b"SerenityOS PowerPC loader: hash table physical",
+            b"SerenityOS PowerPC loader: mapped pages",
+            b"SerenityOS PowerPC loader: high kernel alias passed",
         ):
             if marker not in output:
                 raise SystemExit(f"PowerPC loader missed {marker!r}:\n{output.decode(errors='replace')}")
@@ -201,6 +210,16 @@ def main():
         tags = dict(struct.iter_unpack(">II", source[dynamic_offset:dynamic_offset + dynamic_size]))
         if not observed_count or int(observed_count.group(1), 16) != tags[0x6FFFFFF9]:
             raise SystemExit("PowerPC loader reported the wrong relocation count")
+        table_suffix = output.split(b"SerenityOS PowerPC loader: hash table physical", 1)[1]
+        table_address = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', table_suffix)
+        if not table_address or int(table_address.group(1), 16) % (256 * 1024) != 0:
+            raise SystemExit("PowerPC loader did not align its hash table")
+        page_suffix = output.split(b"SerenityOS PowerPC loader: mapped pages", 1)[1]
+        page_count = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', page_suffix)
+        expected_pages = sum((int.from_bytes(source[header + 20:header + 24], "big") + 4095) // 4096
+                             for header in load_headers)
+        if not page_count or int(page_count.group(1), 16) != expected_pages:
+            raise SystemExit("PowerPC loader mapped the wrong number of kernel pages")
         print("Pegasos 2 kernel ELF loader probe passed")
         return
 
@@ -218,7 +237,7 @@ def main():
                 f"CROSS_COMPILE={args.cross_compile}",
             ]
             subprocess.run(command, check=True, capture_output=True)
-            output = boot_and_capture(args.qemu, bad_loader, expected_marker)
+            output = boot_and_capture(args.qemu, bad_loader, args.memory, args.cpu, expected_marker)
             if expected_marker not in output or b"kernel relocations applied" in output:
                 raise SystemExit(f"PowerPC loader accepted {name}:\n{output.decode(errors='replace')}")
 
