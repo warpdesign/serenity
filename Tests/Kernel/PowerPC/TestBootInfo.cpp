@@ -50,7 +50,7 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
 
     BootMemoryRange reservations[] = {
         { 0, POWERPC_EXCEPTION_CODE_LIMIT },
-        { powerpc_hpt_table_physical(), 64 * 1024 },
+        { powerpc_hpt_table_physical(), static_cast<u64>(powerpc_hpt_group_count()) * 64 },
         { rtas->runtime_base, rtas->runtime_size },
     };
     Kernel::BootInfo boot_info {};
@@ -146,7 +146,7 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     PowerPCHashPageTable table {};
     if (!Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table)
         || table.entries != reinterpret_cast<PowerPCHPTEntry*>(boot_info.arch_specific.hpt_virtual_address)
-        || table.group_count != 1024
+        || table.group_count != powerpc_hpt_group_count()
         || boot_info.boot_method_specific.firmware_memory_map.usable_ranges != ranges
         || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[0].physical_start != 0
         || boot_info.boot_method_specific.firmware_memory_map.reserved_ranges[1].physical_start != powerpc_hpt_table_physical())
@@ -188,6 +188,9 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
         return 0;
     reservations[1].physical_start -= 0x10000u;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() };
+    boot_info.arch_specific.hpt_group_count = 1024;
+    if (Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table))
+        return 0;
     boot_info.arch_specific.hpt_group_count = 512;
     return !Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, table);
 }

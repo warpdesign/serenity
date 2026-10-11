@@ -20,7 +20,7 @@ typedef int (*MarkerFunction)(void);
 
 enum {
     PageSize = POWERPC_HPT_PAGE_SIZE,
-    PageTableSize = 64 * 1024,
+    PageTableSize = 256 * 1024,
     PageTableGroupCount = PageTableSize / 64,
     PageTableEntriesPerGroup = POWERPC_HPT_ENTRIES_PER_GROUP,
     KernelVSID = 12,
@@ -39,7 +39,7 @@ enum {
     UserProbeStackPage = 0x10030000,
     UserProbeVSID = 0x301,
     CollisionBase = KERNEL_MAPPING_BASE + 0x00401000,
-    CollisionStride = 0x00400000,
+    CollisionStride = 0x01000000,
     CollisionCount = 9,
     CollisionGroupCapacity = 2 * PageTableEntriesPerGroup,
     KernelPageFlags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_SUPERVISOR_ONLY,
@@ -136,22 +136,22 @@ extern volatile Word powerpc_probe_user_irq_signal_address;
 
 static int map_high_page(Word effective_address, Word physical_address)
 {
-    return powerpc_hpt_map(&s_hpt, KernelVSID, effective_address, physical_address, KernelPageFlags);
+    return powerpc_hpt_map(&s_hpt, effective_address >> 28, effective_address, physical_address, KernelPageFlags);
 }
 
 static struct PowerPCHPTEntry* find_high_page(Word effective_address)
 {
-    return powerpc_hpt_find(&s_hpt, KernelVSID, effective_address);
+    return powerpc_hpt_find(&s_hpt, effective_address >> 28, effective_address);
 }
 
 static int unmap_high_page(Word effective_address)
 {
-    return powerpc_hpt_unmap(&s_hpt, KernelVSID, effective_address);
+    return powerpc_hpt_unmap(&s_hpt, effective_address >> 28, effective_address);
 }
 
 static int remap_high_page(Word effective_address, Word physical_address)
 {
-    return powerpc_hpt_remap(&s_hpt, KernelVSID, effective_address, physical_address, KernelPageFlags);
+    return powerpc_hpt_remap(&s_hpt, effective_address >> 28, effective_address, physical_address, KernelPageFlags);
 }
 
 int powerpc_hpt_high_alias_roundtrip(void)
@@ -174,7 +174,7 @@ int powerpc_hpt_high_alias_roundtrip(void)
         || !map_high_page(HighDataPage, payload_physical))
         return 0;
 
-    powerpc_select_boot_hpt(table_physical);
+    powerpc_select_boot_hpt(table_physical | ((PageTableSize >> 16) - 1));
     powerpc_enable_boot_translation();
 
     MarkerFunction high_marker = (MarkerFunction)(__UINTPTR_TYPE__)(KERNEL_MAPPING_BASE + function_physical);
@@ -205,7 +205,7 @@ int powerpc_hpt_high_alias_roundtrip(void)
 
     return executed_high && high_read == 0x89abcdefu && low_read == 0x76543210u
         && exceptions_after == exceptions_before + 1 && (exception_status & 0x00020030u) == 0x00020030u
-        && (translated_state & 0x30u) == 0x30u && installed_sdr1 == table_physical
+        && (translated_state & 0x30u) == 0x30u && installed_sdr1 == (table_physical | ((PageTableSize >> 16) - 1))
         && instruction_bat_high == 0 && data_bat_high == 0 && (high_segment & 0x00ffffffu) == KernelVSID;
 }
 
@@ -218,7 +218,8 @@ int powerpc_hpt_external_irq_stack_roundtrip(Word timebase_frequency)
     __asm__ volatile("mfspr %0,25; mfspr %1,530; mfspr %2,538"
         : "=r"(sdr1), "=r"(instruction_bat_high), "=r"(data_bat_high));
     if (!timebase_frequency || (physical_stack & (PageSize - 1)) != 0
-        || physical_stack >= 0x01000000u - PageSize || sdr1 != powerpc_hpt_table_physical()
+        || physical_stack >= 0x01000000u - PageSize
+        || sdr1 != (powerpc_hpt_table_physical() | ((PageTableSize >> 16) - 1))
         || instruction_bat_high != 0 || data_bat_high != 0)
         return 0;
 
@@ -551,7 +552,9 @@ int powerpc_hpt_group_reuse(void)
             return 0;
     }
 
-    Word replacement_alias = CollisionBase + CollisionGroupCapacity * CollisionStride;
+    // The seventeenth alias crosses into segment 13. Adjust its page index so
+    // VSID 13 hashes to the same primary PTEG as the segment 12 aliases.
+    Word replacement_alias = 0xd0400000u;
     if (map_high_page(replacement_alias, replacement_physical))
         return 0;
 

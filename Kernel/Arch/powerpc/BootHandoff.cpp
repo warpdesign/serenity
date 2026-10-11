@@ -84,9 +84,15 @@ bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& ta
         return false;
     auto const& arch = boot_info.arch_specific;
     auto physical = arch.hpt_physical_address.get();
-    constexpr u32 table_size = 64 * 1024;
-    if (arch.hpt_group_count != table_size / 64
-        || physical >= 0x100000000ull || (physical & (table_size - 1)) != 0
+    constexpr u32 minimum_groups = (64 * 1024) / 64;
+    constexpr u32 maximum_groups = (32 * 1024 * 1024) / 64;
+    auto group_count = arch.hpt_group_count;
+    if (group_count < minimum_groups || group_count > maximum_groups
+        || (group_count & (group_count - 1)) != 0)
+        return false;
+    u32 table_size = group_count * 64;
+    if (physical >= 0x100000000ull || (physical & (table_size - 1)) != 0
+        || table_size > 0x100000000ull - physical
         || arch.hpt_virtual_address == 0 || (arch.hpt_virtual_address & 7u) != 0)
         return false;
 
@@ -110,7 +116,7 @@ bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& ta
 
     u32 sdr1;
     asm volatile("mfspr %0,25" : "=r"(sdr1));
-    if (sdr1 != physical)
+    if (sdr1 != (physical | (table_size / (64 * 1024) - 1)))
         return false;
 
     table = PowerPCHashPageTable { reinterpret_cast<PowerPCHPTEntry*>(arch.hpt_virtual_address), arch.hpt_group_count };

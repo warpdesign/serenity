@@ -51,7 +51,7 @@ powerpc_install_boot_bats:
 .global powerpc_select_boot_hpt
 .type powerpc_select_boot_hpt, @function
 powerpc_select_boot_hpt:
-    // r3 is the 64 KiB aligned physical HPT base. Keep BAT0 identity and
+    // r3 is the physical HPT base with the SDR1 size mask. Keep BAT0 identity and
     // DBAT2 I/O mappings; remove the high BAT so HPT must supply that alias.
     li 4, 0
     sync
