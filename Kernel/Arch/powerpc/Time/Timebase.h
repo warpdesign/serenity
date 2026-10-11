@@ -37,6 +37,19 @@ inline u32 decrementer_interval(u32 timebase_frequency, u32 interrupts_per_secon
     return ticks > 0 && ticks <= 0x7fffffff ? ticks : 0;
 }
 
+inline u64 timebase_ticks_for_microseconds(u32 microseconds, u32 timebase_frequency)
+{
+    auto product = static_cast<u64>(microseconds) * timebase_frequency;
+    return product / 1'000'000ull + (product % 1'000'000ull != 0);
+}
+
+inline void delay_timebase_ticks(u64 ticks)
+{
+    auto start = read_timebase();
+    while (read_timebase() - start < ticks)
+        asm volatile("nop" : : : "memory");
+}
+
 inline u64 timebase_ticks_to_nanoseconds(u64 ticks, u32 timebase_frequency)
 {
     if (timebase_frequency == 0)

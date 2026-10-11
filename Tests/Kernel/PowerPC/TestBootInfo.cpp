@@ -56,7 +56,16 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     if (!frequency.has_value() || frequency.value() != timebase_frequency
         || Kernel::PowerPC::timebase_ticks_to_nanoseconds(timebase_frequency, frequency.value()) != 1'000'000'000ull
         || Kernel::PowerPC::timebase_ticks_to_nanoseconds(static_cast<u64>(timebase_frequency) * 600, frequency.value()) != 600'000'000'000ull
-        || Kernel::PowerPC::timebase_ticks_to_nanoseconds(~0ull, frequency.value()) != ~0ull)
+        || Kernel::PowerPC::timebase_ticks_to_nanoseconds(~0ull, frequency.value()) != ~0ull
+        || Kernel::PowerPC::timebase_ticks_for_microseconds(0, frequency.value()) != 0
+        || Kernel::PowerPC::timebase_ticks_for_microseconds(1'000'000, frequency.value()) != frequency.value()
+        || Kernel::PowerPC::timebase_ticks_for_microseconds(1, frequency.value()) == 0)
+        return 0;
+    auto start = Kernel::PowerPC::read_timebase();
+    auto delay_ticks = Kernel::PowerPC::timebase_ticks_for_microseconds(50, frequency.value());
+    Kernel::PowerPC::delay_timebase_ticks(delay_ticks);
+    auto elapsed = Kernel::PowerPC::read_timebase() - start;
+    if (elapsed < delay_ticks || elapsed > frequency.value())
         return 0;
     boot_info.arch_specific.timebase_frequency_hz = 0;
     if (Kernel::PowerPC::boot_timebase_frequency(boot_info).has_value())
