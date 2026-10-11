@@ -16,6 +16,7 @@ check-quick:
 	mkdir -p $(BUILD_DIR)/AK $(BUILD_DIR)/Kernel
 	sed -E 's/^#    cmakedefine01 ([A-Z0-9_]+)/#    define \1 0/' ../../../AK/Debug.h.in > $(BUILD_DIR)/AK/Debug.h
 	sed -E 's/^#cmakedefine01 ([A-Z0-9_]+)/#define \1 0/' ../../../Kernel/Debug.h.in > $(BUILD_DIR)/Kernel/Debug.h
+	../../../Kernel/generate-version-file.sh $(BUILD_DIR)/Kernel/Version.h
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -DTEST_POWERPC_LAYOUT -fsyntax-only Test32BitLayout.c
 	$(CC) $(CFLAGS) -std=c11 -DKERNEL -I../../.. -fsyntax-only Test32BitLayout.c
 	$(CXX) $(CXXFLAGS) -DKERNEL -fsyntax-only ../../../Kernel/Arch/powerpc/SegmentRegisters.cpp
@@ -50,6 +51,7 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only ../../../Kernel/Arch/powerpc/SyscallEntryChecks.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Syscalls/thread.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only ../../../Kernel/Arch/powerpc/CreateThread.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Syscalls/uname.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/InterruptManagement.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Interrupts.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Pegasos2/InterruptController.cpp
