@@ -648,6 +648,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/CPUID.cpp
         Arch/powerpc/CurrentTime.cpp
         Arch/powerpc/Atomic64.cpp
+        Arch/powerpc/archctl.cpp
         Arch/powerpc/Delay.cpp
         Arch/powerpc/CPUInfo.cpp
         Arch/powerpc/ForkRegisters.cpp
