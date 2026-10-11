@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/ELFMachine.h>
 #include <LibELF/Validation.h>
 
 static_assert(ELFSIZE == 32);
@@ -31,7 +32,7 @@ extern "C" int powerpc_native_elf_header_test()
     header.e_ident[EI_VERSION] = EV_CURRENT;
     header.e_ident[EI_OSABI] = ELFOSABI_SYSV;
     header.e_type = ET_EXEC;
-    header.e_machine = EM_PPC;
+    header.e_machine = Kernel::native_elf_machine();
     header.e_version = EV_CURRENT;
     header.e_ehsize = sizeof(header);
     header.e_shentsize = sizeof(Elf_Shdr);

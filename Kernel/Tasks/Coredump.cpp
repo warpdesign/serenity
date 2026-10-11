@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2019-2020, Jesse Buhagiar <jooster669@gmail.com>
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
- * Copyright (c) 2020-2021, Linus Groh <linusg@serenityos.org>
- * Copyright (c) 2021, Andreas Kling <klingi@serenityos.org>
+ * Copyright (c) 2019-2026, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2020-2026, Linus Groh <linusg@serenityos.org>
+ * Copyright (c) 2021-2026, Andreas Kling <klingi@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -10,6 +10,7 @@
 #include <AK/ByteBuffer.h>
 #include <AK/JsonObjectSerializer.h>
 #include <AK/Singleton.h>
+#include <Kernel/Arch/ELFMachine.h>
 #include <Kernel/FileSystem/Custody.h>
 #include <Kernel/FileSystem/OpenFileDescription.h>
 #include <Kernel/FileSystem/VirtualFileSystem.h>
@@ -125,12 +126,8 @@ ErrorOr<void> Coredump::write_elf_header()
     elf_file_header.e_ident[EI_MAG1] = 'E';
     elf_file_header.e_ident[EI_MAG2] = 'L';
     elf_file_header.e_ident[EI_MAG3] = 'F';
-#if ARCH(X86_64) || ARCH(AARCH64) || ARCH(RISCV64)
-    elf_file_header.e_ident[EI_CLASS] = ELFCLASS64;
-#else
-#    error Unknown architecture
-#endif
-    elf_file_header.e_ident[EI_DATA] = ELFDATA2LSB;
+    elf_file_header.e_ident[EI_CLASS] = ELFCLASS;
+    elf_file_header.e_ident[EI_DATA] = ELFDATA;
     elf_file_header.e_ident[EI_VERSION] = EV_CURRENT;
     elf_file_header.e_ident[EI_OSABI] = 0; // ELFOSABI_NONE
     elf_file_header.e_ident[EI_ABIVERSION] = 0;
@@ -141,15 +138,7 @@ ErrorOr<void> Coredump::write_elf_header()
     elf_file_header.e_ident[EI_PAD + 5] = 0;
     elf_file_header.e_ident[EI_PAD + 6] = 0;
     elf_file_header.e_type = ET_CORE;
-#if ARCH(X86_64)
-    elf_file_header.e_machine = EM_X86_64;
-#elif ARCH(AARCH64)
-    elf_file_header.e_machine = EM_AARCH64;
-#elif ARCH(RISCV64)
-    elf_file_header.e_machine = EM_RISCV;
-#else
-#    error Unknown architecture
-#endif
+    elf_file_header.e_machine = native_elf_machine();
     elf_file_header.e_version = 1;
     elf_file_header.e_entry = 0;
     elf_file_header.e_phoff = sizeof(Elf_Ehdr);

@@ -416,6 +416,7 @@ if ("${SERENITY_ARCH}" STREQUAL "x86_64")
         Arch/x86_64/Ptrace.cpp
         Arch/x86_64/SyscallEntryChecks.cpp
         Arch/x86_64/CreateThread.cpp
+        Arch/x86_64/ELFMachine.cpp
 
         Arch/x86_64/CMOS.cpp
         Arch/x86_64/DebugOutput.cpp
@@ -536,6 +537,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "aarch64")
         Arch/aarch64/Ptrace.cpp
         Arch/aarch64/SyscallEntryChecks.cpp
         Arch/aarch64/CreateThread.cpp
+        Arch/aarch64/ELFMachine.cpp
         Arch/aarch64/PowerState.cpp
         Arch/aarch64/SafeMem.cpp
         Arch/aarch64/SmapDisabler.cpp
@@ -614,6 +616,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "riscv64")
         Arch/riscv64/Ptrace.cpp
         Arch/riscv64/SyscallEntryChecks.cpp
         Arch/riscv64/CreateThread.cpp
+        Arch/riscv64/ELFMachine.cpp
         Arch/riscv64/SafeMem.cpp
         Arch/riscv64/SBI.cpp
         Arch/riscv64/SmapDisabler.cpp
@@ -646,6 +649,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Ptrace.cpp
         Arch/powerpc/SyscallEntryChecks.cpp
         Arch/powerpc/CreateThread.cpp
+        Arch/powerpc/ELFMachine.cpp
         Arch/powerpc/BootHandoff.cpp
         Arch/powerpc/FPUState.S
         Arch/powerpc/HashPageTable.cpp
