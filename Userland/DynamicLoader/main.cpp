@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -132,32 +132,7 @@ static int _main(int argc, char** argv, char** envp, bool is_secure)
     VERIFY_NOT_REACHED();
 }
 
-// The compiler expects a previous declaration
-void _start(int, char**, char**) __attribute__((used));
 void _entry(int, char**, char**) __attribute__((used));
-
-NAKED void _start(int, char**, char**)
-{
-#if ARCH(AARCH64)
-    // Make sure backtrace computation stops here by setting FP and LR to 0.
-    // FIXME: The kernel should ensure that registers are zeroed on program start
-    asm(
-        "mov x29, 0\n"
-        "mov x30, 0\n"
-        "bl _entry\n");
-#elif ARCH(RISCV64)
-    asm(
-        "li fp, 0\n"
-        "li ra, 0\n"
-        "tail _entry@plt\n");
-#elif ARCH(X86_64)
-    asm(
-        "push $0\n"
-        "jmp _entry@plt\n");
-#else
-#    error "Unknown architecture"
-#endif
-}
 
 [[gnu::no_stack_protector]] void _entry(int argc, char** argv, char** envp)
 {

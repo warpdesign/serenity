@@ -1,8 +1,8 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Mițca Dumitru <dumitru0mitca@gmail.com>
- * Copyright (c) 2022, the SerenityOS developers.
- * Copyright (c) 2022, Leon Albrecht <leon.a@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Mițca Dumitru <dumitru0mitca@gmail.com>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
+ * Copyright (c) 2022-2026, Leon Albrecht <leon.a@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -531,7 +531,7 @@ long lrintl(long double value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 long lrint(double value)
@@ -555,7 +555,7 @@ long lrint(double value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 long lrintf(float value)
@@ -579,7 +579,7 @@ long lrintf(float value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 
@@ -600,7 +600,7 @@ long long llrintl(long double value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 long long llrint(double value)
@@ -620,7 +620,7 @@ long long llrint(double value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 long long llrintf(float value)
@@ -640,7 +640,7 @@ long long llrintf(float value)
         : "st");
     return res;
 #else
-#    error "Unknown architecture"
+    return static_cast<long long>(internal_to_integer(value, RoundingMode { fegetround() }));
 #endif
 }
 

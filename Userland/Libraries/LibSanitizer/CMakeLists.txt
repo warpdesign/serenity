@@ -3,6 +3,10 @@ set(SOURCES
     ../LibC/ssp.cpp
 )
 
+if (SERENITY_ARCH STREQUAL "powerpc")
+    list(APPEND SOURCES ../LibC/arch/powerpc/stack_chk_fail_local.cpp)
+endif()
+
 serenity_libc(LibUBSanitizer ubsan)
 target_link_options(LibUBSanitizer PRIVATE -nostdlib)
 

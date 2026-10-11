@@ -1,12 +1,18 @@
 set(SOURCES
     main.cpp
     misc.cpp
+    arch/${SERENITY_ARCH}/entry.S
 )
 
 add_library(DynamicLoader_CompileOptions INTERFACE)
 target_compile_definitions(DynamicLoader_CompileOptions INTERFACE NO_TLS _DYNAMIC_LOADER)
 target_compile_options(DynamicLoader_CompileOptions INTERFACE $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti> -fpie -ffunction-sections -fdata-sections)
-target_link_options(DynamicLoader_CompileOptions INTERFACE -nolibc -nostdlib++ -nostartfiles -static-libgcc -fpie -Wl,--gc-sections)
+if (SERENITY_ARCH STREQUAL "powerpc")
+    set(loader_libgcc_option -nodefaultlibs)
+else()
+    set(loader_libgcc_option -static-libgcc)
+endif()
+target_link_options(DynamicLoader_CompileOptions INTERFACE -nolibc -nostdlib++ -nostartfiles ${loader_libgcc_option} -fpie -Wl,--gc-sections)
 target_link_options(DynamicLoader_CompileOptions INTERFACE -fno-sanitize=undefined) # Sanitizer runtime is linked in manually
 
 add_executable(Loader.so ${SOURCES})

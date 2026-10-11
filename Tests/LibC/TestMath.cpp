@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,10 +13,34 @@
 #endif
 
 #include <LibTest/TestCase.h>
+#include <LibC/fenv.h>
 
 #include <AK/Math.h>
 #include <float.h>
 #include <math.h>
+
+TEST_CASE(lrint_respects_current_rounding_mode)
+{
+    auto original_rounding_mode = fegetround();
+
+    EXPECT_EQ(fesetround(FE_DOWNWARD), 0);
+    EXPECT_EQ(lrintf(1.75f), 1L);
+    EXPECT_EQ(lrint(-1.25), -2L);
+    EXPECT_EQ(lrintl(1.75L), 1L);
+    EXPECT_EQ(llrintf(1.75f), 1LL);
+    EXPECT_EQ(llrint(-1.25), -2LL);
+    EXPECT_EQ(llrintl(1.75L), 1LL);
+
+    EXPECT_EQ(fesetround(FE_UPWARD), 0);
+    EXPECT_EQ(lrintf(-1.75f), -1L);
+    EXPECT_EQ(lrint(1.25), 2L);
+    EXPECT_EQ(lrintl(-1.75L), -1L);
+    EXPECT_EQ(llrintf(-1.75f), -1LL);
+    EXPECT_EQ(llrint(1.25), 2LL);
+    EXPECT_EQ(llrintl(-1.75L), -1LL);
+
+    EXPECT_EQ(fesetround(original_rounding_mode), 0);
+}
 
 TEST_CASE(fmod)
 {

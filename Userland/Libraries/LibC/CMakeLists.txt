@@ -87,6 +87,10 @@ if (SERENITY_ARCH STREQUAL "x86_64")
     )
 endif()
 
+if (SERENITY_ARCH STREQUAL "powerpc")
+    list(APPEND SOURCES arch/powerpc/stack_chk_fail_local.cpp)
+endif()
+
 # ===== LibC headers =====
 # NOTE: We have to symlink LibC's headers into the sysroot to satisfy libc++'s include priority
 #       requirements.
@@ -96,7 +100,11 @@ link_libc_headers("${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_STAGING_PREFIX}/${CMAKE
 # ===== Start files =====
 # NOTE: We link all these against NoCoverage so that we don't break ports by requiring coverage
 #       symbols in runtime/startup objects.
-add_library(crt0 STATIC crt0.cpp)
+if (SERENITY_ARCH STREQUAL "powerpc")
+    add_library(crt0 STATIC arch/powerpc/crt0.cpp)
+else()
+    add_library(crt0 STATIC crt0.cpp)
+endif()
 target_link_libraries(crt0 PRIVATE NoCoverage)
 add_custom_command(
     TARGET crt0 POST_BUILD
@@ -115,9 +123,22 @@ else()
 endif()
 
 serenity_libc(LibC c)
+if (SERENITY_ARCH STREQUAL "powerpc")
+    target_include_directories(LibC BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
 add_dependencies(LibC crt0 LibUBSanitizer)
 target_link_libraries(LibC PRIVATE LibSystem LibTimeZone)
 target_link_options(LibC PRIVATE -nolibc)
+if (SERENITY_ARCH STREQUAL "powerpc")
+    target_link_options(LibC PRIVATE -nodefaultlibs)
+    # Export the RTTI base classes expected by C++ shared libraries. The
+    # cross toolchain has libsupc++.a but no shared C++ ABI runtime.
+    target_link_options(LibC PRIVATE
+        LINKER:--undefined=_ZTVN10__cxxabiv117__class_type_infoE
+        LINKER:--undefined=_ZTVN10__cxxabiv120__si_class_type_infoE
+        LINKER:--undefined=_ZTVN10__cxxabiv121__vmi_class_type_infoE)
+    target_link_libraries(LibC PRIVATE supc++ gcc)
+endif()
 
 # Provide a linker script instead of various other libraries that tells everything to link against LibC.
 file(WRITE "${CMAKE_STAGING_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libpthread.so" "INPUT(libc.so)")
@@ -127,6 +148,10 @@ file(WRITE "${CMAKE_STAGING_PREFIX}/${CMAKE_INSTALL_LIBDIR}/libssp.so" "INPUT(li
 
 # ===== LibC for DynamicLoader =====
 add_library(DynamicLoader_LibC STATIC ${SOURCES})
+if (SERENITY_ARCH STREQUAL "powerpc")
+    target_include_directories(DynamicLoader_LibC BEFORE PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(DynamicLoader_LibC PUBLIC gcc)
+endif()
 target_link_libraries(DynamicLoader_LibC
     PUBLIC DynamicLoader_CompileOptions
     PRIVATE DynamicLoader_LibSystem

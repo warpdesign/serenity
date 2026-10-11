@@ -12,6 +12,15 @@ function(serenity_set_implicit_links target_name)
     # slightly outdated stub in the sysroot, but have not yet installed the freshly
     # built LibC.
     target_link_libraries(${target_name} PRIVATE LibC)
+    if ("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "powerpc" AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        # This cross toolchain provides static libgcc but no libgcc_s or
+        # libgcc_eh. Userland does not use C++ exceptions.
+        target_link_options(${target_name} PRIVATE -nodefaultlibs)
+        target_link_libraries(${target_name} PRIVATE gcc)
+        # GCC emits a hidden local call for stack protector failures in each
+        # shared object, so the thunk must be linked into every target.
+        target_sources(${target_name} PRIVATE "${SerenityOS_SOURCE_DIR}/Userland/Libraries/LibC/arch/powerpc/stack_chk_fail_local.cpp")
+    endif()
 endfunction()
 
 function(serenity_install_headers target_name)
