@@ -10,6 +10,10 @@
 
 #include <AK/Math/Macros.h>
 
+#if ARCH(POWERPC32)
+#    include <AK/Arch/powerpc/Sqrt.h>
+#endif
+
 namespace AK {
 
 template<FloatingPoint T>
@@ -56,11 +60,9 @@ constexpr T sqrt(T x)
     }
     if constexpr (IsSame<T, long double>)
         TODO_RISCV64();
+#elif ARCH(POWERPC32)
+    return PowerPC::sqrt(x);
 #else
-#    if defined(AK_OS_SERENITY)
-    // TODO: Add implementation for this function.
-    TODO();
-#    endif
     CALL_BUILTIN(sqrt, x);
 #endif
 }

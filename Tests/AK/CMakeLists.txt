@@ -109,14 +109,39 @@ endforeach()
 target_link_libraries(TestString PRIVATE LibUnicode)
 
 if (NOT CMAKE_CROSSCOMPILING)
+    serenity_test("TestPowerPCSqrt.cpp" AK)
     add_custom_target(AKCheckQuick
         COMMAND "$<TARGET_FILE:TestBitStream>"
-        DEPENDS TestBitStream
+        COMMAND "$<TARGET_FILE:TestAKMath>" --tests sqrt_runtime
+        COMMAND "$<TARGET_FILE:TestPowerPCSqrt>" --tests
+        DEPENDS TestBitStream TestAKMath TestPowerPCSqrt
         USES_TERMINAL
     )
     add_custom_target(AKCheck
         COMMAND "$<TARGET_FILE:TestEndian>"
         DEPENDS AKCheckQuick TestEndian
         USES_TERMINAL
+    )
+endif()
+
+if (SERENITY_ARCH STREQUAL "powerpc")
+    set(powerpc_ak_math_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_sqrt_runtime.py")
+    set(powerpc_ak_math_arguments
+        --compiler "${CMAKE_CXX_COMPILER}" --qemu qemu-system-ppc
+        --kernel-loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --libc "$<TARGET_FILE:LibC>" --libsystem "$<TARGET_FILE:LibSystem>"
+    )
+    add_custom_target(PowerPCAKMathCheckQuick
+        COMMAND python3 "${powerpc_ak_math_test}" ${powerpc_ak_math_arguments}
+        DEPENDS PowerPCFirmwareLoader Loader.so LibC LibSystem
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCAKMathCheck
+        COMMAND python3 "${powerpc_ak_math_test}" ${powerpc_ak_math_arguments} --memory 512 --cpu 750cxe
+        DEPENDS PowerPCAKMathCheckQuick
+        USES_TERMINAL
+        VERBATIM
     )
 endif()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, the SerenityOS developers.
+ * Copyright (c) 2023-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,6 +8,14 @@
 #include <LibTest/TestCase.h>
 
 #include <AK/Math.h>
+
+TEST_CASE(sqrt_runtime)
+{
+    volatile float float_input = 9.0f;
+    volatile double double_input = 25.0;
+    EXPECT_EQ(AK::sqrt(float_input), 3.0f);
+    EXPECT_EQ(AK::sqrt(double_input), 5.0);
+}
 
 // Test cases for pow(2, x) generated with Python + numpy:
 // echo -e "import numpy as np\nfor x in np.arange(-1020, 1020, 0.9):\n    print(f'{{ {x}, {2**x} }},')" | python3
