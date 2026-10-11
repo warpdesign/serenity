@@ -23,6 +23,7 @@ def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, term
             "-M", "pegasos2",
             "-m", str(memory),
             "-kernel", str(loader),
+            "-append", "serenity-loader-stop-before-kernel",
             "-display", "none",
             "-serial", "none",
             "-monitor", f"unix:{monitor},server,nowait",
@@ -165,7 +166,7 @@ def main():
             read_physical_memory(monitor, reads)
 
         output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
-                                  b"SerenityOS PowerPC loader: boot handoff validated", inspect=inspect)
+                                  b"SerenityOS PowerPC loader: PCI bridge handoff prepared", inspect=inspect)
         for marker in (
             b"SerenityOS PowerPC loader: kernel ELF32 validated",
             b"SerenityOS PowerPC loader: load span",
@@ -180,6 +181,7 @@ def main():
             b"SerenityOS PowerPC loader: mapped pages",
             b"SerenityOS PowerPC loader: high kernel alias passed",
             b"SerenityOS PowerPC loader: boot handoff validated",
+            b"SerenityOS PowerPC loader: PCI bridge handoff prepared",
         ):
             if marker not in output:
                 raise SystemExit(f"PowerPC loader missed {marker!r}:\n{output.decode(errors='replace')}")

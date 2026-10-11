@@ -15,6 +15,7 @@ namespace Kernel::PowerPC::Pegasos2 {
 class PCIHostController final : public PCI::HostController {
 public:
     static ErrorOr<NonnullOwnPtr<PCIHostController>> create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const&);
+    ErrorOr<void> assign_unconfigured_resources(PowerPCPCIHostBridgeInfo const&);
 
 private:
     PCIHostController(PCI::Domain const&, Memory::TypedMapping<volatile u32[]>, u16 address_offset);

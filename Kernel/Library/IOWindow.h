@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/ByteReader.h>
+#include <AK/Endian.h>
 #include <AK/Platform.h>
 #include <AK/Types.h>
 #if ARCH(X86_64)
@@ -67,7 +68,7 @@ public:
 #endif
 
 private:
-    explicit IOWindow(NonnullOwnPtr<Memory::TypedMapping<u8 volatile>>);
+    explicit IOWindow(NonnullOwnPtr<Memory::TypedMapping<u8 volatile>>, bool is_pci_io_space = false);
 
     u8 volatile* as_memory_address_pointer();
 
@@ -109,6 +110,8 @@ private:
         // might completely lock up because of an unaligned memory access to their registers.
         VERIFY((start_offset % sizeof(T)) == 0);
         data = *(T volatile*)(as_memory_address_pointer() + start_offset);
+        if (m_is_pci_io_space)
+            data = AK::convert_between_host_and_little_endian(data);
     }
 
     template<typename T>
@@ -127,10 +130,13 @@ private:
         // can cause problems with strict bare metal hardware. For example, some XHCI USB controllers
         // might completely lock up because of an unaligned memory access to their registers.
         VERIFY((start_offset % sizeof(T)) == 0);
+        if (m_is_pci_io_space)
+            value = AK::convert_between_host_and_little_endian(value);
         *(T volatile*)(as_memory_address_pointer() + start_offset) = value;
     }
 
     SpaceType m_space_type { SpaceType::Memory };
+    bool m_is_pci_io_space { false };
 
     OwnPtr<Memory::TypedMapping<u8 volatile>> m_memory_mapped_range;
 

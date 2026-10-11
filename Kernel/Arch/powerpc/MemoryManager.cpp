@@ -75,23 +75,10 @@ void MemoryManager::unmap_text_after_init()
 
 UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& global_data)
 {
-    PhysicalAddress highest_physical_address;
-    for (auto const& range : global_data.used_memory_ranges) {
-        if (range.end > highest_physical_address)
-            highest_physical_address = range.end;
-    }
-    for (auto const& range : global_data.physical_memory_ranges) {
-        auto end = range.start.offset(range.length);
-        if (end > highest_physical_address)
-            highest_physical_address = end;
-    }
-    if (!g_boot_info.boot_framebuffer.paddr.is_null() && g_boot_info.boot_framebuffer.type != BootFramebufferType::None) {
-        auto end = g_boot_info.boot_framebuffer.paddr.offset(g_boot_info.boot_framebuffer.height * g_boot_info.boot_framebuffer.pitch);
-        if (end > highest_physical_address)
-            highest_physical_address = end;
-    }
-
-    m_physical_page_entries_count = PhysicalAddress::physical_page_index(highest_physical_address.get()) + 1;
+    // PhysicalRAMPage also represents PCI framebuffer pages that are not in
+    // firmware's RAM map. A flat array covering the 32-bit physical bus keeps
+    // those pages addressable when their BARs are assigned after MM startup.
+    m_physical_page_entries_count = (1ull << 32) / PAGE_SIZE;
     VERIFY(m_physical_page_entries_count != 0);
     VERIFY(!Checked<size_t>::multiplication_would_overflow(m_physical_page_entries_count, sizeof(PhysicalPageEntry)));
     auto entry_bytes = m_physical_page_entries_count * sizeof(PhysicalPageEntry);

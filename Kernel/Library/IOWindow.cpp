@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -46,7 +46,7 @@ ErrorOr<NonnullOwnPtr<IOWindow>> IOWindow::create_from_io_window_with_offset(u64
         return Error::from_errno(EOVERFLOW);
 
     auto memory_mapped_range = TRY(Memory::adopt_new_nonnull_own_typed_mapping<u8 volatile>(m_memory_mapped_range->paddr.offset(offset), space_length, Memory::Region::Access::ReadWrite));
-    return TRY(adopt_nonnull_own_or_enomem(new (nothrow) IOWindow(move(memory_mapped_range))));
+    return TRY(adopt_nonnull_own_or_enomem(new (nothrow) IOWindow(move(memory_mapped_range), m_is_pci_io_space)));
 }
 
 ErrorOr<NonnullOwnPtr<IOWindow>> IOWindow::create_from_io_window_with_offset(u64 offset)
@@ -87,7 +87,7 @@ ErrorOr<NonnullOwnPtr<IOWindow>> IOWindow::create_for_pci_device_bar(PCI::Device
 #else
         // On non-x86 systems, I/O BARs are mapped to MMIO instead of using special I/O access instructions.
         auto memory_mapped_range = TRY(PCI::adopt_new_nonnull_own_bar_mapping<u8 volatile>(pci_device_identifier, pci_bar, space_length));
-        return TRY(adopt_nonnull_own_or_enomem(new (nothrow) IOWindow(move(memory_mapped_range))));
+        return TRY(adopt_nonnull_own_or_enomem(new (nothrow) IOWindow(move(memory_mapped_range), true)));
 #endif
     }
 
@@ -101,8 +101,9 @@ ErrorOr<NonnullOwnPtr<IOWindow>> IOWindow::create_for_pci_device_bar(PCI::Device
     return create_for_pci_device_bar(pci_device_identifier, pci_bar, pci_bar_space_size);
 }
 
-IOWindow::IOWindow(NonnullOwnPtr<Memory::TypedMapping<u8 volatile>> memory_mapped_range)
+IOWindow::IOWindow(NonnullOwnPtr<Memory::TypedMapping<u8 volatile>> memory_mapped_range, bool is_pci_io_space)
     : m_space_type(SpaceType::Memory)
+    , m_is_pci_io_space(is_pci_io_space)
     , m_memory_mapped_range(move(memory_mapped_range))
 {
 }

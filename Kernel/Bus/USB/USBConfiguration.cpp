@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Jesse Buhagiar <jesse.buhagiar@serenityos.org>
+ * Copyright (c) 2022-2026, Jesse Buhagiar <jesse.buhagiar@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -79,7 +79,7 @@ ErrorOr<void> USBConfiguration::enumerate_interfaces()
     while (!stream.is_eof()) {
         // Peek the descriptor header.
         auto const descriptor_header = TRY(stream.read_value<USBDescriptorCommon>());
-        MUST(stream.seek(-sizeof(USBDescriptorCommon), SeekMode::FromCurrentPosition));
+        MUST(stream.seek(-static_cast<i64>(sizeof(USBDescriptorCommon)), SeekMode::FromCurrentPosition));
 
         switch (descriptor_header.descriptor_type) {
         case DESCRIPTOR_TYPE_INTERFACE: {

@@ -10,6 +10,7 @@
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
 #include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
 
 using FirmwareEntry = int (*)(void*);
 
@@ -113,15 +114,74 @@ static u32 discover_timebase_frequency(FirmwareEntry firmware)
     return frequency;
 }
 
-static u32 discover_controller_base(FirmwareEntry firmware, u32 root)
+static u32 discover_controller_base(FirmwareEntry firmware, u32 root, u32& south_bridge)
 {
+    south_bridge = 0;
     for (u32 child = first_child(firmware, root); child != 0 && child != 0xffffffffu; child = next_peer(firmware, child)) {
         u32 acknowledge = 0;
         if (get_property(firmware, child, "8259-interrupt-acknowledge", &acknowledge, sizeof(acknowledge)) == sizeof(acknowledge)
-            && (acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET)
+            && (acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET) {
+            south_bridge = child;
             return acknowledge & ~0xffffu;
+        }
     }
     return 0;
+}
+
+static bool discover_pci_host_bridges(FirmwareEntry firmware, u32 root, u32 south_bridge,
+    PowerPCPCIHostBridgeInfo (&bridges)[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT])
+{
+    if (south_bridge == 0 || south_bridge == 0xffffffffu)
+        return false;
+    u32 parent_address_cells = 1;
+    if (get_property(firmware, root, "#address-cells", &parent_address_cells, sizeof(parent_address_cells)) != sizeof(parent_address_cells))
+        parent_address_cells = 1;
+    if (parent_address_cells < 1 || parent_address_cells > 2)
+        return false;
+
+    u32 seen_bridges = 0;
+    for (u32 bridge = first_child(firmware, root); bridge != 0 && bridge != 0xffffffffu; bridge = next_peer(firmware, bridge)) {
+        char device_type[8] {};
+        int type_length = get_property(firmware, bridge, "device_type", device_type, sizeof(device_type));
+        if (type_length < 3 || device_type[0] != 'p' || device_type[1] != 'c' || device_type[2] != 'i'
+            || (type_length > 3 && device_type[3] != '\0'))
+            continue;
+
+        u32 bridge_number = 0;
+        if (get_property(firmware, bridge, "pci-bridge-number", &bridge_number, sizeof(bridge_number)) != sizeof(bridge_number))
+            bridge_number = bridge == south_bridge ? 0 : 1;
+        if (bridge_number >= POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT || (seen_bridges & (1u << bridge_number))
+            || (bridge == south_bridge && bridge_number != 0))
+            return false;
+
+        u32 child_address_cells = 0;
+        u32 size_cells = 0;
+        if (get_property(firmware, bridge, "#address-cells", &child_address_cells, sizeof(child_address_cells)) != sizeof(child_address_cells)
+            || get_property(firmware, bridge, "#size-cells", &size_cells, sizeof(size_cells)) != sizeof(size_cells)
+            || child_address_cells != 3)
+            return false;
+
+        u32 bus_range[2] { 0, 255 };
+        int bus_length = get_property(firmware, bridge, "bus-range", bus_range, sizeof(bus_range));
+        if (bus_length != -1 && bus_length != sizeof(bus_range))
+            return false;
+        if (bus_range[0] > bus_range[1] || bus_range[1] > 255)
+            return false;
+
+        u32 cells[96];
+        int length = get_property(firmware, bridge, "ranges", cells, sizeof(cells));
+        if (length <= 0 || length % sizeof(u32) != 0)
+            return false;
+        auto& info = bridges[bridge_number];
+        if (!powerpc_parse_open_firmware_pci_ranges(cells, length / sizeof(u32), child_address_cells,
+                parent_address_cells, size_cells, info.ranges, POWERPC_PEGASOS2_PCI_MAX_RANGES, &info.range_count))
+            return false;
+        info.bridge_number = bridge_number;
+        info.start_bus = bus_range[0];
+        info.end_bus = bus_range[1];
+        seen_bridges |= 1u << bridge_number;
+    }
+    return seen_bridges == (1u << POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT) - 1;
 }
 
 static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
@@ -139,9 +199,9 @@ static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
     return count;
 }
 
-static bool wants_kernel_entry()
+static bool should_stop_before_kernel()
 {
-    char const* needle = "serenity-loader-enter-kernel";
+    char const* needle = "serenity-loader-stop-before-kernel";
     for (u32 offset = 0; s_command_line[offset] != '\0'; ++offset) {
         u32 index = 0;
         while (needle[index] != '\0' && s_command_line[offset + index] == needle[index])
@@ -301,7 +361,13 @@ extern "C" void loader_main(FirmwareEntry firmware)
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { mappings.table_physical };
     boot_info.arch_specific.hpt_group_count = mappings.group_count;
     boot_info.arch_specific.timebase_frequency_hz = discover_timebase_frequency(firmware);
-    boot_info.arch_specific.mv64361_registers_physical_base = discover_controller_base(firmware, root);
+    u32 south_bridge = 0;
+    boot_info.arch_specific.mv64361_registers_physical_base = discover_controller_base(firmware, root, south_bridge);
+    if (!discover_pci_host_bridges(firmware, root, south_bridge, boot_info.arch_specific.pci_host_bridges)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware PCI bridges unavailable\r\n");
+        return;
+    }
+    boot_info.arch_specific.pci_host_bridge_count = POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT;
     boot_info.cmdline = AK::StringView { s_command_line, prepare_command_line(firmware, chosen) };
 
     PowerPCHashPageTable validated_table;
@@ -309,17 +375,19 @@ extern "C" void loader_main(FirmwareEntry firmware)
         || validated_table.entries != reinterpret_cast<PowerPCHPTEntry*>(mappings.table_virtual)
         || validated_table.group_count != mappings.group_count
         || !Kernel::PowerPC::boot_timebase_frequency(boot_info).has_value()
-        || !Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value()) {
+        || !Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value()
+        || !Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value()) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff invalid\r\n");
         return;
     }
     write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff validated\r\n");
-    if (wants_kernel_entry()) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: entering kernel\r\n");
-        powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1));
-        auto entry = reinterpret_cast<void (*)(Kernel::BootInfo const&)>(static_cast<u32>(runtime_base) + plan.entry_offset);
-        entry(boot_info);
-        powerpc_loader_disable_translation();
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel returned\r\n");
-    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: PCI bridge handoff prepared\r\n");
+    if (should_stop_before_kernel())
+        return;
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: entering kernel\r\n");
+    powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1));
+    auto kernel_entry = reinterpret_cast<void (*)(Kernel::BootInfo const&)>(static_cast<u32>(runtime_base) + plan.entry_offset);
+    kernel_entry(boot_info);
+    powerpc_loader_disable_translation();
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel returned\r\n");
 }

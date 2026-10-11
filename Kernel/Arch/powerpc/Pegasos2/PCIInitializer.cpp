@@ -43,9 +43,18 @@ UNMAP_AFTER_INIT void initialize()
         return;
     }
 
+    auto south_controller = south.release_value();
+    auto agp_controller = agp.release_value();
+    if (south_controller->assign_unconfigured_resources((*bridges)[0]).is_error()
+        || agp_controller->assign_unconfigured_resources((*bridges)[1]).is_error()) {
+        dmesgln("PCI: Failed to assign Pegasos 2 device resources");
+        g_pci_access_io_probe_failed.set();
+        return;
+    }
+
     auto& access = Access::the();
-    access.add_host_controller(south.release_value());
-    access.add_host_controller(agp.release_value());
+    access.add_host_controller(move(south_controller));
+    access.add_host_controller(move(agp_controller));
     access.rescan_hardware();
     PCIBusSysFSDirectory::initialize();
     MUST(PCI::enumerate([](DeviceIdentifier const& identifier) {

@@ -26,7 +26,6 @@ def main():
             "-M", "pegasos2",
             "-m", str(args.memory),
             "-kernel", args.loader,
-            "-append", "serenity-loader-enter-kernel",
             "-display", "none",
             "-serial", f"file:{serial}",
             "-monitor", "none",
@@ -53,14 +52,19 @@ def main():
             b"Loading kernel symbol table",
             b"MM: PowerPC physical-page entries",
             b"Starting SerenityOS...",
-            b"Kernel Commandline: serenity-loader-enter-kernel serial_debug",
+            b"Kernel Commandline: serial_debug",
             b"Boot method: FirmwareMemoryMap",
             b"KernelRng: No entropy source available!",
             b"Scheduler[0]: idle loop running",
+            b"PCI [0000:00:0c:02] PCI::HardwareID [1106:3038]",
+            b"UHCI: Reset completed",
+            b"UHCI: Started",
+            b"Framebuffer Console: taking",
             b"VFS SyncTask is running",
         )
         expected_firmware = (
             b"SerenityOS PowerPC loader: boot handoff validated",
+            b"SerenityOS PowerPC loader: PCI bridge handoff prepared",
             b"SerenityOS PowerPC loader: entering kernel",
         )
         missing = [marker for marker in expected_serial if marker not in serial_output]
