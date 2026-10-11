@@ -48,6 +48,23 @@ powerpc_system_call_probe_handler:
     mfspr 11, 27
     stw 11, 148(12)
 
+    // The vector runs in real mode. Save the user's high SR and restore the
+    // fixed kernel VSIDs before any translated kernel access is possible.
+    mfsr 11, 12
+    lis 12, powerpc_user_probe_entry_high_segment@ha
+    stw 11, powerpc_user_probe_entry_high_segment@l(12)
+    sync
+    lis 11, 0x2000
+    ori 11, 11, 12
+    mtsr 12, 11
+    addi 11, 11, 1
+    mtsr 13, 11
+    addi 11, 11, 1
+    mtsr 14, 11
+    addi 11, 11, 1
+    mtsr 15, 11
+    isync
+
     lis 12, powerpc_user_probe_syscall_count@ha
     lwz 11, powerpc_user_probe_syscall_count@l(12)
     addi 11, 11, 1
@@ -67,6 +84,19 @@ powerpc_system_call_probe_handler:
     rfi
 
 .Lreturn_to_user:
+    // Low SR1 still contains the process VSID base + 1. Restore the unused
+    // high VSIDs before rfi so a read-only kernel mapping cannot be read.
+    sync
+    mfsr 11, 1
+    addi 11, 11, 11
+    mtsr 12, 11
+    addi 11, 11, 1
+    mtsr 13, 11
+    addi 11, 11, 1
+    mtsr 14, 11
+    addi 11, 11, 1
+    mtsr 15, 11
+    isync
     lis 12, powerpc_user_probe_observed_user_stack@ha
     stw 1, powerpc_user_probe_observed_user_stack@l(12)
     mfspr 11, 26

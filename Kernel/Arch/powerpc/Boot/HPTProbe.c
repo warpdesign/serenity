@@ -89,6 +89,7 @@ volatile Word powerpc_user_probe_observed_srr0;
 volatile Word powerpc_user_probe_observed_srr1;
 volatile Word powerpc_user_probe_saved_supervisor_stack;
 volatile Word powerpc_user_probe_observed_user_stack;
+volatile Word powerpc_user_probe_entry_high_segment;
 volatile Word powerpc_user_probe_saved_supervisor_cr;
 volatile Word powerpc_user_probe_syscall_count;
 
@@ -924,6 +925,7 @@ int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
     Word fault_status;
     __asm__ volatile("mfspr %0,272; mfspr %1,274; mfspr %2,273"
         : "=r"(isolated_faults_after), "=r"(fault_address), "=r"(fault_status));
+    Word second_syscall_high_segment = powerpc_user_probe_entry_high_segment;
 
     powerpc_activate_kernel_high_segments();
     int kernel_segments_restored = 1;
@@ -955,7 +957,8 @@ int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
         | (restored ? 1u << 11 : 0u)
         | (unmapped ? 1u << 12 : 0u)
         | (rejected_translated_switch ? 1u << 13 : 0u);
-    return powerpc_hpt_user_high_debug == 0x3fffu;
+    powerpc_hpt_user_high_debug |= second_syscall_high_segment == (0x20000000u | (user_base + 12)) ? 1u << 14 : 0u;
+    return powerpc_hpt_user_high_debug == 0x7fffu;
 }
 
 int powerpc_user_stack_observed(void)
