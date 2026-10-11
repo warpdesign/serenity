@@ -34,6 +34,7 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only TestCPUFeatures.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only TestProcessor.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only ../../../Kernel/Arch/powerpc/Processor.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/Processor.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/InterruptManagement.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Interrupts.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Pegasos2/InterruptController.cpp

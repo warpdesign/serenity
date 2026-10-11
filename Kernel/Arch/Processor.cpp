@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2022-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -233,10 +233,10 @@ ErrorOr<Vector<FlatPtr, 32>> ProcessorBase::capture_stack_trace(Thread& thread, 
             },
             false);
         TRY(result);
-#elif ARCH(AARCH64) || ARCH(RISCV64)
-        VERIFY_NOT_REACHED(); // We don't support SMP on AArch64 and RISC-V yet, so this should be unreachable.
 #else
-#    error Unknown architecture
+        // Only x86 currently supports capturing a stack from another active
+        // processor. Single-CPU architectures cannot reach this case.
+        VERIFY_NOT_REACHED();
 #endif
     } else {
         switch (thread.state()) {
