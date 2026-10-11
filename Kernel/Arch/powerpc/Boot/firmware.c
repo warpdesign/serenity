@@ -351,9 +351,9 @@ void boot_main(FirmwareEntry firmware_entry)
         else
             serial_write("SerenityOS PowerPC: PCI 64-bit address assignment failed\r\n");
         if (powerpc_pegasos2_pci_config_test(mv64361_registers_base))
-            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read passed\r\n");
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config access passed\r\n");
         else {
-            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read failed 0x");
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI config access failed 0x");
             serial_write_hex(powerpc_pegasos2_pci_config_debug);
             serial_write("\r\n");
         }
