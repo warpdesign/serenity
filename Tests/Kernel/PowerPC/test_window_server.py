@@ -6,6 +6,7 @@
 import argparse
 from contextlib import nullcontext
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -64,7 +65,7 @@ def create_disk(mke2fs, root, work):
     disk = work / "root.ext2"
     with disk.open("wb") as file:
         file.truncate(128 * 1024 * 1024)
-    subprocess.run([mke2fs, "-q", "-F", "-t", "ext2", "-O", "none", "-b", "1024", "-d", str(root), str(disk)], check=True)
+    subprocess.run([mke2fs, "-q", "-F", "-t", "ext2", "-O", "none", "-b", "4096", "-d", str(root), str(disk)], check=True)
     with disk.open("r+b") as file:
         file.seek(510)
         file.write(b"\x55\xaa")
@@ -101,7 +102,8 @@ def screenshot_is_window_server_frame(path):
 
 def boot_and_check(args, disk, work):
     serial = work / "serial.log"
-    monitor_path = work / "monitor.sock"
+    monitor_directory = tempfile.TemporaryDirectory(prefix="powerpc-window-server-monitor-", dir="/tmp")
+    monitor_path = Path(monitor_directory.name) / "monitor.sock"
     screenshot = work / "window-server.ppm"
     command = [
         args.qemu, "-M", "pegasos2", "-cpu", args.cpu, "-m", str(args.memory),
@@ -113,6 +115,7 @@ def boot_and_check(args, disk, work):
     ]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     passed = False
+    block_stats = b""
     errors = b""
     try:
         deadline = time.monotonic() + 330
@@ -131,12 +134,14 @@ def boot_and_check(args, disk, work):
                 if b"Entering WindowServer main loop" in output:
                     monitor_command(monitor, f"screendump {screenshot}")
                     if screenshot_is_window_server_frame(screenshot):
+                        block_stats = monitor_command(monitor, "info blockstats")
                         passed = True
                         break
                 time.sleep(0.5)
     finally:
         process.terminate()
         _, errors = process.communicate(timeout=5)
+        monitor_directory.cleanup()
 
     output = serial.read_bytes() if serial.exists() else b""
     if (not passed or b"Read system_mode: graphical" not in output
@@ -144,7 +149,9 @@ def boot_and_check(args, disk, work):
         raise SystemExit("Pegasos 2 WindowServer graphical boot failed:\n"
                          + output.decode(errors="replace")[-4500:]
                          + errors.decode(errors="replace")[-1000:])
-    print(f"Pegasos 2 WindowServer painted 1024x768 VirtIO GPU frame: {screenshot}")
+    match = re.search(rb"virtio_disk: rd_bytes=(\d+).*?rd_operations=(\d+)", block_stats)
+    io_summary = f", {int(match[2])} reads for {int(match[1])} bytes" if match else ""
+    print(f"Pegasos 2 WindowServer painted 1024x768 VirtIO GPU frame{io_summary}: {screenshot}")
 
 
 def main():
