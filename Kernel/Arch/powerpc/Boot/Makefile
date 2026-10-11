@@ -33,7 +33,7 @@ PAGE_MAPPING_TEST_OBJECTS := $(BUILD_DIR)/test_page_mapping.o
 VSID_ALLOCATOR_OBJECTS := $(BUILD_DIR)/vsid_allocator.o $(BUILD_DIR)/test_vsid_allocator.o
 FIRMWARE_MEMORY_MAP_TEST_OBJECTS := $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/test_firmware_memory_map.o
 BOOT_INFO_TEST_OBJECTS := $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/test_boot_info.o
-REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o
+REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o $(BUILD_DIR)/fork_registers.o
 STACK_TEST_OBJECTS := $(BUILD_DIR)/test_stack_unwinder.o
 TIMER_TEST_OBJECTS := $(BUILD_DIR)/test_decrementer.o
 PIC_TEST_OBJECTS := $(BUILD_DIR)/test_legacy_pic.o
@@ -237,6 +237,9 @@ $(BUILD_DIR)/test_register_state.o: ../../../../Tests/Kernel/PowerPC/TestRegiste
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_thread_registers.o: ../../../../Tests/Kernel/PowerPC/TestThreadRegisters.cpp ../ThreadRegisters.h ../ArchSpecificThreadData.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/fork_registers.o: ../ForkRegisters.cpp ../../../../Kernel/Arch/ForkRegisters.h ../ThreadRegisters.h ../RegisterState.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_stack_unwinder.o: ../../../../Tests/Kernel/PowerPC/TestStackUnwinder.cpp ../../../../AK/Arch/powerpc/StackUnwinder.h | $(BUILD_DIR)

@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, Idan Horowitz <idan.horowitz@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, Idan Horowitz <idan.horowitz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/ForkRegisters.h>
 #include <Kernel/Debug.h>
 #include <Kernel/Devices/TTY/TTY.h>
 #include <Kernel/FileSystem/Custody.h>
@@ -86,48 +87,7 @@ ErrorOr<FlatPtr> Process::sys$fork(RegisterState& regs)
     child_first_thread->m_alternative_signal_stack = Thread::current()->m_alternative_signal_stack;
 
     auto& child_regs = child_first_thread->m_regs;
-#if ARCH(X86_64)
-    child_regs.rax = 0; // fork() returns 0 in the child :^)
-    child_regs.rbx = regs.rbx;
-    child_regs.rcx = regs.rcx;
-    child_regs.rdx = regs.rdx;
-    child_regs.rbp = regs.rbp;
-    child_regs.rsp = regs.userspace_rsp;
-    child_regs.rsi = regs.rsi;
-    child_regs.rdi = regs.rdi;
-    child_regs.r8 = regs.r8;
-    child_regs.r9 = regs.r9;
-    child_regs.r10 = regs.r10;
-    child_regs.r11 = regs.r11;
-    child_regs.r12 = regs.r12;
-    child_regs.r13 = regs.r13;
-    child_regs.r14 = regs.r14;
-    child_regs.r15 = regs.r15;
-    child_regs.rflags = regs.rflags;
-    child_regs.rip = regs.rip;
-    child_regs.cs = regs.cs;
-
-    dbgln_if(FORK_DEBUG, "fork: child will begin executing at {:#04x}:{:p} with stack {:p}, kstack {:p}",
-        child_regs.cs, child_regs.rip, child_regs.rsp, child_regs.rsp0);
-#elif ARCH(AARCH64)
-    child_regs.x[0] = 0; // fork() returns 0 in the child :^)
-    for (size_t i = 1; i < array_size(child_regs.x); ++i)
-        child_regs.x[i] = regs.x[i];
-    child_regs.spsr_el1 = regs.spsr_el1;
-    child_regs.elr_el1 = regs.elr_el1;
-    child_regs.sp_el0 = regs.sp_el0;
-    child_regs.tpidr_el0 = regs.tpidr_el0;
-#elif ARCH(RISCV64)
-    for (size_t i = 0; i < array_size(child_regs.x); ++i)
-        child_regs.x[i] = regs.x[i];
-    child_regs.x[9] = 0; // fork() returns 0 in the child :^)
-    child_regs.sstatus = regs.sstatus;
-    child_regs.pc = regs.sepc;
-    dbgln_if(FORK_DEBUG, "fork: child will begin executing at {:p} with stack {:p}, kstack {:p}",
-        child_regs.pc, child_regs.sp(), child_regs.kernel_sp);
-#else
-#    error Unknown architecture
-#endif
+    initialize_fork_registers(child_regs, regs);
 
     Processor::store_fpu_state(child_first_thread->fpu_state());
 
