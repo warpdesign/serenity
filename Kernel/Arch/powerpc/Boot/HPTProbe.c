@@ -82,6 +82,10 @@ static int s_user_exception_frame_observed;
 static int s_user_external_irq_observed;
 volatile Word powerpc_hpt_user_high_debug;
 volatile Word powerpc_hpt_user_return_debug;
+volatile Word powerpc_probe_supervisor_return_srr0;
+volatile Word powerpc_probe_supervisor_return_srr1;
+volatile Word powerpc_probe_saved_sc_cr;
+volatile Word powerpc_probe_saved_sc_r11;
 volatile Word powerpc_probe_dsi_high_segment;
 
 volatile struct PowerPCExceptionState powerpc_user_probe_frame;
@@ -110,6 +114,8 @@ extern Word powerpc_user_probe_after_first_syscall[];
 extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top, Word extra_msr_bits);
 extern Word powerpc_enter_user_exception_frame_probe(struct PowerPCExceptionState* frame);
+extern Word powerpc_enter_user_translated_exception_frame_probe(struct PowerPCExceptionState* frame);
+extern char powerpc_user_translated_return_resume[];
 extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
 extern unsigned char powerpc_probe_high_stack[];
 extern unsigned char powerpc_probe_exception_stack[];
@@ -966,7 +972,7 @@ int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
     return powerpc_hpt_user_high_debug == 0xffffu;
 }
 
-int powerpc_hpt_user_exception_return_roundtrip(void)
+static int user_exception_return_roundtrip(int translated_supervisor_call)
 {
     powerpc_hpt_user_return_debug = 0x10000u;
     Word machine_state;
@@ -1024,12 +1030,16 @@ int powerpc_hpt_user_exception_return_roundtrip(void)
     powerpc_write_segment_register(1, 0x20000000u | UserProbeVSID);
     powerpc_user_probe_syscall_count = 0;
     powerpc_user_probe_observed_srr1 = 0;
+    powerpc_probe_supervisor_return_srr0 = 0;
+    powerpc_probe_supervisor_return_srr1 = 0;
     s_user_data_page[0] = 0;
 
     Word fault_count_before;
     Word supervisor_stack_before;
     __asm__ volatile("mfspr %0,272; mr %1,1" : "=r"(fault_count_before), "=r"(supervisor_stack_before));
-    Word result = powerpc_enter_user_exception_frame_probe(&s_user_return_frame);
+    Word result = translated_supervisor_call
+        ? powerpc_enter_user_translated_exception_frame_probe(&s_user_return_frame)
+        : powerpc_enter_user_exception_frame_probe(&s_user_return_frame);
     Word fault_count_after;
     Word fault_address;
     Word returned_state;
@@ -1069,7 +1079,21 @@ int powerpc_hpt_user_exception_return_roundtrip(void)
         && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage)
         && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeStackPage);
     powerpc_hpt_user_return_debug = checks | (restored ? 1u << 14 : 0u) | (unmapped ? 1u << 15 : 0u);
-    return powerpc_hpt_user_return_debug == 0xffffu;
+    if (translated_supervisor_call) {
+        powerpc_hpt_user_return_debug |= powerpc_probe_supervisor_return_srr0 == (Word)(__UINTPTR_TYPE__)powerpc_user_translated_return_resume ? 1u << 16 : 0u;
+        powerpc_hpt_user_return_debug |= (powerpc_probe_supervisor_return_srr1 & 0x4030u) == 0x30u ? 1u << 17 : 0u;
+    }
+    return powerpc_hpt_user_return_debug == (translated_supervisor_call ? 0x3ffffu : 0xffffu);
+}
+
+int powerpc_hpt_user_exception_return_roundtrip(void)
+{
+    return user_exception_return_roundtrip(0);
+}
+
+int powerpc_hpt_translated_user_exception_return_roundtrip(void)
+{
+    return user_exception_return_roundtrip(1);
 }
 
 int powerpc_user_stack_observed(void)

@@ -17,6 +17,39 @@ system_call_probe_vector_end:
 .section .text, "ax"
 .type powerpc_system_call_probe_handler, @function
 powerpc_system_call_probe_handler:
+    // A supervisor sc is the translated-to-real-mode door used by the
+    // return probe. Keep the user's CR and r11 in physical probe storage;
+    // SPRG2 retains the last data-fault address for the MMU tests.
+    mtspr 275,12
+    lis 12,powerpc_probe_saved_sc_r11@ha
+    stw 11,powerpc_probe_saved_sc_r11@l(12)
+    mfcr 11
+    lis 12,powerpc_probe_saved_sc_cr@ha
+    stw 11,powerpc_probe_saved_sc_cr@l(12)
+    mfspr 11,27
+    andi. 11,11,0x4000
+    bne .Luser_system_call
+    cmpwi 0,0x5352
+    bne .Lunexpected_supervisor_system_call
+    mfspr 11,27
+    lis 12,powerpc_probe_supervisor_return_srr1@ha
+    stw 11,powerpc_probe_supervisor_return_srr1@l(12)
+    mfspr 11,26
+    lis 12,powerpc_probe_supervisor_return_srr0@ha
+    stw 11,powerpc_probe_supervisor_return_srr0@l(12)
+    b powerpc_restore_user_exception_state_real_mode
+
+.Lunexpected_supervisor_system_call:
+    tw 31,0,0
+    b .Lunexpected_supervisor_system_call
+
+.Luser_system_call:
+    lis 12,powerpc_probe_saved_sc_cr@ha
+    lwz 11,powerpc_probe_saved_sc_cr@l(12)
+    mtcrf 255,11
+    lis 12,powerpc_probe_saved_sc_r11@ha
+    lwz 11,powerpc_probe_saved_sc_r11@l(12)
+    mfspr 12,275
     // Address translation is off. Save every user GPR before using a scratch
     // register, then capture the rest of the integer exception state.
     mtspr 275, 12
@@ -183,6 +216,46 @@ powerpc_enter_user_exception_frame_probe:
     addi 1,1,128
     blr
 .size powerpc_enter_user_exception_frame_probe, .-powerpc_enter_user_exception_frame_probe
+
+.global powerpc_enter_user_translated_exception_frame_probe
+.type powerpc_enter_user_translated_exception_frame_probe,@function
+powerpc_enter_user_translated_exception_frame_probe:
+    stwu 1,-128(1)
+    stw 2,8(1)
+    stmw 13,40(1)
+    mflr 0
+    stw 0,0(3)
+    mfcr 12
+    lis 11,powerpc_user_probe_saved_supervisor_cr@ha
+    stw 12,powerpc_user_probe_saved_supervisor_cr@l(11)
+    mfmsr 12
+    lis 11,powerpc_user_probe_saved_msr@ha
+    stw 12,powerpc_user_probe_saved_msr@l(11)
+    lis 12,.Lreturn_from_translated_user_frame@ha
+    addi 12,12,.Lreturn_from_translated_user_frame@l
+    lis 11,powerpc_user_probe_resume_address@ha
+    stw 12,powerpc_user_probe_resume_address@l(11)
+    lis 11,powerpc_user_probe_saved_supervisor_stack@ha
+    stw 1,powerpc_user_probe_saved_supervisor_stack@l(11)
+    mfmsr 11
+    ori 11,11,0x30
+    sync
+    mtmsr 11
+    isync
+    li 0,0x5352
+    sc
+.global powerpc_user_translated_return_resume
+powerpc_user_translated_return_resume:
+.Lreturn_from_translated_user_frame:
+    lis 11,powerpc_user_probe_saved_supervisor_cr@ha
+    lwz 11,powerpc_user_probe_saved_supervisor_cr@l(11)
+    mtcrf 255,11
+    lwz 2,8(1)
+    lmw 13,40(1)
+    mtlr 0
+    addi 1,1,128
+    blr
+.size powerpc_enter_user_translated_exception_frame_probe, .-powerpc_enter_user_translated_exception_frame_probe
 
 // Use a mapped user stack and data page, then fault on the high kernel load.
 .section .text.user_mode_probe, "ax"

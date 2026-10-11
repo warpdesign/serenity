@@ -90,6 +90,7 @@ extern int powerpc_hpt_kernel_protection_roundtrip(void);
 extern int powerpc_hpt_user_mode_roundtrip(void);
 extern int powerpc_hpt_user_high_vsid_isolation_roundtrip(void);
 extern int powerpc_hpt_user_exception_return_roundtrip(void);
+extern int powerpc_hpt_translated_user_exception_return_roundtrip(void);
 extern volatile Cell powerpc_hpt_user_high_debug;
 extern volatile Cell powerpc_hpt_user_return_debug;
 extern int powerpc_user_stack_observed(void);
@@ -551,6 +552,13 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: real-mode user frame return passed\r\n");
         else {
             serial_write("SerenityOS PowerPC: real-mode user frame return failed checks 0x");
+            serial_write_hex(powerpc_hpt_user_return_debug);
+            serial_write("\r\n");
+        }
+        if (powerpc_hpt_translated_user_exception_return_roundtrip())
+            serial_write("SerenityOS PowerPC: translated supervisor user return passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: translated supervisor user return failed checks 0x");
             serial_write_hex(powerpc_hpt_user_return_debug);
             serial_write("\r\n");
         }
