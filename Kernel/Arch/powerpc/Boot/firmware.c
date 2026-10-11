@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 
 typedef unsigned int Cell;
 typedef int (*FirmwareEntry)(void*);
@@ -68,6 +69,7 @@ extern int powerpc_external_irq_roundtrip(Cell);
 extern int powerpc_run_high_stack_external_irq_probe(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
+extern int powerpc_debug_output_test(void);
 extern int powerpc_hpt_external_irq_stack_roundtrip(Cell);
 extern int powerpc_hpt_external_irq_high_handler_roundtrip(Cell);
 extern int powerpc_hpt_user_external_irq_observed(void);
@@ -190,7 +192,7 @@ static int initialize_qemu_pegasos2_serial(void)
     if ((machine_state & 0x30) != 0)
         return 0;
 
-    s_uart = (volatile unsigned char*)0xfe0002f8u;
+    s_uart = (volatile unsigned char*)PEGASOS2_UART_PHYSICAL_BASE;
     uart_write_register(s_uart, 1, 0);
     uart_write_register(s_uart, 3, 0x80);
     uart_write_register(s_uart, 0, 1);
@@ -439,6 +441,8 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
+        if (!powerpc_debug_output_test())
+            serial_write("SerenityOS PowerPC: kernel debug UART failed\r\n");
         if (powerpc_hpt_external_irq_stack_roundtrip(timebase_frequency))
             serial_write("SerenityOS PowerPC: HPT external IRQ stack passed\r\n");
         else
