@@ -628,7 +628,7 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
 static int user_segments_match(Word vsid_base)
 {
     for (Word segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment) {
-        if (powerpc_read_segment_register(segment) != vsid_base + segment)
+        if (powerpc_read_segment_register(segment) != (0x20000000u | (vsid_base + segment)))
             return 0;
     }
     return 1;

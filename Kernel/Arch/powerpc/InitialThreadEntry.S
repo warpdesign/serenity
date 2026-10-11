@@ -25,6 +25,14 @@ powerpc_start_initial_context:
     // r3: prepared ThreadRegisters, r4: initial Thread.
     lwz 1,PPC_CONTEXT_GPR1(3)
     lwz 2,PPC_CONTEXT_GPR2(3)
+    // The loader's BAT0 identity mapping kept the low bootstrap stack
+    // accessible through early initialization. With r1 now on the HPT-backed
+    // high kernel stack, remove that mapping before user processes run.
+    li 11,0
+    sync
+    mtspr 528,11 // IBAT0U
+    mtspr 536,11 // DBAT0U
+    isync
     lwz 12,PPC_CONTEXT_IP(3)
     mtctr 12
     mr 3,4

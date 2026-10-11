@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/StdLibExtraDetails.h>
 #include <Kernel/API/Syscall.h>
 #include <Kernel/Arch/RegisterState.h>
 #include <Kernel/Arch/SyscallEntry.h>
@@ -24,15 +25,60 @@ extern bool g_in_system_shutdown;
 
 namespace Syscall {
 
-using Handler = auto (Process::*)(FlatPtr, FlatPtr, FlatPtr, FlatPtr) -> ErrorOr<FlatPtr>;
-using HandlerWithRegisterState = auto (Process::*)(RegisterState&) -> ErrorOr<FlatPtr>;
+using Handler = ErrorOr<FlatPtr> (*)(Process&, RegisterState&, FlatPtr, FlatPtr, FlatPtr, FlatPtr);
+
+// Calling a typed syscall method through a raw-integer member-function pointer
+// is not ABI-safe for wrapper arguments such as Userspace<T>.
+template<typename T>
+static decltype(auto) decode_argument(FlatPtr value, RegisterState& regs)
+{
+    if constexpr (IsSame<T, RegisterState&>)
+        return (regs);
+    else if constexpr (IsPointer<T>)
+        return reinterpret_cast<T>(value);
+    else if constexpr (requires { T { value }; })
+        return T { value };
+    else
+        return static_cast<T>(value);
+}
+
+template<typename>
+struct MethodInvoker;
+
+template<typename Result, typename... Args>
+struct MethodInvoker<Result (Process::*)(Args...)> {
+    template<auto method, size_t... indices>
+    static ErrorOr<FlatPtr> call_impl(Process& process, RegisterState& regs, FlatPtr const* values, IndexSequence<indices...>)
+    {
+        if constexpr (IsSame<Result, void>) {
+            (process.*method)(decode_argument<Args>(values[indices], regs)...);
+            VERIFY_NOT_REACHED();
+        } else {
+            return (process.*method)(decode_argument<Args>(values[indices], regs)...);
+        }
+    }
+
+    template<auto method>
+    static ErrorOr<FlatPtr> call(Process& process, RegisterState& regs, FlatPtr arg1, FlatPtr arg2, FlatPtr arg3, FlatPtr arg4)
+    {
+        static_assert(sizeof...(Args) <= 4);
+        FlatPtr values[] { arg1, arg2, arg3, arg4 };
+        return call_impl<method>(process, regs, values, MakeIndexSequence<sizeof...(Args)> {});
+    }
+};
+
+template<auto method>
+static ErrorOr<FlatPtr> invoke_syscall(Process& process, RegisterState& regs, FlatPtr arg1, FlatPtr arg2, FlatPtr arg3, FlatPtr arg4)
+{
+    return MethodInvoker<decltype(method)>::template call<method>(process, regs, arg1, arg2, arg3, arg4);
+}
 
 struct HandlerMetadata {
     Handler handler;
     NeedsBigProcessLock needs_lock;
 };
 
-#define __ENUMERATE_SYSCALL(sys_call, needs_lock) { bit_cast<Handler>(&Process::sys$##sys_call), needs_lock },
+#define __ENUMERATE_SYSCALL(sys_call, needs_lock) { &invoke_syscall<&Process::sys$##sys_call>, needs_lock },
 static HandlerMetadata const s_syscall_table[] = {
     ENUMERATE_SYSCALLS(__ENUMERATE_SYSCALL)
 };
@@ -88,13 +134,7 @@ ErrorOr<FlatPtr> handle(RegisterState& regs, FlatPtr function, FlatPtr arg1, Fla
     }
 
     ErrorOr<FlatPtr> result { FlatPtr(nullptr) };
-    if (function == SC_fork || function == SC_sigreturn) {
-        // These syscalls want the RegisterState& rather than individual parameters.
-        auto handler = bit_cast<HandlerWithRegisterState>(syscall_metadata.handler);
-        result = (process.*(handler))(regs);
-    } else {
-        result = (process.*(syscall_metadata.handler))(arg1, arg2, arg3, arg4);
-    }
+    result = syscall_metadata.handler(process, regs, arg1, arg2, arg3, arg4);
 
     return result;
 }

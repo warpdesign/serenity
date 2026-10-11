@@ -39,6 +39,9 @@
 
     POWERPC_USE_KERNEL_HIGH_SEGMENTS 12
     lwz 12,\handler_offset(1)
+    // The frame was saved through its physical alias with translation off.
+    // C++ exception handlers must use the high kernel alias of that stack.
+    addis 1,1,-16384
     mtspr 26,12
     mfmsr 12
     ori 12,12,0x2032 // FP | IR | DR | recoverable, with interrupts disabled.
@@ -53,6 +56,14 @@
 powerpc_data_storage_vector_start:
     POWERPC_SAVE_AND_ENTER 272
 powerpc_data_storage_vector_end:
+
+.section .text.powerpc_instruction_storage_vector, "ax"
+.p2align 2
+.globl powerpc_instruction_storage_vector_start
+.globl powerpc_instruction_storage_vector_end
+powerpc_instruction_storage_vector_start:
+    POWERPC_SAVE_AND_ENTER 272,248
+powerpc_instruction_storage_vector_end:
 
 .section .text.powerpc_decrementer_vector, "ax"
 .p2align 2
@@ -70,6 +81,14 @@ powerpc_external_vector_start:
     POWERPC_SAVE_AND_ENTER 275,248
 powerpc_external_vector_end:
 
+.section .text.powerpc_system_call_vector, "ax"
+.p2align 2
+.globl powerpc_system_call_vector_start
+.globl powerpc_system_call_vector_end
+powerpc_system_call_vector_start:
+    POWERPC_SAVE_AND_ENTER 272,244
+powerpc_system_call_vector_end:
+
 .section .text, "ax"
 .p2align 2
 .globl powerpc_data_storage_high_handler
@@ -81,6 +100,15 @@ powerpc_data_storage_high_handler:
     addi 1,1,-32 // C++ callee linkage area must not overlap RegisterState.
     b powerpc_data_storage_exception_handler
 .size powerpc_data_storage_high_handler,.-powerpc_data_storage_high_handler
+
+.p2align 2
+.globl powerpc_instruction_storage_high_handler
+.type powerpc_instruction_storage_high_handler,@function
+powerpc_instruction_storage_high_handler:
+    mr 3,1
+    addi 1,1,-32
+    b powerpc_instruction_storage_exception_handler
+.size powerpc_instruction_storage_high_handler,.-powerpc_instruction_storage_high_handler
 
 .p2align 2
 .globl powerpc_decrementer_high_handler
@@ -99,3 +127,30 @@ powerpc_external_high_handler:
     addi 1,1,-32
     b powerpc_external_exception_handler
 .size powerpc_external_high_handler,.-powerpc_external_high_handler
+
+.p2align 2
+.globl powerpc_system_call_high_handler
+.type powerpc_system_call_high_handler,@function
+powerpc_system_call_high_handler:
+    // The real-mode scratch frame cannot stay on the fixed exception stack:
+    // a syscall can block or fault. Copy it onto the current thread's kernel
+    // stack before entering the shared C++ syscall handler.
+    mr 30,1
+    stwu 1,-64(1)
+    bl powerpc_current_kernel_stack_top
+    mr 10,30
+    addi 1,3,-320
+    mr 31,1
+    mr 8,1
+    li 9,64
+    mtctr 9
+.Lcopy_syscall_frame:
+    lwz 9,0(10)
+    stw 9,0(8)
+    addi 10,10,4
+    addi 8,8,4
+    bdnz .Lcopy_syscall_frame
+    mr 3,31
+    addi 1,1,-32
+    b powerpc_syscall_exception_handler
+.size powerpc_system_call_high_handler,.-powerpc_system_call_high_handler

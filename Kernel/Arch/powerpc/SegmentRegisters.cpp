@@ -40,7 +40,7 @@ int powerpc_activate_user_segments(PowerPCSegmentWord base)
 
     __asm__ volatile("sync" : : : "memory");
     for (PowerPCSegmentWord segment = 0; segment < POWERPC_USER_SEGMENT_COUNT; ++segment)
-        powerpc_write_segment_register(segment, base + segment);
+        powerpc_write_segment_register(segment, 0x20000000u | (base + segment));
     return 1;
 }
 

@@ -17,11 +17,13 @@ extern "C" [[noreturn]] void powerpc_decrementer_exception_handler(RegisterState
 extern "C" [[noreturn]] void powerpc_decrementer_exception_handler(RegisterState* registers)
 {
     VERIFY(registers);
-    VERIFY(registers->previous_mode() == ExecutionMode::Kernel);
+    auto previous_mode = registers->previous_mode();
     TrapFrame trap { registers };
     Processor::current().enter_trap(trap, true);
     PowerPC::Timer::the().handle_interrupt();
     Processor::current().exit_trap(trap);
+    if (previous_mode == ExecutionMode::User)
+        powerpc_return_to_user_from_high(*registers);
     powerpc_restore_supervisor_exception_state(*registers);
 }
 

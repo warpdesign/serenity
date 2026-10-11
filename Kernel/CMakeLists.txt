@@ -661,6 +661,8 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/ExceptionVectorInstaller.cpp
         Arch/powerpc/ExceptionSetup.cpp
         Arch/powerpc/DataStorageException.cpp
+        Arch/powerpc/InstructionStorageException.cpp
+        Arch/powerpc/SyscallException.cpp
         Arch/powerpc/DecrementerException.cpp
         Arch/powerpc/ExceptionEntry.S
         Arch/powerpc/SignalTrampoline.cpp

@@ -24,7 +24,7 @@ extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState*);
 extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState* registers)
 {
     VERIFY(registers);
-    VERIFY(registers->previous_mode() == ExecutionMode::Kernel);
+    auto previous_mode = registers->previous_mode();
     TrapFrame trap { registers };
     Processor::current().enter_trap(trap, true);
     for (auto& controller : InterruptManagement::the().controllers()) {
@@ -39,6 +39,8 @@ extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState* r
         }
     }
     Processor::current().exit_trap(trap);
+    if (previous_mode == ExecutionMode::User)
+        powerpc_return_to_user_from_high(*registers);
     powerpc_restore_supervisor_exception_state(*registers);
 }
 

@@ -144,13 +144,13 @@ powerpc_restore_user_exception_state_from_high_real_mode:
     mtxer 11
     lwz 11,PPC_CONTEXT_LR(12)
     mtlr 11
-    // SPRG2/3 hold the last two user GPRs needed after DR is disabled.
-    // Exception entry uses these as scratch registers, so no persistent
-    // processor state is displaced.
+    // SPRG1/2 hold the last two user GPRs needed after DR is disabled.
+    // Exception entry overwrites these before using them as scratch. SPRG3
+    // must retain the physical interrupt stack top for user-mode interrupts.
     lwz 11,PPC_CONTEXT_GPR11(12)
     mtspr 274,11
     lwz 11,PPC_CONTEXT_GPR12(12)
-    mtspr 275,11
+    mtspr 273,11
     lwz 0,PPC_CONTEXT_GPR0(12)
     lwz 1,PPC_CONTEXT_GPR1(12)
     lwz 2,PPC_CONTEXT_GPR2(12)
@@ -172,7 +172,7 @@ powerpc_restore_user_exception_state_from_high_real_mode:
     isync
     POWERPC_USE_USER_HIGH_SEGMENTS 11
     mfspr 11,274
-    mfspr 12,275
+    mfspr 12,273
     rfi
 .Linvalid_high_user_return:
     tw 31,0,0
