@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -10,6 +10,7 @@
 #include <AK/Format.h>
 #include <AK/SinglyLinkedList.h>
 #include <Kernel/API/Syscall.h>
+#include <LibELF/Arch/tls.h>
 #include <LibSystem/syscall.h>
 #include <bits/pthread_cancel.h>
 #include <bits/pthread_integration.h>
@@ -21,6 +22,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/internals.h>
 #include <sys/mman.h>
 #include <sys/prctl.h>
 #include <syscall.h>
@@ -60,8 +62,9 @@ extern "C" {
 
 [[noreturn]] static void exit_thread(void* code, void* stack_location, size_t stack_size)
 {
+    __call_thread_local_destructors();
     __pthread_key_destroy_for_current_thread();
-    MUST(__free_tls_region(bit_cast<FlatPtr>(__builtin_thread_pointer())));
+    MUST(__free_tls_region(ELF::get_thread_pointer_register()));
     syscall(SC_exit_thread, code, stack_location, stack_size);
     VERIFY_NOT_REACHED();
 }

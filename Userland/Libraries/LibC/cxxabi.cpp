@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2019-2021, Andrew Kaster <akaster@serenityos.org>
+ * Copyright (c) 2019-2026, Andrew Kaster <akaster@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Atomic.h>
 #include <AK/Bitmap.h>
 #include <AK/Checked.h>
 #include <AK/Debug.h>
@@ -47,6 +48,74 @@ static size_t atexit_next_capacity()
 static AtExitEntry* atexit_entries;
 static size_t atexit_entry_count = 0;
 static pthread_mutex_t atexit_mutex = __PTHREAD_MUTEX_INITIALIZER;
+
+struct ThreadAtExitEntry {
+    AtExitFunction method;
+    void* parameter;
+    void* dso_handle;
+    ThreadAtExitEntry* next;
+};
+
+static __thread ThreadAtExitEntry* thread_atexit_entries;
+
+static pthread_mutex_t static_initializer_mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t static_initializer_condition = PTHREAD_COND_INITIALIZER;
+
+int __cxa_guard_acquire(u64* guard)
+{
+    auto* bytes = reinterpret_cast<u8*>(guard);
+    pthread_mutex_lock(&static_initializer_mutex);
+    while (bytes[1] != 0 && bytes[0] == 0)
+        pthread_cond_wait(&static_initializer_condition, &static_initializer_mutex);
+    if (bytes[0] != 0) {
+        pthread_mutex_unlock(&static_initializer_mutex);
+        return 0;
+    }
+    bytes[1] = 1;
+    pthread_mutex_unlock(&static_initializer_mutex);
+    return 1;
+}
+
+void __cxa_guard_release(u64* guard)
+{
+    auto* bytes = reinterpret_cast<u8*>(guard);
+    pthread_mutex_lock(&static_initializer_mutex);
+    AK::atomic_store(&bytes[0], static_cast<u8>(1), AK::memory_order_release);
+    bytes[1] = 0;
+    pthread_cond_broadcast(&static_initializer_condition);
+    pthread_mutex_unlock(&static_initializer_mutex);
+}
+
+void __cxa_guard_abort(u64* guard)
+{
+    auto* bytes = reinterpret_cast<u8*>(guard);
+    pthread_mutex_lock(&static_initializer_mutex);
+    bytes[1] = 0;
+    pthread_cond_broadcast(&static_initializer_condition);
+    pthread_mutex_unlock(&static_initializer_mutex);
+}
+
+int __cxa_thread_atexit(AtExitFunction method, void* parameter, void* dso_handle)
+{
+    auto* entry = static_cast<ThreadAtExitEntry*>(malloc(sizeof(ThreadAtExitEntry)));
+    if (!entry)
+        return -1;
+    *entry = { method, parameter, dso_handle, thread_atexit_entries };
+    thread_atexit_entries = entry;
+    return 0;
+}
+
+void __call_thread_local_destructors()
+{
+    while (thread_atexit_entries) {
+        auto* entry = thread_atexit_entries;
+        thread_atexit_entries = entry->next;
+        auto method = entry->method;
+        auto parameter = entry->parameter;
+        free(entry);
+        method(parameter);
+    }
+}
 
 // The C++ compiler automagically registers the destructor of this object with __cxa_atexit.
 // However, we can't control the order in which these destructors are run, so we might still want to access this data after the registered entry.

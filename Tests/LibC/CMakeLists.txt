@@ -12,6 +12,7 @@ set(TEST_SOURCES
     TestLibCMkTemp.cpp
     TestLibCNetdb.cpp
     TestLibCSetjmp.cpp
+    TestLocalStaticInitialization.cpp
     TestLibCString.cpp
     TestLibCTime.cpp
     TestMalloc.cpp
@@ -39,6 +40,7 @@ set(TEST_SOURCES
     TestStrlcpy.cpp
     TestStrtodAccuracy.cpp
     TestTruncate.cpp
+    TestThreadLocalDestructors.cpp
     TestWchar.cpp
     TestWctype.cpp
 )

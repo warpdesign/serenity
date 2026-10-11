@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, the SerenityOS developers.
+ * Copyright (c) 2020-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -7,6 +7,7 @@
 #pragma once
 
 #include <sys/cdefs.h>
+#include <stdint.h>
 #include <sys/types.h>
 
 __BEGIN_DECLS
@@ -25,7 +26,12 @@ extern bool __heap_is_stable;
 extern void* __auxiliary_vector;
 
 int __cxa_atexit(AtExitFunction exit_function, void* parameter, void* dso_handle);
+int __cxa_thread_atexit(AtExitFunction exit_function, void* parameter, void* dso_handle);
+void __call_thread_local_destructors(void);
 void __cxa_finalize(void* dso_handle);
+int __cxa_guard_acquire(uint64_t* guard);
+void __cxa_guard_release(uint64_t* guard);
+void __cxa_guard_abort(uint64_t* guard);
 __attribute__((noreturn)) void __cxa_pure_virtual(void);
 __attribute__((noreturn)) void __stack_chk_fail(void);
 __attribute__((noreturn)) void __stack_chk_fail_local(void);

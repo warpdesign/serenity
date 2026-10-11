@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -351,6 +351,7 @@ extern "C" {
 void exit(int status)
 {
 #ifndef _DYNAMIC_LOADER
+    __call_thread_local_destructors();
     __pthread_key_destroy_for_current_thread();
 #endif
 
