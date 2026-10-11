@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, sin-ack <sin-ack@protonmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, sin-ack <sin-ack@protonmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -421,7 +421,7 @@ InodeMetadata Ext2FSInode::metadata() const
     auto decode_time_with_extra = [](u32 const& time, u32 const& time_extra) {
         time_t seconds = decode_seconds_with_extra(time, time_extra);
         u32 nanoseconds = decode_nanoseconds_from_extra(time_extra);
-        return UnixDateTime::from_unix_timespec({ .tv_sec = seconds, .tv_nsec = nanoseconds });
+        return UnixDateTime::from_unix_timespec({ .tv_sec = seconds, .tv_nsec = static_cast<long>(nanoseconds) });
     };
 
     u64 usable_size = fs().usable_inode_size(m_raw_inode);
@@ -440,7 +440,7 @@ InodeMetadata Ext2FSInode::metadata() const
         time_t ctime_seconds = decode_seconds_with_extra(m_raw_inode.i_ctime, m_raw_inode.i_ctime_extra);
         u32 ctime_nanoseconds = decode_nanoseconds_from_extra(m_raw_inode.i_ctime_extra);
 
-        metadata.ctime = UnixDateTime::from_unix_timespec({ .tv_sec = ctime_seconds, .tv_nsec = ctime_nanoseconds });
+        metadata.ctime = UnixDateTime::from_unix_timespec({ .tv_sec = ctime_seconds, .tv_nsec = static_cast<long>(ctime_nanoseconds) });
         metadata.dtime = UnixDateTime::from_seconds_since_epoch(decode_seconds_with_extra(m_raw_inode.i_dtime, m_raw_inode.i_ctime_extra));
     } else {
         metadata.ctime = UnixDateTime::from_seconds_since_epoch(static_cast<i32>(m_raw_inode.i_ctime));
