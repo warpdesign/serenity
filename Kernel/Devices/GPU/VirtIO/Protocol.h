@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2021, Sahan Fernando <sahan.h.fernando@gmail.com>
+ * Copyright (c) 2021-2026, Sahan Fernando <sahan.h.fernando@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #pragma once
 
+#include <AK/Endian.h>
 #include <AK/Types.h>
 
 #define VIRTIO_GPU_MAX_SCANOUTS 16
@@ -132,20 +133,22 @@ enum class PipePrimitiveTypes : u32 {
 
 // Specification equivalent: struct virtio_gpu_ctrl_hdr
 struct ControlHeader {
-    u32 type;
-    u32 flags;
-    u64 fence_id;
-    u32 context_id;
-    u32 padding;
+    AK::LittleEndian<u32> type;
+    AK::LittleEndian<u32> flags;
+    AK::LittleEndian<u64> fence_id;
+    AK::LittleEndian<u32> context_id;
+    AK::LittleEndian<u32> padding;
 };
+static_assert(sizeof(ControlHeader) == 24);
 
 // Specification equivalent: struct virtio_gpu_rect
 struct Rect {
-    u32 x;
-    u32 y;
-    u32 width;
-    u32 height;
+    AK::LittleEndian<u32> x;
+    AK::LittleEndian<u32> y;
+    AK::LittleEndian<u32> width;
+    AK::LittleEndian<u32> height;
 };
+static_assert(sizeof(Rect) == 16);
 
 // Specification equivalent: struct virtio_gpu_resp_display_info
 struct DisplayInfoResponse {
@@ -153,8 +156,8 @@ struct DisplayInfoResponse {
     // Specification equivalent: struct virtio_gpu_display_one
     struct Display {
         Rect rect;
-        u32 enabled;
-        u32 flags;
+        AK::LittleEndian<u32> enabled;
+        AK::LittleEndian<u32> flags;
     } scanout_modes[VIRTIO_GPU_MAX_SCANOUTS];
 };
 
@@ -175,102 +178,104 @@ enum class TextureFormat : u32 {
 // Specification equivalent: struct virtio_gpu_resource_create_2d
 struct ResourceCreate2D {
     ControlHeader header;
-    u32 resource_id;
-    u32 format;
-    u32 width;
-    u32 height;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> format;
+    AK::LittleEndian<u32> width;
+    AK::LittleEndian<u32> height;
 };
 
 // Specification equivalent: struct virtio_gpu_resource_create_3d
 struct ResourceCreate3D {
     ControlHeader header;
-    u32 resource_id;
-    u32 target;
-    u32 format;
-    u32 bind;
-    u32 width;
-    u32 height;
-    u32 depth;
-    u32 array_size;
-    u32 last_level;
-    u32 nr_samples;
-    u32 flags;
-    u32 padding;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> target;
+    AK::LittleEndian<u32> format;
+    AK::LittleEndian<u32> bind;
+    AK::LittleEndian<u32> width;
+    AK::LittleEndian<u32> height;
+    AK::LittleEndian<u32> depth;
+    AK::LittleEndian<u32> array_size;
+    AK::LittleEndian<u32> last_level;
+    AK::LittleEndian<u32> nr_samples;
+    AK::LittleEndian<u32> flags;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_resource_unref
 struct ResourceUnref {
     ControlHeader header;
-    u32 resource_id;
-    u32 padding;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_set_scanout
 struct SetScanOut {
     ControlHeader header;
     Rect rect;
-    u32 scanout_id;
-    u32 resource_id;
+    AK::LittleEndian<u32> scanout_id;
+    AK::LittleEndian<u32> resource_id;
 };
 
 // Specification equivalent: struct virtio_gpu_mem_entry
 struct MemoryEntry {
-    u64 address;
-    u32 length;
-    u32 padding;
+    AK::LittleEndian<u64> address;
+    AK::LittleEndian<u32> length;
+    AK::LittleEndian<u32> padding;
 };
+static_assert(sizeof(MemoryEntry) == 16);
 
 // Specification equivalent: struct virtio_gpu_resource_attach_backing
 struct ResourceAttachBacking {
     ControlHeader header;
-    u32 resource_id;
-    u32 num_entries;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> num_entries;
 };
 
 // Specification equivalent: struct virtio_gpu_resource_detach_backing
 struct ResourceDetachBacking {
     ControlHeader header;
-    u32 resource_id;
-    u32 padding;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_transfer_to_host_2d
 struct TransferToHost2D {
     ControlHeader header;
     Rect rect;
-    u64 offset;
-    u32 resource_id;
-    u32 padding;
+    AK::LittleEndian<u64> offset;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_resource_flush
 struct ResourceFlush {
     ControlHeader header;
     Rect rect;
-    u32 resource_id;
-    u32 padding;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_get_edid
 struct GetEDID {
     ControlHeader header;
-    u32 scanout_id;
-    u32 padding;
+    AK::LittleEndian<u32> scanout_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // Specification equivalent: struct virtio_gpu_resp_edid
 struct GetEDIDResponse {
     ControlHeader header;
-    u32 size;
-    u32 padding;
+    AK::LittleEndian<u32> size;
+    AK::LittleEndian<u32> padding;
     u8 edid[1024];
 };
+static_assert(sizeof(GetEDIDResponse) == 1056);
 
 // No equivalent in specification
 struct ContextCreate {
     ControlHeader header;
-    u32 name_length;
-    u32 padding;
+    AK::LittleEndian<u32> name_length;
+    AK::LittleEndian<u32> padding;
     AK::Array<char, 64> debug_name;
 };
 
@@ -279,15 +284,15 @@ static_assert(sizeof(ContextCreate::debug_name) == 64);
 // No equivalent in specification
 struct ContextAttachResource {
     ControlHeader header;
-    u32 resource_id;
-    u32 padding;
+    AK::LittleEndian<u32> resource_id;
+    AK::LittleEndian<u32> padding;
 };
 
 // No equivalent in specification
 struct CommandSubmit {
     ControlHeader header;
-    u32 size;
-    u32 padding;
+    AK::LittleEndian<u32> size;
+    AK::LittleEndian<u32> padding;
 };
 
 namespace Gallium {

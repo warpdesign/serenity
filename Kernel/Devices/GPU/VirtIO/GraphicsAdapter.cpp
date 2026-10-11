@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Sahan Fernando <sahan.h.fernando@gmail.com>
+ * Copyright (c) 2021-2026, Sahan Fernando <sahan.h.fernando@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -218,8 +218,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::query_and_set_edid(u32 scanout_id, VirtIODi
         return Error::from_errno(ENOTSUP);
 
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::GetEDID>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::GetEDIDResponse>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::GetEDID>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::GetEDIDResponse>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_GET_EDID, 0);
 
@@ -239,7 +239,7 @@ ErrorOr<void> VirtIOGraphicsAdapter::query_and_set_edid(u32 scanout_id, VirtIODi
     }
 
     Array<u8, 128> raw_edid;
-    memcpy(raw_edid.data(), response.edid, min(sizeof(raw_edid), response.size));
+    memcpy(raw_edid.data(), response.edid, min(sizeof(raw_edid), static_cast<size_t>(response.size)));
     display_connector.set_edid_bytes({}, raw_edid);
     return {};
 }
@@ -248,8 +248,8 @@ ErrorOr<Graphics::VirtIOGPU::ResourceID> VirtIOGraphicsAdapter::create_2d_resour
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceCreate2D>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceCreate2D>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_CREATE_2D, 0);
 
@@ -272,8 +272,8 @@ ErrorOr<Graphics::VirtIOGPU::ResourceID> VirtIOGraphicsAdapter::create_3d_resour
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceCreate3D>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceCreate3D>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_CREATE_3D, 0);
 
@@ -281,12 +281,17 @@ ErrorOr<Graphics::VirtIOGPU::ResourceID> VirtIOGraphicsAdapter::create_3d_resour
     // after this fails?
     auto resource_id = allocate_resource_id();
     request.resource_id = resource_id.value();
-    // TODO: Abstract this out a bit more
-    u32* start_of_copied_fields = &request.target;
-
-    // Validate that the sub copy from the resource_3d_specification to the offset of the request fits.
-    static_assert((sizeof(request) - offsetof(Graphics::VirtIOGPU::Protocol::ResourceCreate3D, target) == sizeof(resource_3d_specification)));
-    memcpy(start_of_copied_fields, &resource_3d_specification, sizeof(resource_3d_specification));
+    request.target = to_underlying(resource_3d_specification.target);
+    request.format = resource_3d_specification.format;
+    request.bind = resource_3d_specification.bind;
+    request.width = resource_3d_specification.width;
+    request.height = resource_3d_specification.height;
+    request.depth = resource_3d_specification.depth;
+    request.array_size = resource_3d_specification.array_size;
+    request.last_level = resource_3d_specification.last_level;
+    request.nr_samples = resource_3d_specification.nr_samples;
+    request.flags = resource_3d_specification.flags;
+    request.padding = resource_3d_specification.padding;
 
     TRY(synchronous_virtio_gpu_command(COMMAND_TIMEOUT_US, start_of_scratch_space(), sizeof(request), sizeof(response)));
 
@@ -307,19 +312,19 @@ ErrorOr<void> VirtIOGraphicsAdapter::ensure_backing_storage(Graphics::VirtIOGPU:
     size_t num_mem_regions = buffer_length / PAGE_SIZE;
 
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceAttachBacking>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceAttachBacking>(writer);
     size_t const header_block_size = sizeof(request) + num_mem_regions * sizeof(Graphics::VirtIOGPU::Protocol::MemoryEntry);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING, 0);
     request.resource_id = resource_id.value();
     request.num_entries = num_mem_regions;
     for (size_t i = 0; i < num_mem_regions; ++i) {
-        auto& memory_entry = writer.append_structure<Graphics::VirtIOGPU::Protocol::MemoryEntry>();
+        auto& memory_entry = append_scratch_structure<Graphics::VirtIOGPU::Protocol::MemoryEntry>(writer);
         memory_entry.address = region.physical_page(first_page_index + i)->paddr().get();
         memory_entry.length = PAGE_SIZE;
     }
 
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     TRY(synchronous_virtio_gpu_command(COMMAND_TIMEOUT_US, start_of_scratch_space(), header_block_size, sizeof(response)));
 
@@ -334,8 +339,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::detach_backing_storage(Graphics::VirtIOGPU:
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceDetachBacking>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceDetachBacking>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING, 0);
     request.resource_id = resource_id.value();
@@ -354,8 +359,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::set_scanout_resource(Graphics::VirtIOGPU::S
     VERIFY(m_operation_lock.is_locked());
     // We need to scope the request/response here so that we can query display information later on
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::SetScanOut>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::SetScanOut>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_SET_SCANOUT, 0);
     request.resource_id = resource_id.value();
@@ -375,8 +380,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::transfer_framebuffer_data_to_host(Graphics:
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::TransferToHost2D>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::TransferToHost2D>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D, 0);
     request.offset = (dirty_rect.x + (dirty_rect.y * m_scanouts[scanout.value()].display_connector->display_information({}).rect.width)) * sizeof(u32);
@@ -394,8 +399,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::flush_displayed_image(Graphics::VirtIOGPU::
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceFlush>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceFlush>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_FLUSH, 0);
     request.resource_id = resource_id.value();
@@ -449,8 +454,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::delete_resource(Graphics::VirtIOGPU::Resour
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ResourceUnref>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ResourceUnref>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_RESOURCE_UNREF, 0);
     request.resource_id = resource_id.value();
@@ -483,8 +488,8 @@ ErrorOr<Graphics::VirtIOGPU::ContextID> VirtIOGraphicsAdapter::create_context()
         auto new_context_id = static_cast<u32>(maybe_available_id.value());
 
         auto writer = create_scratchspace_writer();
-        auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ContextCreate>();
-        auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+        auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ContextCreate>(writer);
+        auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
         constexpr char const* region_name = "Serenity VirGL3D Context";
         populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_CTX_CREATE, 0);
@@ -508,7 +513,7 @@ ErrorOr<void> VirtIOGraphicsAdapter::submit_command_buffer(Graphics::VirtIOGPU::
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::CommandSubmit>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::CommandSubmit>(writer);
 
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_SUBMIT_3D, 0);
     request.header.context_id = context_id.value();
@@ -523,11 +528,11 @@ ErrorOr<void> VirtIOGraphicsAdapter::submit_command_buffer(Graphics::VirtIOGPU::
     // we pad with no-ops until we reach the correct alignment
     while (writer.current_offset() % alignof(Graphics::VirtIOGPU::Protocol::ControlHeader) != 0) {
         VERIFY((writer.current_offset() % alignof(Graphics::VirtIOGPU::Protocol::ControlHeader)) % sizeof(u32) == 0);
-        writer.append_structure<u32>() = to_underlying(Graphics::VirtIOGPU::VirGLCommand::NOP);
-        request.size += 4;
+        append_scratch_structure<AK::LittleEndian<u32>>(writer) = to_underlying(Graphics::VirtIOGPU::VirGLCommand::NOP);
+        request.size = static_cast<u32>(request.size) + 4;
     }
     dbgln_if(VIRTIO_DEBUG, "VirtIO::GraphicsAdapter: Sending command buffer of length {}", request.size);
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
 
     TRY(synchronous_virtio_gpu_command(COMMAND_TIMEOUT_US, start_of_scratch_space(), sizeof(request) + request.size, sizeof(response)));
 
@@ -540,8 +545,8 @@ ErrorOr<void> VirtIOGraphicsAdapter::attach_resource_to_context(Graphics::VirtIO
 {
     VERIFY(m_operation_lock.is_locked());
     auto writer = create_scratchspace_writer();
-    auto& request = writer.append_structure<Graphics::VirtIOGPU::Protocol::ContextAttachResource>();
-    auto& response = writer.append_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>();
+    auto& request = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ContextAttachResource>(writer);
+    auto& response = append_scratch_structure<Graphics::VirtIOGPU::Protocol::ControlHeader>(writer);
     populate_virtio_gpu_request_header(request.header, Graphics::VirtIOGPU::Protocol::CommandType::VIRTIO_GPU_CMD_CTX_ATTACH_RESOURCE, 0);
     request.header.context_id = context_id.value();
     request.resource_id = resource_id.value();

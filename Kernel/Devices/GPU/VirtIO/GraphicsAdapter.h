@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Sahan Fernando <sahan.h.fernando@gmail.com>
+ * Copyright (c) 2021-2026, Sahan Fernando <sahan.h.fernando@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -94,6 +94,17 @@ private:
     AK::BinaryBufferWriter create_scratchspace_writer()
     {
         return { Bytes(m_scratch_space->vaddr().as_ptr(), m_scratch_space->size()) };
+    }
+    template<typename T>
+    T& append_scratch_structure(AK::BinaryBufferWriter& writer)
+    {
+        // GPU wire structures contain LittleEndian fields, which require
+        // construction before the host writes values into them.
+        static_assert(IsTriviallyDestructible<T>);
+        auto offset = writer.current_offset();
+        VERIFY((reinterpret_cast<FlatPtr>(m_scratch_space->vaddr().as_ptr()) + offset) % alignof(T) == 0);
+        writer.skip_bytes(sizeof(T));
+        return *new (m_scratch_space->vaddr().as_ptr() + offset) T {};
     }
     ErrorOr<void> synchronous_virtio_gpu_command(size_t microseconds_timeout, PhysicalAddress buffer_start, size_t request_size, size_t response_size);
 
