@@ -146,10 +146,19 @@ Optional<PageMappingInfo> MemoryManager::query_page(PageDirectory& directory, Vi
     return PageMappingInfo {
         .physical_page_base = lower & 0xfffff000u,
         .present = true,
-        .writable = protection != POWERPC_HPT_READ_ONLY,
-        .user_allowed = protection != POWERPC_HPT_SUPERVISOR_ONLY,
+        .writable = protection == POWERPC_HPT_SUPERVISOR_ONLY,
+        .user_allowed = false,
         .execute_disabled = false,
     };
+}
+
+void MemoryManager::set_page_writable_direct(VirtualAddress address, bool writable)
+{
+    VERIFY(address.get() >= KERNEL_MAPPING_BASE);
+    SpinlockLocker page_lock(kernel_page_directory().get_lock());
+    SpinlockLocker hpt_lock(PageDirectory::hpt_lock());
+    VERIFY(powerpc_set_kernel_page_writable(kernel_page_directory().backend().table,
+        address.page_base().get(), writable));
 }
 
 u8* MemoryManager::quickmap_page(PhysicalAddress physical_address, MemoryType memory_type)

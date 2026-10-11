@@ -104,16 +104,41 @@ bool powerpc_apply_kernel_mapping(PowerPCHashPageTable const* table, PowerPCHPTW
         || (effective_address & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
         || request.physical_page_base > 0xfffff000u
         || (request.physical_page_base & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
-        || request.user_allowed || !request.writable || request.execute_disabled)
+        || request.user_allowed || request.execute_disabled)
         return false;
 
     PowerPCHPTWord vsid = effective_address >> 28;
     PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED
-        | memory_type_flags(request.memory_type) | POWERPC_HPT_SUPERVISOR_ONLY;
+        | memory_type_flags(request.memory_type)
+        | (request.writable ? POWERPC_HPT_SUPERVISOR_ONLY : POWERPC_HPT_READ_ONLY);
+    // PP=3 is read-only for both privilege keys. User return substitutes
+    // private high VSIDs, so it cannot resolve the shared kernel entry.
     auto physical = static_cast<PowerPCHPTWord>(request.physical_page_base);
     if (powerpc_hpt_find(table, vsid, effective_address))
         return powerpc_hpt_remap(table, vsid, effective_address, physical, flags);
     return powerpc_hpt_map(table, vsid, effective_address, physical, flags);
+}
+
+int powerpc_set_kernel_page_writable(PowerPCHashPageTable const* table, PowerPCHPTWord effective_address, int writable)
+{
+    if (!table || effective_address < 0xc0000000u
+        || (effective_address & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || (writable != 0 && writable != 1))
+        return 0;
+
+    PowerPCHPTWord vsid = effective_address >> 28;
+    auto* entry = powerpc_hpt_find(table, vsid, effective_address);
+    if (!entry)
+        return 0;
+    PowerPCHPTWord lower = entry->lower;
+    PowerPCHPTWord protection = lower & 3u;
+    if (protection != POWERPC_HPT_SUPERVISOR_ONLY && protection != POWERPC_HPT_READ_ONLY)
+        return 0;
+    PowerPCHPTWord desired_protection = writable ? POWERPC_HPT_SUPERVISOR_ONLY : POWERPC_HPT_READ_ONLY;
+    if (protection == desired_protection)
+        return 1;
+    return powerpc_hpt_remap(table, vsid, effective_address, lower & 0xfffff000u,
+        (lower & 0xfffu & ~3u) | desired_protection);
 }
 
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address)

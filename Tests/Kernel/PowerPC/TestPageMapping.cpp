@@ -104,11 +104,24 @@ extern "C" int powerpc_page_mapping_test()
     kernel_request.user_allowed = false;
     kernel_request.writable = false;
     constexpr unsigned quickmap_address = KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE;
-    if (powerpc_apply_kernel_mapping(&table, quickmap_address, kernel_request))
+    if (!powerpc_apply_kernel_mapping(&table, quickmap_address, kernel_request))
+        return 0;
+    auto* kernel_entry = powerpc_hpt_find(&table, quickmap_address >> 28, quickmap_address);
+    if (!kernel_entry || (kernel_entry->lower & 3u) != POWERPC_HPT_READ_ONLY
+        || !powerpc_set_kernel_page_writable(&table, quickmap_address, 1)
+        || (kernel_entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY
+        || !powerpc_set_kernel_page_writable(&table, quickmap_address, 0)
+        || (kernel_entry->lower & 3u) != POWERPC_HPT_READ_ONLY
+        || powerpc_set_kernel_page_writable(&table, address, 1)
+        || powerpc_set_kernel_page_writable(&table, quickmap_address + POWERPC_HPT_PAGE_SIZE, 1)
+        || powerpc_set_kernel_page_writable(&table, quickmap_address, 2))
         return 0;
     kernel_request.writable = true;
     kernel_request.execute_disabled = true;
     if (powerpc_apply_kernel_mapping(&table, quickmap_address, kernel_request))
+        return 0;
+    if ((kernel_entry->lower & 3u) != POWERPC_HPT_READ_ONLY
+        || !powerpc_hpt_unmap(&table, quickmap_address >> 28, quickmap_address))
         return 0;
 
     // Heap growth maps consecutive writable supervisor pages through the

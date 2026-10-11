@@ -586,8 +586,8 @@ int powerpc_hpt_unmapped_fault_observed(void)
 int powerpc_hpt_read_only_fault_roundtrip(void)
 {
     Word replacement_physical = (Word)(__UINTPTR_TYPE__)&s_hpt_replacement_word;
-    Word read_only_flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | POWERPC_HPT_COHERENT | POWERPC_HPT_READ_ONLY;
-    if (!powerpc_hpt_map(&s_hpt, KernelVSID, ReadOnlyPage, replacement_physical, read_only_flags))
+    if (!powerpc_test_map_kernel_page(&s_hpt, ReadOnlyPage, replacement_physical)
+        || !powerpc_set_kernel_page_writable(&s_hpt, ReadOnlyPage, 0))
         return 0;
 
     powerpc_enable_boot_translation();
@@ -605,9 +605,19 @@ int powerpc_hpt_read_only_fault_roundtrip(void)
     Word physical_value = s_hpt_replacement_word;
     powerpc_disable_boot_translation();
 
+    if (!powerpc_set_kernel_page_writable(&s_hpt, ReadOnlyPage, 1))
+        return 0;
+    powerpc_enable_boot_translation();
+    *alias = 0x2468ace0u;
+    Word writable_value = *alias;
+    powerpc_disable_boot_translation();
+    s_hpt_replacement_word = 0x13579bdfu;
+    int protected_again = powerpc_set_kernel_page_writable(&s_hpt, ReadOnlyPage, 0);
+
     return value_before == 0x13579bdfu && value_after == value_before && physical_value == value_before
         && fault_count_after == fault_count_before + 1 && fault_address == ReadOnlyPage
-        && (fault_status & 0x0a000000u) == 0x0a000000u && (fault_status & 0x40000000u) == 0;
+        && (fault_status & 0x0a000000u) == 0x0a000000u && (fault_status & 0x40000000u) == 0
+        && writable_value == 0x2468ace0u && protected_again;
 }
 
 static int user_segments_match(Word vsid_base)
