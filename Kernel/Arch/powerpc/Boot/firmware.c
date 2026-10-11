@@ -70,6 +70,7 @@ extern int powerpc_run_high_stack_external_irq_probe(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_debug_output_test(void);
+extern int powerpc_current_time_fallback_test(void);
 extern int powerpc_hpt_external_irq_stack_roundtrip(Cell);
 extern int powerpc_hpt_external_irq_high_handler_roundtrip(Cell);
 extern int powerpc_hpt_user_external_irq_observed(void);
@@ -443,6 +444,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: HPT high alias failed\r\n");
         if (!powerpc_debug_output_test())
             serial_write("SerenityOS PowerPC: kernel debug UART failed\r\n");
+        if (powerpc_current_time_fallback_test())
+            serial_write("SerenityOS PowerPC: wall-clock fallback passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: wall-clock fallback failed\r\n");
         if (powerpc_hpt_external_irq_stack_roundtrip(timebase_frequency))
             serial_write("SerenityOS PowerPC: HPT external IRQ stack passed\r\n");
         else
