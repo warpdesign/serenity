@@ -677,6 +677,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Pegasos2/InterruptController.cpp
         Arch/powerpc/Pegasos2/DebugOutput.cpp
         Arch/powerpc/Pegasos2/PCIConfig.cpp
+        Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.cpp
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp
         Arch/powerpc/RegisterDump.cpp

@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
 #include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
 
 typedef unsigned int Cell;
 typedef int (*FirmwareEntry)(void*);
@@ -43,6 +44,7 @@ extern int pci_open_firmware_address_test(void);
 extern int pci_address_assignment_test(void);
 extern int powerpc_pegasos2_pci_config_test(Cell);
 extern volatile Cell powerpc_pegasos2_pci_config_debug;
+extern int powerpc_open_firmware_pci_ranges_test(Cell const*, Cell, Cell, Cell);
 extern int nvme_endian_test(void);
 extern int sd_adma_address_test(void);
 extern int powerpc_deferred_key_press_test(void);
@@ -147,17 +149,39 @@ static int get_property(Cell device, char const* name, void* buffer, Cell size)
     return (int)call.cells[4];
 }
 
-static Cell discover_mv64361_registers_base(Cell root)
+static Cell discover_mv64361_registers_base(Cell root, Cell* south_bridge)
 {
     // The PCI bridge publishes its i8259 acknowledge register inside the
     // controller's 64 KiB register aperture.
     for (Cell child = first_child(root); child != 0 && child != (Cell)-1; child = next_peer(child)) {
         Cell interrupt_acknowledge = 0;
         if (get_property(child, "8259-interrupt-acknowledge", &interrupt_acknowledge, sizeof(interrupt_acknowledge)) == sizeof(interrupt_acknowledge)
-            && (interrupt_acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET)
+            && (interrupt_acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET) {
+            *south_bridge = child;
             return interrupt_acknowledge & ~0xffffu;
+        }
     }
     return 0;
+}
+
+static int test_pci_firmware_ranges(Cell root, Cell bridge)
+{
+    if (bridge == 0)
+        return 0;
+    Cell parent_address_cells = 1;
+    Cell child_address_cells = 0;
+    Cell size_cells = 0;
+    if (get_property(root, "#address-cells", &parent_address_cells, sizeof(parent_address_cells)) != sizeof(parent_address_cells))
+        parent_address_cells = 1;
+    if (get_property(bridge, "#address-cells", &child_address_cells, sizeof(child_address_cells)) != sizeof(child_address_cells)
+        || get_property(bridge, "#size-cells", &size_cells, sizeof(size_cells)) != sizeof(size_cells)
+        || child_address_cells != 3)
+        return 0;
+    Cell cells[96];
+    int length = get_property(bridge, "ranges", cells, sizeof(cells));
+    if (length <= 0 || length % sizeof(Cell) != 0)
+        return 0;
+    return powerpc_open_firmware_pci_ranges_test(cells, (Cell)length / sizeof(Cell), parent_address_cells, size_cells);
 }
 
 static void write_console(char const* string)
@@ -298,7 +322,8 @@ void boot_main(FirmwareEntry firmware_entry)
     Cell qemu_boot_kernel[4];
     if (is_pegasos2() && get_property(chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) == sizeof(qemu_boot_kernel) && initialize_qemu_pegasos2_serial()) {
         Cell timebase_frequency = discover_timebase_frequency();
-        Cell mv64361_registers_base = discover_mv64361_registers_base(root);
+        Cell south_bridge = 0;
+        Cell mv64361_registers_base = discover_mv64361_registers_base(root, &south_bridge);
         if (powerpc_setjmp_self_test())
             serial_write("SerenityOS PowerPC: setjmp roundtrip passed\r\n");
         else
@@ -357,6 +382,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write_hex(powerpc_pegasos2_pci_config_debug);
             serial_write("\r\n");
         }
+        if (test_pci_firmware_ranges(root, south_bridge))
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI firmware ranges passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: Pegasos 2 PCI firmware ranges failed\r\n");
         if (nvme_endian_test())
             serial_write("SerenityOS PowerPC: NVMe little-endian wire format passed\r\n");
         else

@@ -34,6 +34,7 @@ def main():
         b"SerenityOS PowerPC: PCI Open Firmware address passed",
         b"SerenityOS PowerPC: PCI 64-bit address assignment passed",
         b"SerenityOS PowerPC: Pegasos 2 PCI config access passed",
+        b"SerenityOS PowerPC: Pegasos 2 PCI firmware ranges passed",
         b"SerenityOS PowerPC: NVMe little-endian wire format passed",
         b"SerenityOS PowerPC: SD ADMA physical addresses passed",
         b"SerenityOS PowerPC: deferred key press passed",

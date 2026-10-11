@@ -39,7 +39,7 @@ TIMER_TEST_OBJECTS := $(BUILD_DIR)/test_decrementer.o
 PIC_TEST_OBJECTS := $(BUILD_DIR)/test_legacy_pic.o
 EXTERNAL_IRQ_TEST_OBJECTS := $(BUILD_DIR)/test_external_irq.o
 PCI_TEST_OBJECTS := $(BUILD_DIR)/test_pci_open_firmware_address.o $(BUILD_DIR)/test_pci_address_assignment.o
-PEGASOS2_PCI_CONFIG_TEST_OBJECTS := $(BUILD_DIR)/pegasos2_pci_config.o $(BUILD_DIR)/test_pegasos2_pci_config.o
+PEGASOS2_PCI_CONFIG_TEST_OBJECTS := $(BUILD_DIR)/pegasos2_pci_config.o $(BUILD_DIR)/test_pegasos2_pci_config.o $(BUILD_DIR)/open_firmware_pci_ranges.o $(BUILD_DIR)/test_open_firmware_pci_ranges.o
 NVME_TEST_OBJECTS := $(BUILD_DIR)/test_nvme_endian.o
 SD_TEST_OBJECTS := $(BUILD_DIR)/test_sd_adma_address.o
 KEY_EVENT_TEST_OBJECTS := $(BUILD_DIR)/test_deferred_key_press.o
@@ -295,6 +295,12 @@ $(BUILD_DIR)/pegasos2_pci_config.o: ../Pegasos2/PCIConfig.cpp ../Pegasos2/PCICon
 
 $(BUILD_DIR)/test_pegasos2_pci_config.o: ../../../../Tests/Kernel/PowerPC/TestPegasos2PCIConfig.cpp ../Pegasos2/PCIConfig.h ../Pegasos2/HardwareAddresses.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/open_firmware_pci_ranges.o: ../Pegasos2/OpenFirmwarePCIRanges.cpp ../Pegasos2/OpenFirmwarePCIRanges.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/test_open_firmware_pci_ranges.o: ../../../../Tests/Kernel/PowerPC/TestOpenFirmwarePCIRanges.c ../Pegasos2/OpenFirmwarePCIRanges.h ../Pegasos2/HardwareAddresses.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
 $(BUILD_DIR)/test_pci_address_assignment.o: ../../../../Tests/Kernel/PCI/TestAddressAssignment.cpp ../../../../Kernel/Bus/PCI/AddressAssignment.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
