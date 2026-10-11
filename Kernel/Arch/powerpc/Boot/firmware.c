@@ -33,7 +33,7 @@ extern int powerpc_cache_maintenance_test(void);
 extern int powerpc_tlb_maintenance_test(void);
 extern int powerpc_vsid_allocator_test(void);
 extern int powerpc_firmware_memory_map_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
-extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell);
+extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell, Cell);
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
@@ -41,7 +41,7 @@ extern int powerpc_float_digit_packing_test(void);
 extern int powerpc_float_parser_test(void);
 extern int pci_open_firmware_address_test(void);
 extern int pci_address_assignment_test(void);
-extern int powerpc_pegasos2_pci_config_test(void);
+extern int powerpc_pegasos2_pci_config_test(Cell);
 extern volatile Cell powerpc_pegasos2_pci_config_debug;
 extern int nvme_endian_test(void);
 extern int sd_adma_address_test(void);
@@ -131,12 +131,33 @@ static Cell first_child(Cell device)
     return call.cells[1];
 }
 
+static Cell next_peer(Cell device)
+{
+    struct FirmwareCall call = { "peer", 1, 1, { device, 0 } };
+    if (s_firmware_entry(&call) != 0)
+        return 0;
+    return call.cells[1];
+}
+
 static int get_property(Cell device, char const* name, void* buffer, Cell size)
 {
     struct FirmwareCall call = { "getprop", 4, 1, { device, firmware_pointer(name), firmware_pointer(buffer), size, 0 } };
     if (s_firmware_entry(&call) != 0)
         return -1;
     return (int)call.cells[4];
+}
+
+static Cell discover_mv64361_registers_base(Cell root)
+{
+    // The PCI bridge publishes its i8259 acknowledge register inside the
+    // controller's 64 KiB register aperture.
+    for (Cell child = first_child(root); child != 0 && child != (Cell)-1; child = next_peer(child)) {
+        Cell interrupt_acknowledge = 0;
+        if (get_property(child, "8259-interrupt-acknowledge", &interrupt_acknowledge, sizeof(interrupt_acknowledge)) == sizeof(interrupt_acknowledge)
+            && (interrupt_acknowledge & 0xffffu) == PEGASOS2_INTACK_OFFSET)
+            return interrupt_acknowledge & ~0xffffu;
+    }
+    return 0;
 }
 
 static void write_console(char const* string)
@@ -277,6 +298,7 @@ void boot_main(FirmwareEntry firmware_entry)
     Cell qemu_boot_kernel[4];
     if (is_pegasos2() && get_property(chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) == sizeof(qemu_boot_kernel) && initialize_qemu_pegasos2_serial()) {
         Cell timebase_frequency = discover_timebase_frequency();
+        Cell mv64361_registers_base = discover_mv64361_registers_base(root);
         if (powerpc_setjmp_self_test())
             serial_write("SerenityOS PowerPC: setjmp roundtrip passed\r\n");
         else
@@ -328,7 +350,7 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: PCI 64-bit address assignment passed\r\n");
         else
             serial_write("SerenityOS PowerPC: PCI 64-bit address assignment failed\r\n");
-        if (powerpc_pegasos2_pci_config_test())
+        if (powerpc_pegasos2_pci_config_test(mv64361_registers_base))
             serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read passed\r\n");
         else {
             serial_write("SerenityOS PowerPC: Pegasos 2 PCI config read failed 0x");
@@ -491,7 +513,7 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: user-mode external IRQ resume passed\r\n");
         else
             serial_write("SerenityOS PowerPC: user-mode external IRQ resume failed\r\n");
-        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency))
+        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency, mv64361_registers_base))
             serial_write("SerenityOS PowerPC: HPT and timebase boot handoff passed\r\n");
         else
             serial_write("SerenityOS PowerPC: HPT and timebase boot handoff failed\r\n");

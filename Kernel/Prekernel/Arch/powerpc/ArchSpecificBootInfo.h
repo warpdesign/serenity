@@ -20,6 +20,7 @@ struct ArchSpecificBootInfo {
     PhysicalAddress hpt_physical_address { 0 };
     u32 hpt_group_count { 0 };
     u32 timebase_frequency_hz { 0 };
+    u32 mv64361_registers_physical_base { 0 };
 };
 
 }

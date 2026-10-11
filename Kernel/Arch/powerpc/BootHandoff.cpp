@@ -18,6 +18,16 @@ Optional<u32> boot_timebase_frequency(BootInfo const& boot_info)
     return boot_info.arch_specific.timebase_frequency_hz;
 }
 
+Optional<u32> boot_mv64361_registers_base(BootInfo const& boot_info)
+{
+    if (boot_info.boot_method != BootMethod::FirmwareMemoryMap)
+        return {};
+    auto base = boot_info.arch_specific.mv64361_registers_physical_base;
+    if (base == 0 || (base & 0xffffu) != 0 || base > 0xffff0000u)
+        return {};
+    return base;
+}
+
 bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& table)
 {
     if (boot_info.boot_method != BootMethod::FirmwareMemoryMap || boot_info.kernel_mapping_base != KERNEL_MAPPING_BASE)

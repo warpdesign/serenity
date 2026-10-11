@@ -23,6 +23,7 @@ static_assert(sizeof(decltype(Kernel::BootInfo::kernel_mapping_base)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::open_firmware_entry)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::hpt_virtual_address)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::timebase_frequency_hz)) == 4);
+static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::mv64361_registers_physical_base)) == 4);
 static_assert(sizeof(PowerPCHPTEntry) == 8);
 static_assert(sizeof(PowerPCHashPageTable) == 8);
 static_assert(sizeof(PowerPCExceptionState) == 152);
@@ -36,9 +37,9 @@ extern "C" u32 powerpc_hpt_table_physical();
 extern "C" u32 powerpc_hpt_group_count();
 extern "C" u32 powerpc_quickmap_probe_address();
 
-extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes, u32 timebase_frequency)
+extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes, u32 timebase_frequency, u32 controller_base)
 {
-    if (!ranges || range_count == 0 || total_bytes == 0)
+    if (!ranges || range_count == 0 || total_bytes == 0 || controller_base == 0)
         return 0;
     if (powerpc_quickmap_probe_address() != KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE)
         return 0;
@@ -55,6 +56,18 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() };
     boot_info.arch_specific.hpt_group_count = powerpc_hpt_group_count();
     boot_info.arch_specific.timebase_frequency_hz = timebase_frequency;
+    boot_info.arch_specific.mv64361_registers_physical_base = controller_base;
+
+    auto pci_base = Kernel::PowerPC::boot_mv64361_registers_base(boot_info);
+    if (!pci_base.has_value() || pci_base.value() != controller_base)
+        return 0;
+    boot_info.arch_specific.mv64361_registers_physical_base = 0;
+    if (Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.mv64361_registers_physical_base = controller_base + 0x1000u;
+    if (Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.mv64361_registers_physical_base = controller_base;
 
     auto frequency = Kernel::PowerPC::boot_timebase_frequency(boot_info);
     if (!frequency.has_value() || frequency.value() != timebase_frequency

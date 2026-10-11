@@ -15,5 +15,6 @@ namespace Kernel::PowerPC {
 // Validate the firmware handoff against SDR1 and produce the mapped HPT view.
 bool boot_hpt_from_boot_info(BootInfo const&, PowerPCHashPageTable&);
 Optional<u32> boot_timebase_frequency(BootInfo const&);
+Optional<u32> boot_mv64361_registers_base(BootInfo const&);
 
 }

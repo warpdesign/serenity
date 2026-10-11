@@ -9,7 +9,7 @@
 
 volatile u32 powerpc_pegasos2_pci_config_debug;
 
-extern "C" int powerpc_pegasos2_pci_config_test()
+extern "C" int powerpc_pegasos2_pci_config_test(u32 controller_base)
 {
     using Kernel::PowerPC::Pegasos2::pci_config_address;
     using Kernel::PowerPC::Pegasos2::read_pci_config32;
@@ -22,10 +22,12 @@ extern "C" int powerpc_pegasos2_pci_config_test()
         || pci_config_address(0, 0, 0, 0x100).has_value())
         return 0;
 
-    auto* south_address = reinterpret_cast<volatile u32*>(PEGASOS2_PCI_SOUTH_CONFIG_ADDRESS);
-    auto* south_data = reinterpret_cast<volatile u32*>(PEGASOS2_PCI_SOUTH_CONFIG_DATA);
-    auto* agp_address = reinterpret_cast<volatile u32*>(PEGASOS2_PCI_AGP_CONFIG_ADDRESS);
-    auto* agp_data = reinterpret_cast<volatile u32*>(PEGASOS2_PCI_AGP_CONFIG_DATA);
+    if (controller_base == 0 || (controller_base & 0xffffu) != 0)
+        return 0;
+    auto* south_address = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_SOUTH_CONFIG_ADDRESS_OFFSET);
+    auto* south_data = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_SOUTH_CONFIG_DATA_OFFSET);
+    auto* agp_address = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_AGP_CONFIG_ADDRESS_OFFSET);
+    auto* agp_data = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_AGP_CONFIG_DATA_OFFSET);
     auto south_id = read_pci_config32(south_address, south_data, 0, 0, 0, 0);
     auto agp_id = read_pci_config32(agp_address, agp_data, 0, 0, 0, 0);
     if (!south_id.has_value() || !agp_id.has_value())
