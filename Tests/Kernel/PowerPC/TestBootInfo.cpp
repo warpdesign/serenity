@@ -84,6 +84,10 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     boot_info.arch_specific.pci_host_bridges[0] = bridges[0];
     if (boot_info.arch_specific.pci_host_bridges[0].ranges[0].host_address != original_host_address)
         return 0;
+    boot_info.arch_specific.pci_host_bridges[0].ranges[0].length = 0x100000000ull;
+    if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.pci_host_bridges[0] = bridges[0];
     boot_info.arch_specific.pci_host_bridges[1].bridge_number = 0;
     if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
         return 0;

@@ -5,8 +5,17 @@
  */
 
 #include <Kernel/Arch/powerpc/Pegasos2/PCIConfig.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 
 namespace Kernel::PowerPC::Pegasos2 {
+
+Optional<PCIConfigRegisters> pci_config_register_offsets(u32 bridge_number)
+{
+    if (bridge_number > 1)
+        return {};
+    u16 address = PEGASOS2_PCI_SOUTH_CONFIG_ADDRESS_OFFSET + bridge_number * 0x80u;
+    return PCIConfigRegisters { address, static_cast<u16>(address + sizeof(u32)) };
+}
 
 Optional<u32> pci_config_address(u8 bus, u8 device, u8 function, u16 offset)
 {

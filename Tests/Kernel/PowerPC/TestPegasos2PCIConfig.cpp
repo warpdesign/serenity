@@ -12,6 +12,7 @@ volatile u32 powerpc_pegasos2_pci_config_debug;
 extern "C" int powerpc_pegasos2_pci_config_test(u32 controller_base)
 {
     using Kernel::PowerPC::Pegasos2::pci_config_address;
+    using Kernel::PowerPC::Pegasos2::pci_config_register_offsets;
     using Kernel::PowerPC::Pegasos2::read_pci_config8;
     using Kernel::PowerPC::Pegasos2::read_pci_config16;
     using Kernel::PowerPC::Pegasos2::read_pci_config32;
@@ -29,10 +30,18 @@ extern "C" int powerpc_pegasos2_pci_config_test(u32 controller_base)
 
     if (controller_base == 0 || (controller_base & 0xffffu) != 0)
         return 0;
-    auto* south_address = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_SOUTH_CONFIG_ADDRESS_OFFSET);
-    auto* south_data = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_SOUTH_CONFIG_DATA_OFFSET);
-    auto* agp_address = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_AGP_CONFIG_ADDRESS_OFFSET);
-    auto* agp_data = reinterpret_cast<volatile u32*>(controller_base + PEGASOS2_PCI_AGP_CONFIG_DATA_OFFSET);
+    auto south_offsets = pci_config_register_offsets(0);
+    auto agp_offsets = pci_config_register_offsets(1);
+    if (!south_offsets.has_value() || !agp_offsets.has_value() || pci_config_register_offsets(2).has_value()
+        || south_offsets->address_offset != PEGASOS2_PCI_SOUTH_CONFIG_ADDRESS_OFFSET
+        || south_offsets->data_offset != PEGASOS2_PCI_SOUTH_CONFIG_DATA_OFFSET
+        || agp_offsets->address_offset != PEGASOS2_PCI_AGP_CONFIG_ADDRESS_OFFSET
+        || agp_offsets->data_offset != PEGASOS2_PCI_AGP_CONFIG_DATA_OFFSET)
+        return 0;
+    auto* south_address = reinterpret_cast<volatile u32*>(controller_base + south_offsets->address_offset);
+    auto* south_data = reinterpret_cast<volatile u32*>(controller_base + south_offsets->data_offset);
+    auto* agp_address = reinterpret_cast<volatile u32*>(controller_base + agp_offsets->address_offset);
+    auto* agp_data = reinterpret_cast<volatile u32*>(controller_base + agp_offsets->data_offset);
     auto south_id = read_pci_config32(south_address, south_data, 0, 0, 0, 0);
     auto agp_id = read_pci_config32(agp_address, agp_data, 0, 0, 0, 0);
     if (!south_id.has_value() || !agp_id.has_value())

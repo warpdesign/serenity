@@ -11,6 +11,12 @@
 
 namespace Kernel::PowerPC::Pegasos2 {
 
+struct PCIConfigRegisters {
+    u16 address_offset;
+    u16 data_offset;
+};
+
+Optional<PCIConfigRegisters> pci_config_register_offsets(u32 bridge_number);
 Optional<u32> pci_config_address(u8 bus, u8 device, u8 function, u16 offset);
 Optional<u8> read_pci_config8(volatile u32* address_register, volatile u32* data_register,
     u8 bus, u8 device, u8 function, u16 offset);

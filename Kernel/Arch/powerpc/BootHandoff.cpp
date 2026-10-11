@@ -42,7 +42,7 @@ Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo 
             return {};
         for (u32 range_index = 0; range_index < bridge.range_count; ++range_index) {
             auto const& range = bridge.ranges[range_index];
-            if (range.space < 1 || range.space > 3 || range.length == 0
+            if (range.space < 1 || range.space > 3 || range.length == 0 || range.length > 0xffffffffull
                 || range.host_address >= 0x100000000ull || range.length > 0x100000000ull - range.host_address
                 || range.bus_address > ~0ull - range.length)
                 return {};
