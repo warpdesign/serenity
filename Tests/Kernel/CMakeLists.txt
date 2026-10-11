@@ -90,3 +90,19 @@ endforeach()
 target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 
 add_subdirectory(POSIX)
+
+if (SERENITY_ARCH STREQUAL "powerpc")
+    add_custom_target(PowerPCWindowServerCheckQuick
+        DEPENDS PowerPCFirmwareLoaderCheckQuick init mount DeviceMapper SystemServer WindowServer keymap Loader.so
+    )
+    add_custom_target(PowerPCWindowServerCheck
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_window_server.py"
+            --qemu qemu-system-ppc
+            --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+            --user-loader "$<TARGET_FILE:Loader.so>"
+            --build-dir "${CMAKE_BINARY_DIR}"
+        DEPENDS PowerPCWindowServerCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+endif()
