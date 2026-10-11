@@ -39,16 +39,39 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     set(powerpc_kernel_loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf")
     set(powerpc_loader_test "${SerenityOS_SOURCE_DIR}/Tests/DynamicLoader/PowerPC/test_bootstrap.py")
     set(powerpc_program_mapping_test "${SerenityOS_SOURCE_DIR}/Tests/DynamicLoader/PowerPC/test_program_mapping.py")
+    set(powerpc_program_mapping_arguments
+        --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}"
+        --user-loader "$<TARGET_FILE:Loader.so>" --program "$<TARGET_FILE:init>"
+        --library "$<TARGET_FILE:LibC>" --library "$<TARGET_FILE:LibCore>"
+        --library "$<TARGET_FILE:LibCoreBasic>" --library "$<TARGET_FILE:LibCoreMinimal>"
+        --library "$<TARGET_FILE:LibCrypt>" --library "$<TARGET_FILE:LibURL>"
+        --library "$<TARGET_FILE:LibUnicode>" --library "$<TARGET_FILE:LibTextCodec>"
+        --library "$<TARGET_FILE:LibSystem>"
+    )
     add_custom_target(PowerPCDynamicLoaderCheckQuick
         COMMAND python3 "${powerpc_loader_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>"
-        COMMAND python3 "${powerpc_program_mapping_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --program "$<TARGET_FILE:init>" --library "$<TARGET_FILE:LibC>" --library "$<TARGET_FILE:LibCore>" --library "$<TARGET_FILE:LibCoreBasic>" --library "$<TARGET_FILE:LibCoreMinimal>" --library "$<TARGET_FILE:LibCrypt>" --library "$<TARGET_FILE:LibURL>" --library "$<TARGET_FILE:LibUnicode>" --library "$<TARGET_FILE:LibTextCodec>" --library "$<TARGET_FILE:LibSystem>"
+        COMMAND python3 "${powerpc_program_mapping_test}" ${powerpc_program_mapping_arguments}
         DEPENDS PowerPCFirmwareLoader Loader.so init LibC
         USES_TERMINAL
+        VERBATIM
     )
     add_custom_target(PowerPCDynamicLoaderCheck
         COMMAND python3 "${powerpc_loader_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --memory 512 --cpu 750cxe
-        COMMAND python3 "${powerpc_program_mapping_test}" --qemu qemu-system-ppc --kernel-loader "${powerpc_kernel_loader}" --user-loader "$<TARGET_FILE:Loader.so>" --program "$<TARGET_FILE:init>" --library "$<TARGET_FILE:LibC>" --library "$<TARGET_FILE:LibCore>" --library "$<TARGET_FILE:LibCoreBasic>" --library "$<TARGET_FILE:LibCoreMinimal>" --library "$<TARGET_FILE:LibCrypt>" --library "$<TARGET_FILE:LibURL>" --library "$<TARGET_FILE:LibUnicode>" --library "$<TARGET_FILE:LibTextCodec>" --library "$<TARGET_FILE:LibSystem>" --memory 512 --cpu 750cxe
+        COMMAND python3 "${powerpc_program_mapping_test}" ${powerpc_program_mapping_arguments} --memory 512 --cpu 750cxe
         DEPENDS PowerPCDynamicLoaderCheckQuick
         USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCDynamicLoaderForkCheckQuick
+        COMMAND python3 "${powerpc_program_mapping_test}" ${powerpc_program_mapping_arguments} --through-fork
+        DEPENDS PowerPCFirmwareLoader Loader.so init LibC
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCDynamicLoaderForkCheck
+        COMMAND python3 "${powerpc_program_mapping_test}" ${powerpc_program_mapping_arguments} --through-fork --memory 512 --cpu 750cxe
+        DEPENDS PowerPCDynamicLoaderForkCheckQuick
+        USES_TERMINAL
+        VERBATIM
     )
 endif()

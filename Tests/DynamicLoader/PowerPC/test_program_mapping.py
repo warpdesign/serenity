@@ -5,6 +5,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,7 @@ def main():
     parser.add_argument("--library", action="append", required=True)
     parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--cpu")
+    parser.add_argument("--through-fork", action="store_true")
     args = parser.parse_args()
 
     mke2fs = shutil.which("mke2fs")
@@ -60,16 +62,19 @@ def main():
         if args.cpu:
             command.extend(("-cpu", args.cpu))
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        marker = b"DynamicObject: DYNAMIC tag handling not implemented for DT_LOPROC (1879048192) in /usr/lib/libunicode.so.serenity"
+        if args.through_fork:
+            marker = b"VirtualFileSystem: Remounting inode 2:2"
+        else:
+            marker = b"DynamicObject: DYNAMIC tag handling not implemented for DT_LOPROC (1879048192) in /usr/lib/libunicode.so.serenity"
         found = False
         try:
-            deadline = time.monotonic() + 35
+            deadline = time.monotonic() + (85 if args.through_fork else 35)
             while time.monotonic() < deadline and process.poll() is None:
                 output = serial.read_bytes() if serial.exists() else b""
                 if marker in output:
                     found = True
                     break
-                if b"KERNEL PANIC" in output:
+                if b"KERNEL PANIC" in output or b"KUBSAN" in output:
                     break
                 time.sleep(0.05)
         finally:
@@ -77,13 +82,22 @@ def main():
             _, errors = process.communicate(timeout=5)
 
         output = serial.read_bytes() if serial.exists() else b""
-        if not found or b"Running first user process: /init" not in output or b"KERNEL PANIC" in output:
+        if args.through_fork:
+            parent = re.search(rb"init\((\d+)\).*Spawning mount -a", output)
+            remounting_children = [int(match.group(1)) for line in output.splitlines() if marker in line
+                                   if (match := re.search(rb"init\((\d+):\d+\)", line))]
+            found = found and parent is not None and any(pid != int(parent.group(1)) for pid in remounting_children)
+        if (not found or b"Running first user process: /init" not in output
+                or b"KERNEL PANIC" in output or b"KUBSAN" in output):
             raise SystemExit(
-                "Pegasos 2 dynamic loader did not map /init and its dependencies:\n"
+                "Pegasos 2 did not reach the expected init milestone:\n"
                 + output.decode(errors="replace")[-3000:]
                 + errors.decode(errors="replace")[-1000:]
             )
-    print("Pegasos 2 dynamic loader program and dependency mapping passed")
+    if args.through_fork:
+        print("Pegasos 2 dynamic init fork and child remount passed")
+    else:
+        print("Pegasos 2 dynamic loader program and dependency mapping passed")
 
 
 if __name__ == "__main__":

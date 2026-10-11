@@ -49,6 +49,35 @@
     rfi
 .endm
 
+// Fault handlers may wait for a file-backed page, and interrupt handlers may
+// schedule another thread. Keep their RegisterState and C++ call stack on the
+// current thread's kernel stack. Supervisor exceptions continue below the
+// interrupted kernel frame; user exceptions begin at the stack top.
+.macro POWERPC_MOVE_EXCEPTION_FRAME_TO_THREAD_STACK
+    mr 30,1
+    lwz 0,PPC_CONTEXT_SRR1(30)
+    andi. 0,0,0x4000
+    beq .Lsupervisor_stack\@
+    stwu 1,-64(1)
+    bl powerpc_current_kernel_stack_top
+    b .Lhave_stack\@
+.Lsupervisor_stack\@:
+    lwz 3,PPC_CONTEXT_GPR1(30)
+.Lhave_stack\@:
+    addi 1,3,-320
+    mr 31,1
+    mr 10,30
+    mr 8,1
+    li 9,64
+    mtctr 9
+.Lcopy_exception_frame\@:
+    lwz 9,0(10)
+    stw 9,0(8)
+    addi 10,10,4
+    addi 8,8,4
+    bdnz .Lcopy_exception_frame\@
+.endm
+
 .section .text.powerpc_data_storage_vector, "ax"
 .p2align 2
 .globl powerpc_data_storage_vector_start
@@ -94,9 +123,10 @@ powerpc_system_call_vector_end:
 .globl powerpc_data_storage_high_handler
 .type powerpc_data_storage_high_handler,@function
 powerpc_data_storage_high_handler:
-    mr 3,1
-    lwz 4,152(1)
-    lwz 5,156(1)
+    POWERPC_MOVE_EXCEPTION_FRAME_TO_THREAD_STACK
+    mr 3,31
+    lwz 4,152(31)
+    lwz 5,156(31)
     addi 1,1,-32 // C++ callee linkage area must not overlap RegisterState.
     b powerpc_data_storage_exception_handler
 .size powerpc_data_storage_high_handler,.-powerpc_data_storage_high_handler
@@ -105,7 +135,8 @@ powerpc_data_storage_high_handler:
 .globl powerpc_instruction_storage_high_handler
 .type powerpc_instruction_storage_high_handler,@function
 powerpc_instruction_storage_high_handler:
-    mr 3,1
+    POWERPC_MOVE_EXCEPTION_FRAME_TO_THREAD_STACK
+    mr 3,31
     addi 1,1,-32
     b powerpc_instruction_storage_exception_handler
 .size powerpc_instruction_storage_high_handler,.-powerpc_instruction_storage_high_handler
@@ -114,7 +145,8 @@ powerpc_instruction_storage_high_handler:
 .globl powerpc_decrementer_high_handler
 .type powerpc_decrementer_high_handler,@function
 powerpc_decrementer_high_handler:
-    mr 3,1
+    POWERPC_MOVE_EXCEPTION_FRAME_TO_THREAD_STACK
+    mr 3,31
     addi 1,1,-32
     b powerpc_decrementer_exception_handler
 .size powerpc_decrementer_high_handler,.-powerpc_decrementer_high_handler
@@ -123,7 +155,8 @@ powerpc_decrementer_high_handler:
 .globl powerpc_external_high_handler
 .type powerpc_external_high_handler,@function
 powerpc_external_high_handler:
-    mr 3,1
+    POWERPC_MOVE_EXCEPTION_FRAME_TO_THREAD_STACK
+    mr 3,31
     addi 1,1,-32
     b powerpc_external_exception_handler
 .size powerpc_external_high_handler,.-powerpc_external_high_handler
