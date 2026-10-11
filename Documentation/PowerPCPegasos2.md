@@ -250,8 +250,8 @@ vector `0x900` against elapsed timebase ticks. The
 [MPC750 manual](https://www.nxp.com/docs/en/reference-manual/MPC750UM.pdf)
 defines the decrementer exception and its vector. The boot probe temporarily
 masks both Pegasos 2 legacy 8259 controllers while CPU external interrupts are
-enabled, then restores their masks. QEMU otherwise delivers a device interrupt
-at the unimplemented `0x500` vector during the second tick. The full kernel
+enabled, then restores their masks. Without the masks, QEMU delivered a device
+interrupt at `0x500` before the probe had installed that vector. The full kernel
 still needs a device interrupt entry path and timer callback dispatch.
 The Pegasos 2 controller now uses Serenity's `IRQController` interface with
 MMIO mappings for the VT8231 I/O ports and MV64361 interrupt acknowledge
@@ -259,6 +259,10 @@ window. The same register logic runs in the real-mode probe: it programs PIT
 channel 0, acknowledges IRQ0 through the bridge, checks edge EOI, and checks
 slave cascade mask changes. The controller and handler table compile for
 PowerPC; the kernel exception vector has not yet dispatched an IRQ to them.
+PCI MSI and MSI-X remain unavailable on this PowerPC controller path. PCI
+devices therefore select pin interrupts, matching the sixteen registered
+legacy IRQ lines; the architecture capability check also lets generic PCI
+code compile without a PowerPC conditional.
 The probe now copies a `0x500` vector that saves all integer registers and
 SRR0/SRR1, calls a C PIC dispatcher, then restores the state with `rfi`. QEMU
 observes one external interrupt from PIT channel 0 and checks that the saved
