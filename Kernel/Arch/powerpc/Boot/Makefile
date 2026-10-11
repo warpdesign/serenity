@@ -33,7 +33,7 @@ PAGE_MAPPING_TEST_OBJECTS := $(BUILD_DIR)/test_page_mapping.o
 VSID_ALLOCATOR_OBJECTS := $(BUILD_DIR)/vsid_allocator.o $(BUILD_DIR)/test_vsid_allocator.o
 FIRMWARE_MEMORY_MAP_TEST_OBJECTS := $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/test_firmware_memory_map.o
 BOOT_INFO_TEST_OBJECTS := $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/test_boot_info.o
-REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o $(BUILD_DIR)/fork_registers.o $(BUILD_DIR)/process_entry.o
+REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o $(BUILD_DIR)/fork_registers.o $(BUILD_DIR)/process_entry.o $(BUILD_DIR)/create_thread.o
 STACK_TEST_OBJECTS := $(BUILD_DIR)/test_stack_unwinder.o
 TIMER_TEST_OBJECTS := $(BUILD_DIR)/test_decrementer.o
 PIC_TEST_OBJECTS := $(BUILD_DIR)/test_legacy_pic.o
@@ -244,6 +244,9 @@ $(BUILD_DIR)/fork_registers.o: ../ForkRegisters.cpp ../../../../Kernel/Arch/Fork
 
 $(BUILD_DIR)/process_entry.o: ../ProcessEntry.cpp ../../../../Kernel/Arch/ProcessEntry.h ../ThreadRegisters.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/create_thread.o: ../CreateThread.cpp ../../../../Kernel/Arch/CreateThread.h ../ThreadRegisters.h ../../../../Kernel/API/Syscall.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_stack_unwinder.o: ../../../../Tests/Kernel/PowerPC/TestStackUnwinder.cpp ../../../../AK/Arch/powerpc/StackUnwinder.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -fno-omit-frame-pointer -fno-optimize-sibling-calls -c $< -o $@

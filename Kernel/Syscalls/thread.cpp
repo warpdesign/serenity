@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <AK/Checked.h>
+#include <Kernel/Arch/CreateThread.h>
 #include <Kernel/Memory/MemoryManager.h>
 #include <Kernel/Tasks/PerformanceManager.h>
 #include <Kernel/Tasks/Process.h>
@@ -57,40 +58,10 @@ ErrorOr<FlatPtr> Process::sys$create_thread(void* (*entry)(void*), Userspace<Sys
     regs.set_ip((FlatPtr)entry);
     regs.set_sp(user_sp.value());
 
-#if ARCH(X86_64)
-    regs.set_flags(0x0202);
-    regs.cr3 = address_space().with([](auto& space) { return space->page_directory().cr3(); });
-
     // Set up the argument registers expected by pthread_create_helper.
-    regs.rdi = (FlatPtr)params.entry;
-    regs.rsi = (FlatPtr)params.entry_argument;
-    regs.rdx = (FlatPtr)params.stack_location;
-    regs.rcx = (FlatPtr)params.stack_size;
-
-    thread->arch_specific_data().fs_base = bit_cast<FlatPtr>(params.tls_pointer);
-#elif ARCH(AARCH64)
-    regs.ttbr0_el1 = address_space().with([](auto& space) { return space->page_directory().ttbr0(); });
-
-    // Set up the argument registers expected by pthread_create_helper.
-    regs.x[0] = (FlatPtr)params.entry;
-    regs.x[1] = (FlatPtr)params.entry_argument;
-    regs.x[2] = (FlatPtr)params.stack_location;
-    regs.x[3] = (FlatPtr)params.stack_size;
-
-    regs.tpidr_el0 = bit_cast<FlatPtr>(params.tls_pointer);
-#elif ARCH(RISCV64)
-    regs.satp = address_space().with([](auto& space) { return space->page_directory().satp(); });
-
-    // Set up the argument registers expected by pthread_create_helper.
-    regs.x[9] = (FlatPtr)params.entry;
-    regs.x[10] = (FlatPtr)params.entry_argument;
-    regs.x[11] = (FlatPtr)params.stack_location;
-    regs.x[12] = (FlatPtr)params.stack_size;
-
-    regs.x[3] = bit_cast<FlatPtr>(params.tls_pointer);
-#else
-#    error Unknown architecture
-#endif
+    address_space().with([&](auto& space) {
+        prepare_user_thread_registers(regs, thread->arch_specific_data(), space->page_directory(), params);
+    });
 
     PerformanceManager::add_thread_created_event(*thread);
 
