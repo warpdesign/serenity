@@ -41,7 +41,7 @@ def main():
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline and process.poll() is None:
                 serial_output = serial.read_bytes() if serial.exists() else b""
-                if b"Boot method: FirmwareMemoryMap" in serial_output:
+                if b"KernelRng: No entropy source available!" in serial_output:
                     break
                 time.sleep(0.05)
         finally:
@@ -55,6 +55,7 @@ def main():
             b"Starting SerenityOS...",
             b"Kernel Commandline: serenity-loader-enter-kernel serial_debug",
             b"Boot method: FirmwareMemoryMap",
+            b"KernelRng: No entropy source available!",
         )
         expected_firmware = (
             b"SerenityOS PowerPC loader: boot handoff validated",
@@ -62,6 +63,8 @@ def main():
         )
         missing = [marker for marker in expected_serial if marker not in serial_output]
         missing += [marker for marker in expected_firmware if marker not in trace_output]
+        if b"KERNEL PANIC" in serial_output:
+            missing.append(b"no kernel panic during page fault recovery")
         if missing:
             raise SystemExit(
                 f"Pegasos 2 kernel entry missed {missing!r}:\n"
