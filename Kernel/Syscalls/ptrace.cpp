@@ -1,12 +1,12 @@
 /*
- * Copyright (c) 2020, Itamar S. <itamar8910@gmail.com>
- * Copyright (c) 2020-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Itamar S. <itamar8910@gmail.com>
+ * Copyright (c) 2020-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <AK/ScopeGuard.h>
-#include <Kernel/Arch/aarch64/Registers.h>
+#include <Kernel/Arch/Ptrace.h>
 #include <Kernel/Memory/PrivateInodeVMObject.h>
 #include <Kernel/Memory/Region.h>
 #include <Kernel/Memory/ScopedAddressSpaceSwitcher.h>
@@ -119,24 +119,7 @@ static ErrorOr<FlatPtr> handle_ptrace(Kernel::Syscall::SC_ptrace_params const& p
         if (peer_saved_registers.previous_mode() != ExecutionMode::User)
             return EPERM;
 
-#if ARCH(X86_64)
-        // Single stepping works by setting the x86 TF flag bit in the eflags register.
-        // This flag causes the cpu to enter single-stepping mode, which causes
-        // Interrupt 1 (debug interrupt) to be emitted after every instruction.
-        // To single step the program, we set the TF flag and continue the debuggee.
-        constexpr u32 TRAP_FLAG = 0x100;
-        peer_saved_registers.rflags |= TRAP_FLAG;
-#elif ARCH(AARCH64)
-        // Single stepping on AArch64 works by setting the SS flag in the SPSR_EL1 register.
-        // When an exception return is executed in EL1, the value of SPSR_EL1.SS is copied
-        // to PSTATE.SS. To enable single stepping, the MDSCR_EL1.SS must also be set to 1.
-        peer_saved_registers.spsr_el1 |= Aarch64::SPSR_EL1_SS_FLAG;
-        peer->debug_register_state().mdscr_el1 |= Aarch64::MDSCR_EL1_SS_FLAG;
-#elif ARCH(RISCV64)
-        TODO_RISCV64();
-#else
-#    error Unknown architecture
-#endif
+        TRY(enable_ptrace_single_step(*peer, peer_saved_registers));
         tracer->set_regs(peer_saved_registers);
         break;
     }
@@ -251,84 +234,6 @@ ErrorOr<void> Process::poke_user_data(Userspace<FlatPtr*> address, FlatPtr data)
 
         return copy_to_user(address, &data);
     });
-}
-
-ErrorOr<FlatPtr> Thread::peek_debug_register(u32 register_index)
-{
-#if ARCH(X86_64)
-    FlatPtr data;
-    switch (register_index) {
-    case 0:
-        data = m_debug_register_state.dr0;
-        break;
-    case 1:
-        data = m_debug_register_state.dr1;
-        break;
-    case 2:
-        data = m_debug_register_state.dr2;
-        break;
-    case 3:
-        data = m_debug_register_state.dr3;
-        break;
-    case 6:
-        data = m_debug_register_state.dr6;
-        break;
-    case 7:
-        data = m_debug_register_state.dr7;
-        break;
-    default:
-        return EINVAL;
-    }
-    return data;
-#elif ARCH(AARCH64)
-    (void)register_index;
-    dbgln("FIXME: Implement Thread::peek_debug_register on AArch64");
-    return ENOTSUP;
-#elif ARCH(RISCV64)
-    (void)register_index;
-    dbgln("FIXME: Implement Thread::peek_debug_register on RISC-V");
-    return ENOTSUP;
-#else
-#    error "Unknown architecture"
-#endif
-}
-
-ErrorOr<void> Thread::poke_debug_register(u32 register_index, FlatPtr data)
-{
-#if ARCH(X86_64)
-    switch (register_index) {
-    case 0:
-        m_debug_register_state.dr0 = data;
-        break;
-    case 1:
-        m_debug_register_state.dr1 = data;
-        break;
-    case 2:
-        m_debug_register_state.dr2 = data;
-        break;
-    case 3:
-        m_debug_register_state.dr3 = data;
-        break;
-    case 7:
-        m_debug_register_state.dr7 = data;
-        break;
-    default:
-        return EINVAL;
-    }
-    return {};
-#elif ARCH(AARCH64)
-    (void)register_index;
-    (void)data;
-    dbgln("FIXME: Implement Thread::poke_debug_register on AArch64");
-    return ENOTSUP;
-#elif ARCH(RISCV64)
-    (void)register_index;
-    (void)data;
-    dbgln("FIXME: Implement Thread::poke_debug_register on RISC-V");
-    return ENOTSUP;
-#else
-#    error "Unknown architecture"
-#endif
 }
 
 }

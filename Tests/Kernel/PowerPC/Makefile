@@ -44,6 +44,8 @@ check-quick:
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -fsyntax-only ../../../Kernel/Arch/powerpc/ForkRegisters.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Syscalls/execve.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -fsyntax-only ../../../Kernel/Arch/powerpc/ProcessEntry.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Syscalls/ptrace.cpp
+	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Ptrace.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/InterruptManagement.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Interrupts.cpp
 	$(CXX) $(CXXFLAGS) -DKERNEL -I$(BUILD_DIR) -include ../../../Kernel/Arch/powerpc/MemoryLayout.h -I../../../Userland/Libraries/LibC -I../../../Userland/Libraries -fsyntax-only ../../../Kernel/Arch/powerpc/Pegasos2/InterruptController.cpp
