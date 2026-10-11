@@ -29,6 +29,9 @@ static struct PowerPCPCIHostBridgeInfo s_pci_host_bridges[POWERPC_PEGASOS2_PCI_H
 static Cell s_pci_host_bridge_count;
 static struct PowerPCRtasInfo s_rtas_info;
 static int s_rtas_power_off_test_requested;
+static volatile Cell s_rtas_clock_debug;
+static volatile Cell s_rtas_clock_before;
+static volatile Cell s_rtas_clock_after;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
@@ -78,6 +81,8 @@ extern int powerpc_legacy_pic_irq0_roundtrip(Cell);
 extern int powerpc_external_irq_roundtrip(Cell);
 extern int powerpc_run_high_stack_external_irq_probe(Cell);
 extern int powerpc_mmu_high_alias_roundtrip(void);
+extern void powerpc_enable_boot_translation(void);
+extern void powerpc_disable_boot_translation(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_debug_output_test(void);
 extern int powerpc_current_time_fallback_test(void);
@@ -204,12 +209,15 @@ static int prepare_rtas(void)
     Cell image_size = 0;
     Cell power_off_token = 0;
     Cell reboot_token = 0;
+    Cell clock_token = 0;
     if (get_property(node, "rtas-size", &image_size, sizeof(image_size)) != sizeof(image_size)
         || get_property(node, "power-off", &power_off_token, sizeof(power_off_token)) != sizeof(power_off_token)
         || get_property(node, "system-reboot", &reboot_token, sizeof(reboot_token)) != sizeof(reboot_token)
         || image_size == 0 || image_size > 1024 * 1024 - 8192
         || power_off_token == 0 || reboot_token == 0)
         return 0;
+    if (get_property(node, "get-time-of-day", &clock_token, sizeof(clock_token)) != sizeof(clock_token))
+        clock_token = 0;
     Cell image_allocation_size = (image_size + 4095u) & ~4095u;
     Cell allocation_size = image_allocation_size + 4096;
     Cell base = claim_pages(allocation_size);
@@ -233,7 +241,7 @@ static int prepare_rtas(void)
     sync_instruction_cache(base, image_allocation_size);
     s_rtas_info = (struct PowerPCRtasInfo) {
         base, allocation_size, entry, base + image_allocation_size,
-        power_off_token, reboot_token
+        power_off_token, reboot_token, clock_token
     };
     return 1;
 }
@@ -262,7 +270,45 @@ static void request_rtas_power_off(void)
     arguments->values[1] = 0;
     arguments->values[2] = (Cell)-1;
     __asm__ volatile("sync" : : : "memory");
-    ((void (*)(Cell))(__UINTPTR_TYPE__)s_rtas_info.entry_physical)(s_rtas_info.arguments_physical);
+    powerpc_enable_boot_translation();
+    (void)powerpc_rtas_enter(s_rtas_info.arguments_physical, s_rtas_info.entry_physical,
+        firmware_pointer(powerpc_rtas_return_real), firmware_pointer(powerpc_rtas_return_virtual));
+    powerpc_disable_boot_translation();
+}
+
+static int test_translated_rtas_clock(void)
+{
+    if (s_rtas_info.entry_physical == 0 || s_rtas_info.get_time_of_day_token == 0)
+        return 0;
+    struct PowerPCRtasArguments* arguments = (struct PowerPCRtasArguments*)(__UINTPTR_TYPE__)s_rtas_info.arguments_physical;
+    arguments->token = s_rtas_info.get_time_of_day_token;
+    arguments->argument_count = 0;
+    arguments->result_count = 8;
+    for (Cell index = 0; index < 8; ++index)
+        arguments->values[index] = (Cell)-1;
+    __asm__ volatile("sync" : : : "memory");
+
+    powerpc_enable_boot_translation();
+    Cell translated_before;
+    __asm__ volatile("mfmsr %0" : "=r"(translated_before));
+    Cell hypercall_status = powerpc_rtas_enter(s_rtas_info.arguments_physical, s_rtas_info.entry_physical,
+        firmware_pointer(powerpc_rtas_return_real), firmware_pointer(powerpc_rtas_return_virtual));
+    Cell translated_after;
+    __asm__ volatile("mfmsr %0" : "=r"(translated_after));
+    s_rtas_clock_before = translated_before;
+    s_rtas_clock_after = translated_after;
+    powerpc_disable_boot_translation();
+    __asm__ volatile("sync" : : : "memory");
+    // The RTAS entry enables machine checks in QEMU. The guest's
+    // privilege, translation, interrupt, and FP state must roundtrip.
+    s_rtas_clock_debug = ((translated_before & 0x30u) == 0x30u ? 1u : 0u)
+        | (((translated_after ^ translated_before) & ~0x1000u) == 0 ? 2u : 0u)
+        | (hypercall_status == 0 ? 4u : 0u)
+        | (arguments->values[0] == 0 ? 8u : 0u)
+        | (arguments->values[1] >= 2020 && arguments->values[1] < 2100 ? 16u : 0u)
+        | (arguments->values[2] >= 1 && arguments->values[2] <= 12 ? 32u : 0u)
+        | (arguments->values[3] >= 1 && arguments->values[3] <= 31 ? 64u : 0u);
+    return s_rtas_clock_debug == 0x7fu;
 }
 
 static Cell discover_mv64361_registers_base(Cell root, Cell* south_bridge)
@@ -662,6 +708,17 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: MMU high alias passed\r\n");
         else
             serial_write("SerenityOS PowerPC: MMU high alias failed\r\n");
+        if (test_translated_rtas_clock())
+            serial_write("SerenityOS PowerPC: translated RTAS clock passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: translated RTAS clock failed 0x");
+            serial_write_hex(s_rtas_clock_debug);
+            serial_write(" MSR ");
+            serial_write_hex(s_rtas_clock_before);
+            serial_write("/");
+            serial_write_hex(s_rtas_clock_after);
+            serial_write("\r\n");
+        }
         if (powerpc_run_high_stack_external_irq_probe(timebase_frequency))
             serial_write("SerenityOS PowerPC: translated external IRQ stack passed\r\n");
         else

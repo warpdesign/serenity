@@ -32,7 +32,7 @@ PHYSICAL_PAGE_ARRAY_OBJECTS := $(BUILD_DIR)/physical_page_array.o
 PAGE_MAPPING_TEST_OBJECTS := $(BUILD_DIR)/test_page_mapping.o
 VSID_ALLOCATOR_OBJECTS := $(BUILD_DIR)/vsid_allocator.o $(BUILD_DIR)/test_vsid_allocator.o
 FIRMWARE_MEMORY_MAP_TEST_OBJECTS := $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/test_firmware_memory_map.o
-BOOT_INFO_TEST_OBJECTS := $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/test_boot_info.o
+BOOT_INFO_TEST_OBJECTS := $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/test_boot_info.o $(BUILD_DIR)/rtas_call.o
 REGISTER_TEST_OBJECTS := $(BUILD_DIR)/test_register_state.o $(BUILD_DIR)/test_thread_registers.o $(BUILD_DIR)/fork_registers.o $(BUILD_DIR)/process_entry.o $(BUILD_DIR)/create_thread.o $(BUILD_DIR)/register_dump.o
 STACK_TEST_OBJECTS := $(BUILD_DIR)/test_stack_unwinder.o
 TIMER_TEST_OBJECTS := $(BUILD_DIR)/test_decrementer.o
@@ -124,6 +124,9 @@ $(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../ExceptionVec
 
 $(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../Pegasos2/RTAS.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/rtas_call.o: ../Pegasos2/RTASCall.S ../Pegasos2/RTAS.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/test_vsid_allocator.o: ../../../../Tests/Kernel/PowerPC/TestVSIDAllocator.cpp ../VSIDAllocator.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -Wno-literal-suffix -c $< -o $@

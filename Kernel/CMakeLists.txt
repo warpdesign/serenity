@@ -653,6 +653,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/CPUInfo.cpp
         Arch/powerpc/ForkRegisters.cpp
         Arch/powerpc/ProcessEntry.cpp
+        Arch/powerpc/PowerState.cpp
         Arch/powerpc/Ptrace.cpp
         Arch/powerpc/SyscallEntryChecks.cpp
         Arch/powerpc/CreateThread.cpp
@@ -679,6 +680,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Pegasos2/PCIConfig.cpp
         Arch/powerpc/Pegasos2/PCIHostController.cpp
         Arch/powerpc/Pegasos2/PCIInitializer.cpp
+        Arch/powerpc/Pegasos2/RTASCall.S
         Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.cpp
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp
