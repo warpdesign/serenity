@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, Sam Atkins <atkinssj@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, Sam Atkins <atkinssj@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,6 +8,7 @@
 #include "BitmapFont.h"
 #include "Emoji.h"
 #include <AK/BuiltinWrappers.h>
+#include <AK/Endian.h>
 #include <AK/Utf32View.h>
 #include <AK/Utf8View.h>
 #include <LibCore/File.h>
@@ -24,13 +25,13 @@ struct [[gnu::packed]] FontFileHeader {
     char magic[4];
     u8 glyph_width;
     u8 glyph_height;
-    u16 range_mask_size;
+    LittleEndian<u16> range_mask_size;
     u8 is_variable_width;
     u8 glyph_spacing;
     u8 baseline;
     u8 mean_line;
     u8 presentation_size;
-    u16 weight;
+    LittleEndian<u16> weight;
     u8 slope;
     char name[32];
     char family[32];
@@ -258,8 +259,7 @@ ErrorOr<void> BitmapFont::write_to_file(ByteString const& path)
 
 ErrorOr<void> BitmapFont::write_to_file(NonnullOwnPtr<Core::File> file)
 {
-    FontFileHeader header;
-    memset(&header, 0, sizeof(FontFileHeader));
+    FontFileHeader header {};
     memcpy(header.magic, "!Fnt", 4);
     header.glyph_width = m_glyph_width;
     header.glyph_height = m_glyph_height;

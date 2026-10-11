@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
- * Copyright (c) 2021, Brian Gianforcaro <bgianf@serenityos.org>
+ * Copyright (c) 2020-2026, the SerenityOS developers.
+ * Copyright (c) 2021-2026, Brian Gianforcaro <bgianf@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <AK/Utf8View.h>
+#include <LibCore/MappedFile.h>
 #include <LibCore/ResourceImplementationFile.h>
 #include <LibGfx/Font/BitmapFont.h>
 #include <LibGfx/Font/FontDatabase.h>
@@ -13,6 +14,7 @@
 #include <LibTest/TestCase.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 static void init_font_database()
@@ -146,6 +148,11 @@ TEST_CASE(test_load_from_uri)
     init_font_database();
     auto font = Gfx::BitmapFont::load_from_uri("resource://TestFont.font"sv);
     EXPECT(!font->name().is_empty());
+    EXPECT_EQ(font->weight(), 400u);
+    EXPECT_EQ(font->glyph_count(), 512u);
+    auto glyph = font->glyph('A');
+    EXPECT(glyph.has_value());
+    EXPECT(glyph->glyph_bitmap().bit_at(1, 2));
 }
 
 TEST_CASE(test_write_to_file)
@@ -157,6 +164,11 @@ TEST_CASE(test_write_to_file)
     char path[] = "/tmp/new.font.XXXXXX";
     EXPECT(mkstemp(path) != -1);
     TRY_OR_FAIL(font->write_to_file(path));
+    auto serialized_font = TRY_OR_FAIL(Core::MappedFile::map(StringView { path, strlen(path) }));
+    EXPECT_EQ(serialized_font->bytes()[6], 1u);
+    EXPECT_EQ(serialized_font->bytes()[7], 0u);
+    EXPECT_EQ(serialized_font->bytes()[13], 0x90u);
+    EXPECT_EQ(serialized_font->bytes()[14], 0x01u);
     unlink(path);
 }
 
