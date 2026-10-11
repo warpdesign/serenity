@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2024, Idan Horowitz <idan.horowitz@serenityos.org>
+ * Copyright (c) 2024-2026, Idan Horowitz <idan.horowitz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <Kernel/Memory/MMIOVMObject.h>
+#include <Kernel/Memory/PhysicalRAMPage.h>
 
 namespace Kernel::Memory {
 
