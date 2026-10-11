@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -293,6 +293,14 @@ union [[gnu::packed]] Pixel {
 };
 static_assert(AssertSize<Pixel, 4>());
 
+template<typename T>
+ALWAYS_INLINE static u8 sample_to_u8(T sample)
+{
+    if constexpr (sizeof(T) == 1)
+        return sample;
+    return static_cast<u16>(sample) >> 8;
+}
+
 void PNGImageDecoderPlugin::unfilter_scanline(PNG::FilterType filter, Bytes scanline_data, ReadonlyBytes previous_scanlines_data, u8 bytes_per_complete_pixel)
 {
     // https://www.w3.org/TR/png-3/#9Filter-types
@@ -343,9 +351,9 @@ ALWAYS_INLINE static void unpack_grayscale_without_alpha(PNGLoadingContext& cont
         auto* gray_values = reinterpret_cast<T const*>(context.scanlines[y].data.data());
         for (int i = 0; i < context.width; ++i) {
             auto& pixel = (Pixel&)context.bitmap->scanline(y)[i];
-            pixel.r = gray_values[i];
-            pixel.g = gray_values[i];
-            pixel.b = gray_values[i];
+            pixel.r = sample_to_u8(gray_values[i]);
+            pixel.g = pixel.r;
+            pixel.b = pixel.r;
             pixel.a = 0xff;
         }
     }
@@ -358,10 +366,10 @@ ALWAYS_INLINE static void unpack_grayscale_with_alpha(PNGLoadingContext& context
         auto* tuples = reinterpret_cast<Tuple<T> const*>(context.scanlines[y].data.data());
         for (int i = 0; i < context.width; ++i) {
             auto& pixel = (Pixel&)context.bitmap->scanline(y)[i];
-            pixel.r = tuples[i].gray;
-            pixel.g = tuples[i].gray;
-            pixel.b = tuples[i].gray;
-            pixel.a = tuples[i].a;
+            pixel.r = sample_to_u8(tuples[i].gray);
+            pixel.g = pixel.r;
+            pixel.b = pixel.r;
+            pixel.a = sample_to_u8(tuples[i].a);
         }
     }
 }
@@ -373,25 +381,27 @@ ALWAYS_INLINE static void unpack_triplets_without_alpha(PNGLoadingContext& conte
         auto* triplets = reinterpret_cast<Triplet<T> const*>(context.scanlines[y].data.data());
         for (int i = 0; i < context.width; ++i) {
             auto& pixel = (Pixel&)context.bitmap->scanline(y)[i];
-            pixel.r = triplets[i].r;
-            pixel.g = triplets[i].g;
-            pixel.b = triplets[i].b;
+            pixel.r = sample_to_u8(triplets[i].r);
+            pixel.g = sample_to_u8(triplets[i].g);
+            pixel.b = sample_to_u8(triplets[i].b);
             pixel.a = 0xff;
         }
     }
 }
 
 template<typename T>
-ALWAYS_INLINE static void unpack_triplets_with_transparency_value(PNGLoadingContext& context, Triplet<T> transparency_value)
+ALWAYS_INLINE static void unpack_triplets_with_transparency_value(PNGLoadingContext& context, Triplet<u16> transparency_value)
 {
     for (int y = 0; y < context.height; ++y) {
         auto* triplets = reinterpret_cast<Triplet<T> const*>(context.scanlines[y].data.data());
         for (int i = 0; i < context.width; ++i) {
             auto& pixel = (Pixel&)context.bitmap->scanline(y)[i];
-            pixel.r = triplets[i].r;
-            pixel.g = triplets[i].g;
-            pixel.b = triplets[i].b;
-            if (triplets[i] == transparency_value)
+            pixel.r = sample_to_u8(triplets[i].r);
+            pixel.g = sample_to_u8(triplets[i].g);
+            pixel.b = sample_to_u8(triplets[i].b);
+            if (static_cast<u16>(triplets[i].r) == transparency_value.r
+                && static_cast<u16>(triplets[i].g) == transparency_value.g
+                && static_cast<u16>(triplets[i].b) == transparency_value.b)
                 pixel.a = 0x00;
             else
                 pixel.a = 0xff;
@@ -447,7 +457,7 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
         if (context.bit_depth == 8) {
             unpack_grayscale_without_alpha<u8>(context);
         } else if (context.bit_depth == 16) {
-            unpack_grayscale_without_alpha<u16>(context);
+            unpack_grayscale_without_alpha<NetworkOrdered<u16>>(context);
         } else if (context.bit_depth == 1 || context.bit_depth == 2 || context.bit_depth == 4) {
             auto bit_depth_squared = context.bit_depth * context.bit_depth;
             auto pixels_per_byte = 8 / context.bit_depth;
@@ -472,7 +482,7 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
         if (context.bit_depth == 8) {
             unpack_grayscale_with_alpha<u8>(context);
         } else if (context.bit_depth == 16) {
-            unpack_grayscale_with_alpha<u16>(context);
+            unpack_grayscale_with_alpha<NetworkOrdered<u16>>(context);
         } else {
             VERIFY_NOT_REACHED();
         }
@@ -480,12 +490,12 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
     case PNG::ColorType::Truecolor:
         if (context.palette_transparency_data.size() == 6) {
             if (context.bit_depth == 8) {
-                unpack_triplets_with_transparency_value<u8>(context, Triplet<u8> { context.palette_transparency_data[0], context.palette_transparency_data[2], context.palette_transparency_data[4] });
+                unpack_triplets_with_transparency_value<u8>(context, Triplet<u16> { context.palette_transparency_data[1], context.palette_transparency_data[3], context.palette_transparency_data[5] });
             } else if (context.bit_depth == 16) {
-                u16 tr = context.palette_transparency_data[0] | context.palette_transparency_data[1] << 8;
-                u16 tg = context.palette_transparency_data[2] | context.palette_transparency_data[3] << 8;
-                u16 tb = context.palette_transparency_data[4] | context.palette_transparency_data[5] << 8;
-                unpack_triplets_with_transparency_value<u16>(context, Triplet<u16> { tr, tg, tb });
+                u16 tr = (context.palette_transparency_data[0] << 8) | context.palette_transparency_data[1];
+                u16 tg = (context.palette_transparency_data[2] << 8) | context.palette_transparency_data[3];
+                u16 tb = (context.palette_transparency_data[4] << 8) | context.palette_transparency_data[5];
+                unpack_triplets_with_transparency_value<NetworkOrdered<u16>>(context, Triplet<u16> { tr, tg, tb });
             } else {
                 VERIFY_NOT_REACHED();
             }
@@ -493,7 +503,7 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
             if (context.bit_depth == 8)
                 unpack_triplets_without_alpha<u8>(context);
             else if (context.bit_depth == 16)
-                unpack_triplets_without_alpha<u16>(context);
+                unpack_triplets_without_alpha<NetworkOrdered<u16>>(context);
             else
                 VERIFY_NOT_REACHED();
         }
@@ -505,13 +515,13 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
             }
         } else if (context.bit_depth == 16) {
             for (int y = 0; y < context.height; ++y) {
-                auto* quartets = reinterpret_cast<Quartet<u16> const*>(context.scanlines[y].data.data());
+                auto* quartets = reinterpret_cast<Quartet<NetworkOrdered<u16>> const*>(context.scanlines[y].data.data());
                 for (int i = 0; i < context.width; ++i) {
                     auto& pixel = (Pixel&)context.bitmap->scanline(y)[i];
-                    pixel.r = quartets[i].r & 0xFF;
-                    pixel.g = quartets[i].g & 0xFF;
-                    pixel.b = quartets[i].b & 0xFF;
-                    pixel.a = quartets[i].a & 0xFF;
+                    pixel.r = sample_to_u8(quartets[i].r);
+                    pixel.g = sample_to_u8(quartets[i].g);
+                    pixel.b = sample_to_u8(quartets[i].b);
+                    pixel.a = sample_to_u8(quartets[i].a);
                 }
             }
         } else {
@@ -566,12 +576,20 @@ NEVER_INLINE FLATTEN static ErrorOr<void> unfilter(PNGLoadingContext& context)
         break;
     }
 
-    // Swap r and b values:
+    // Convert the PNG's RGBA bytes to Bitmap's native ARGB32 pixel layout.
     for (int y = 0; y < context.height; ++y) {
         auto* pixels = (Pixel*)context.bitmap->scanline(y);
         for (int i = 0; i < context.bitmap->width(); ++i) {
             auto& x = pixels[i];
-            swap(x.r, x.b);
+            if constexpr (AK::HostIsLittleEndian) {
+                swap(x.r, x.b);
+            } else {
+                auto alpha = x.a;
+                x.a = x.b;
+                x.b = x.g;
+                x.g = x.r;
+                x.r = alpha;
+            }
         }
     }
 

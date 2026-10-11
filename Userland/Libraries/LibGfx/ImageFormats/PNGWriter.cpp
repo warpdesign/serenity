@@ -1,13 +1,14 @@
 /*
- * Copyright (c) 2021, Pierre Hoffmeister
- * Copyright (c) 2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Aziz Berkay Yesilyurt <abyesilyurt@gmail.com>
- * Copyright (c) 2024, Torben Jonas Virtmann
+ * Copyright (c) 2021-2026, Pierre Hoffmeister
+ * Copyright (c) 2021-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Aziz Berkay Yesilyurt <abyesilyurt@gmail.com>
+ * Copyright (c) 2024-2026, Torben Jonas Virtmann
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <AK/Concepts.h>
+#include <AK/Endian.h>
 #include <AK/FixedArray.h>
 #include <AK/MemoryStream.h>
 #include <AK/SIMDExtras.h>
@@ -209,7 +210,14 @@ union [[gnu::packed]] Pixel {
 
     ALWAYS_INLINE static AK::SIMD::u8x4 argb32_to_simd(Pixel pixel)
     {
-        return pixel.simd;
+        if constexpr (AK::HostIsLittleEndian)
+            return pixel.simd;
+        AK::SIMD::u8x4 bytes;
+        bytes[0] = static_cast<u8>(pixel.rgba);
+        bytes[1] = static_cast<u8>(pixel.rgba >> 8);
+        bytes[2] = static_cast<u8>(pixel.rgba >> 16);
+        bytes[3] = static_cast<u8>(pixel.rgba >> 24);
+        return bytes;
     }
 };
 static_assert(AssertSize<Pixel, 4>());
