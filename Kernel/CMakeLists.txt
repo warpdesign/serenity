@@ -671,6 +671,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Pegasos2/DebugOutput.cpp
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp
+        Arch/powerpc/RegisterDump.cpp
         Arch/powerpc/SafeMem.cpp
         Arch/powerpc/SafeMem.S
         Arch/powerpc/SegmentRegisters.cpp

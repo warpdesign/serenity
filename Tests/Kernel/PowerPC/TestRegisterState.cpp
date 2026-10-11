@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/RegisterState.h>
+#include <Kernel/Arch/CPU.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Arch/powerpc/ExceptionState.h>
 
@@ -58,6 +59,7 @@ extern "C" int powerpc_register_state_test()
     FlatPtr third = 0;
     FlatPtr fourth = 0;
     registers.capture_syscall_params(function, first, second, third, fourth);
+    Kernel::dump_registers(registers);
     registers.set_return_reg(0xaabbccddu);
     return function == 0x70 && first == 0x11 && second == 0x22
         && third == 0x33 && fourth == 0x44 && registers.gpr[3] == 0xaabbccddu;
