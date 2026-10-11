@@ -71,7 +71,7 @@ $(BUILD_DIR)/Kernel/Debug.h: ../../../../Kernel/Debug.h.in | $(BUILD_DIR)
 $(BUILD_DIR)/boot.o: boot.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/firmware.o: firmware.c ../OpenFirmwareMemoryMap.h ../Pegasos2/HardwareAddresses.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
+$(BUILD_DIR)/firmware.o: firmware.c ../OpenFirmwareMemoryMap.h ../Pegasos2/HardwareAddresses.h ../Pegasos2/RTAS.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
 $(BUILD_DIR)/exception_probe.o: ExceptionProbe.c ../ExceptionVectorInstaller.h ../ExceptionVectorAddresses.h | $(BUILD_DIR)
@@ -119,10 +119,10 @@ $(BUILD_DIR)/open_firmware_memory_map.o: ../OpenFirmwareMemoryMap.cpp ../OpenFir
 $(BUILD_DIR)/test_firmware_memory_map.o: ../../../../Tests/Kernel/PowerPC/TestFirmwareMemoryMap.c ../OpenFirmwareMemoryMap.h ../../../../Kernel/Boot/BootMemoryMap.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I../../../.. -c $< -o $@
 
-$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
+$(BUILD_DIR)/boot_handoff.o: ../BootHandoff.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../Pegasos2/RTAS.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
+$(BUILD_DIR)/test_boot_info.o: ../../../../Tests/Kernel/PowerPC/TestBootInfo.cpp ../BootHandoff.h ../ExceptionVectorAddresses.h ../Time/Timebase.h ../Pegasos2/RTAS.h ../../../../Kernel/Prekernel/Arch/powerpc/ArchSpecificBootInfo.h ../../../../Kernel/Sections.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_vsid_allocator.o: ../../../../Tests/Kernel/PowerPC/TestVSIDAllocator.cpp ../VSIDAllocator.h | $(BUILD_DIR)
@@ -390,6 +390,7 @@ check-quick: all
 	$(MAKE) -C ../../../../Tests/Kernel/SD check-quick
 	$(MAKE) -C ../../../../Tests/Kernel/PowerPC check-quick CROSS_COMPILE=$(CROSS_COMPILE)
 	python3 ../../../../Tests/Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf --memory 256
+	python3 ../../../../Tests/Kernel/PowerPC/test_rtas_power_off.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf
 
 check: check-quick
 	python3 ../../../../Tests/Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(BUILD_DIR)/serenity-powerpc-boot.elf --memory 512 --cpu 750cxe

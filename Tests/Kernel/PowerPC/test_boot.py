@@ -21,6 +21,7 @@ def main():
 
     serial_expected = (
         b"SerenityOS PowerPC: serial online",
+        b"SerenityOS PowerPC: RTAS runtime prepared",
         b"SerenityOS PowerPC: setjmp roundtrip passed",
         b"SerenityOS PowerPC: CPU features passed",
         b"SerenityOS PowerPC: processor primitives passed",
@@ -73,7 +74,7 @@ def main():
         b"SerenityOS PowerPC: HPT external IRQ stack passed",
         b"SerenityOS PowerPC: HPT high IRQ handler passed",
         b"SerenityOS PowerPC: user-mode external IRQ resume passed",
-        b"SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff passed",
+        b"SerenityOS PowerPC: HPT, timebase, PCI, and RTAS handoff passed",
         b"SerenityOS PowerPC: HPT quickmap alias passed",
         b"SerenityOS PowerPC: HPT physical metadata array passed",
         b"SerenityOS PowerPC: HPT duplicate mapping rejected",

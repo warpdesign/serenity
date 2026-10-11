@@ -51,6 +51,33 @@ Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo 
     return ReadonlySpan<PowerPCPCIHostBridgeInfo> { arch.pci_host_bridges, arch.pci_host_bridge_count };
 }
 
+Optional<PowerPCRtasInfo> boot_rtas_info(BootInfo const& boot_info)
+{
+    if (boot_info.boot_method != BootMethod::FirmwareMemoryMap)
+        return {};
+    auto const& info = boot_info.arch_specific.rtas;
+    if (info.runtime_base < POWERPC_EXCEPTION_CODE_LIMIT || (info.runtime_base & 4095u) != 0
+        || info.runtime_size < 8192 || (info.runtime_size & 4095u) != 0
+        || info.runtime_base > 0xffffffffu - info.runtime_size
+        || info.arguments_physical != info.runtime_base + info.runtime_size - 4096
+        || info.entry_physical < info.runtime_base || info.entry_physical >= info.arguments_physical
+        || info.power_off_token == 0 || info.system_reboot_token == 0)
+        return {};
+
+    auto const& memory_map = boot_info.boot_method_specific.firmware_memory_map;
+    if (!memory_map.reserved_ranges)
+        return {};
+    for (u32 index = 0; index < memory_map.reserved_range_count; ++index) {
+        auto const& reservation = memory_map.reserved_ranges[index];
+        if (reservation.physical_start <= info.runtime_base
+            && reservation.length >= info.runtime_size
+            && reservation.physical_start <= ~0ull - reservation.length
+            && reservation.physical_start + reservation.length >= static_cast<u64>(info.runtime_base) + info.runtime_size)
+            return info;
+    }
+    return {};
+}
+
 bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& table)
 {
     if (boot_info.boot_method != BootMethod::FirmwareMemoryMap || boot_info.kernel_mapping_base != KERNEL_MAPPING_BASE)

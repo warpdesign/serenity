@@ -7,6 +7,7 @@
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
 #include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
+#include <Kernel/Arch/powerpc/Pegasos2/RTAS.h>
 
 typedef unsigned int Cell;
 typedef int (*FirmwareEntry)(void*);
@@ -26,6 +27,8 @@ static struct BootMemoryRange s_memory_ranges[32];
 static Cell s_memory_range_count;
 static struct PowerPCPCIHostBridgeInfo s_pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT];
 static Cell s_pci_host_bridge_count;
+static struct PowerPCRtasInfo s_rtas_info;
+static int s_rtas_power_off_test_requested;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
@@ -37,7 +40,7 @@ extern int powerpc_tlb_maintenance_test(void);
 extern int powerpc_vsid_allocator_test(void);
 extern int powerpc_firmware_memory_map_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
 extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell, Cell,
-    struct PowerPCPCIHostBridgeInfo const*, Cell);
+    struct PowerPCPCIHostBridgeInfo const*, Cell, struct PowerPCRtasInfo const*);
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
@@ -153,6 +156,113 @@ static int get_property(Cell device, char const* name, void* buffer, Cell size)
     if (s_firmware_entry(&call) != 0)
         return -1;
     return (int)call.cells[4];
+}
+
+static Cell open_device(char const* path)
+{
+    struct FirmwareCall call = { "open", 1, 1, { firmware_pointer(path), 0 } };
+    if (s_firmware_entry(&call) != 0)
+        return 0;
+    return call.cells[1];
+}
+
+static void close_device(Cell instance)
+{
+    struct FirmwareCall call = { "close", 1, 0, { instance } };
+    (void)s_firmware_entry(&call);
+}
+
+static Cell claim_pages(Cell size)
+{
+    struct FirmwareCall call = { "claim", 3, 1, { 0, size, 4096, 0 } };
+    if (s_firmware_entry(&call) != 0)
+        return 0;
+    return call.cells[3];
+}
+
+static void release_pages(Cell base, Cell size)
+{
+    struct FirmwareCall call = { "release", 2, 0, { base, size } };
+    (void)s_firmware_entry(&call);
+}
+
+static void sync_instruction_cache(Cell start, Cell size)
+{
+    for (Cell address = start; address < start + size; address += 32)
+        __asm__ volatile("dcbst 0,%0" : : "r"(address) : "memory");
+    __asm__ volatile("sync" : : : "memory");
+    for (Cell address = start; address < start + size; address += 32)
+        __asm__ volatile("icbi 0,%0" : : "r"(address) : "memory");
+    __asm__ volatile("sync; isync" : : : "memory");
+}
+
+static int prepare_rtas(void)
+{
+    Cell node = find_device("/rtas");
+    if (node == (Cell)-1)
+        return 0;
+    Cell image_size = 0;
+    Cell power_off_token = 0;
+    Cell reboot_token = 0;
+    if (get_property(node, "rtas-size", &image_size, sizeof(image_size)) != sizeof(image_size)
+        || get_property(node, "power-off", &power_off_token, sizeof(power_off_token)) != sizeof(power_off_token)
+        || get_property(node, "system-reboot", &reboot_token, sizeof(reboot_token)) != sizeof(reboot_token)
+        || image_size == 0 || image_size > 1024 * 1024 - 8192
+        || power_off_token == 0 || reboot_token == 0)
+        return 0;
+    Cell image_allocation_size = (image_size + 4095u) & ~4095u;
+    Cell allocation_size = image_allocation_size + 4096;
+    Cell base = claim_pages(allocation_size);
+    if (base == 0 || base == (Cell)-1 || (base & 4095u) != 0 || base > 0xffffffffu - allocation_size)
+        return 0;
+
+    Cell instance = open_device("/rtas");
+    if (instance == 0 || instance == (Cell)-1) {
+        release_pages(base, allocation_size);
+        return 0;
+    }
+    struct FirmwareCall call = { "call-method", 3, 2,
+        { firmware_pointer("instantiate-rtas"), instance, base, (Cell)-1, 0 } };
+    int result = s_firmware_entry(&call);
+    close_device(instance);
+    Cell entry = call.cells[4];
+    if (result != 0 || call.cells[3] != 0 || entry < base || entry >= base + image_allocation_size) {
+        release_pages(base, allocation_size);
+        return 0;
+    }
+    sync_instruction_cache(base, image_allocation_size);
+    s_rtas_info = (struct PowerPCRtasInfo) {
+        base, allocation_size, entry, base + image_allocation_size,
+        power_off_token, reboot_token
+    };
+    return 1;
+}
+
+static int wants_rtas_power_off_test(Cell chosen)
+{
+    char boot_arguments[64];
+    int length = get_property(chosen, "bootargs", boot_arguments, sizeof(boot_arguments));
+    char const* expected = "serenity-rtas-power-off-test";
+    if (length <= 0 || length >= (int)sizeof(boot_arguments))
+        return 0;
+    for (int index = 0; expected[index] != '\0'; ++index) {
+        if (index >= length || boot_arguments[index] != expected[index])
+            return 0;
+    }
+    return boot_arguments[sizeof("serenity-rtas-power-off-test") - 1] == '\0';
+}
+
+static void request_rtas_power_off(void)
+{
+    struct PowerPCRtasArguments* arguments = (struct PowerPCRtasArguments*)(__UINTPTR_TYPE__)s_rtas_info.arguments_physical;
+    arguments->token = s_rtas_info.power_off_token;
+    arguments->argument_count = 2;
+    arguments->result_count = 1;
+    arguments->values[0] = 0;
+    arguments->values[1] = 0;
+    arguments->values[2] = (Cell)-1;
+    __asm__ volatile("sync" : : : "memory");
+    ((void (*)(Cell))(__UINTPTR_TYPE__)s_rtas_info.entry_physical)(s_rtas_info.arguments_physical);
 }
 
 static Cell discover_mv64361_registers_base(Cell root, Cell* south_bridge)
@@ -370,6 +480,11 @@ void boot_main(FirmwareEntry firmware_entry)
         Cell timebase_frequency = discover_timebase_frequency();
         Cell south_bridge = 0;
         Cell mv64361_registers_base = discover_mv64361_registers_base(root, &south_bridge);
+        s_rtas_power_off_test_requested = wants_rtas_power_off_test(chosen);
+        if (prepare_rtas())
+            serial_write("SerenityOS PowerPC: RTAS runtime prepared\r\n");
+        else
+            serial_write("SerenityOS PowerPC: RTAS runtime unavailable\r\n");
         if (powerpc_setjmp_self_test())
             serial_write("SerenityOS PowerPC: setjmp roundtrip passed\r\n");
         else
@@ -596,10 +711,10 @@ void boot_main(FirmwareEntry firmware_entry)
         else
             serial_write("SerenityOS PowerPC: user-mode external IRQ resume failed\r\n");
         if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency,
-                mv64361_registers_base, s_pci_host_bridges, s_pci_host_bridge_count))
-            serial_write("SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff passed\r\n");
+                mv64361_registers_base, s_pci_host_bridges, s_pci_host_bridge_count, &s_rtas_info))
+            serial_write("SerenityOS PowerPC: HPT, timebase, PCI, and RTAS handoff passed\r\n");
         else
-            serial_write("SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff failed\r\n");
+            serial_write("SerenityOS PowerPC: HPT, timebase, PCI, and RTAS handoff failed\r\n");
         if (powerpc_hpt_quickmap_roundtrip())
             serial_write("SerenityOS PowerPC: HPT quickmap alias passed\r\n");
         else
@@ -703,5 +818,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: stack backchain unwinder passed\r\n");
         else
             serial_write("SerenityOS PowerPC: stack backchain unwinder failed\r\n");
+        if (s_rtas_power_off_test_requested && s_rtas_info.entry_physical != 0) {
+            serial_write("SerenityOS PowerPC: RTAS power-off requested\r\n");
+            request_rtas_power_off();
+            serial_write("SerenityOS PowerPC: RTAS power-off returned\r\n");
+        }
     }
 }

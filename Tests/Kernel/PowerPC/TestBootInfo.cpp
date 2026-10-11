@@ -39,10 +39,11 @@ extern "C" u32 powerpc_hpt_group_count();
 extern "C" u32 powerpc_quickmap_probe_address();
 
 extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes,
-    u32 timebase_frequency, u32 controller_base, PowerPCPCIHostBridgeInfo const* bridges, u32 bridge_count)
+    u32 timebase_frequency, u32 controller_base, PowerPCPCIHostBridgeInfo const* bridges, u32 bridge_count,
+    PowerPCRtasInfo const* rtas)
 {
     if (!ranges || range_count == 0 || total_bytes == 0 || controller_base == 0 || !bridges
-        || bridge_count != POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT)
+        || bridge_count != POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT || !rtas)
         return 0;
     if (powerpc_quickmap_probe_address() != KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE)
         return 0;
@@ -50,10 +51,11 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     BootMemoryRange reservations[] = {
         { 0, POWERPC_EXCEPTION_CODE_LIMIT },
         { powerpc_hpt_table_physical(), 64 * 1024 },
+        { rtas->runtime_base, rtas->runtime_size },
     };
     Kernel::BootInfo boot_info {};
     boot_info.boot_method = Kernel::BootMethod::FirmwareMemoryMap;
-    boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap { ranges, range_count, reservations, 2 };
+    boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap { ranges, range_count, reservations, 3 };
     boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
     boot_info.arch_specific.hpt_virtual_address = powerpc_hpt_table_physical();
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { powerpc_hpt_table_physical() };
@@ -63,6 +65,20 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     boot_info.arch_specific.pci_host_bridge_count = bridge_count;
     for (u32 index = 0; index < bridge_count; ++index)
         boot_info.arch_specific.pci_host_bridges[index] = bridges[index];
+    boot_info.arch_specific.rtas = *rtas;
+
+    auto runtime = Kernel::PowerPC::boot_rtas_info(boot_info);
+    if (!runtime.has_value() || runtime->entry_physical != rtas->entry_physical
+        || runtime->arguments_physical != rtas->arguments_physical)
+        return 0;
+    boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 2;
+    if (Kernel::PowerPC::boot_rtas_info(boot_info).has_value())
+        return 0;
+    boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 3;
+    boot_info.arch_specific.rtas.power_off_token = 0;
+    if (Kernel::PowerPC::boot_rtas_info(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.rtas = *rtas;
 
     auto pci_bridges = Kernel::PowerPC::boot_pci_host_bridges(boot_info);
     if (!pci_bridges.has_value() || pci_bridges->size() != bridge_count
