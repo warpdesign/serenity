@@ -58,6 +58,7 @@ private:
             size_t framebuffer_offset { 0 };
             Graphics::VirtIOGPU::Protocol::Rect dirty_rect {};
             Graphics::VirtIOGPU::ResourceID resource_id { 0 };
+            OwnPtr<Memory::Region> host_framebuffer_region;
         };
 
         RefPtr<VirtIODisplayConnector> display_connector;
@@ -87,10 +88,7 @@ private:
     ErrorOr<void> submit_command_buffer(Graphics::VirtIOGPU::ContextID, Function<size_t(Bytes)> buffer_writer);
     Graphics::VirtIOGPU::Protocol::TextureFormat get_framebuffer_format() const
     {
-        // Gfx::ARGB32 pixels are stored in native byte order in the framebuffer.
-        return AK::HostIsLittleEndian
-            ? Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM
-            : Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM;
+        return Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM;
     }
 
     auto& operation_lock() { return m_operation_lock; }

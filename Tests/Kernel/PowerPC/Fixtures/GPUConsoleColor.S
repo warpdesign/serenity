@@ -45,7 +45,7 @@ _start:
     .ascii "/dev/tty0"
 .Ltty_path_end:
 .Lmessage:
-    .ascii "VirtIO GPU color test\n"
+    .ascii "\033[31mRED\033[32mGREEN\033[34mBLUE\033[0m\n"
 .Lmessage_end:
 .size _start,.-_start
 

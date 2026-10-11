@@ -102,6 +102,21 @@ ErrorOr<void> VirtIOGraphicsAdapter::transfer_framebuffer_data_to_host(Badge<Vir
     VERIFY(m_operation_lock.is_locked());
     VERIFY(connector.scanout_id() < VIRTIO_GPU_MAX_SCANOUTS);
     Scanout::PhysicalBuffer& buffer = main_buffer ? m_scanouts[connector.scanout_id().value()].main_buffer : m_scanouts[connector.scanout_id().value()].back_buffer;
+    if constexpr (!AK::HostIsLittleEndian) {
+        auto const framebuffer_width = connector.display_information({}).rect.width;
+        auto const* source = reinterpret_cast<u32 const*>(connector.framebuffer_region().vaddr().offset(buffer.framebuffer_offset).as_ptr());
+        auto* destination = reinterpret_cast<u8*>(buffer.host_framebuffer_region->vaddr().as_ptr());
+        for (size_t y = rect.y; y < rect.y + rect.height; ++y) {
+            for (size_t x = rect.x; x < rect.x + rect.width; ++x) {
+                auto pixel_index = y * framebuffer_width + x;
+                u32 argb = source[pixel_index];
+                destination[pixel_index * 4 + 0] = argb & 0xff;
+                destination[pixel_index * 4 + 1] = (argb >> 8) & 0xff;
+                destination[pixel_index * 4 + 2] = (argb >> 16) & 0xff;
+                destination[pixel_index * 4 + 3] = 0xff;
+            }
+        }
+    }
     TRY(transfer_framebuffer_data_to_host(connector.scanout_id(), buffer.resource_id, rect));
     return {};
 }
@@ -123,7 +138,12 @@ ErrorOr<void> VirtIOGraphicsAdapter::attach_physical_range_to_framebuffer(VirtIO
     buffer.resource_id = TRY(create_2d_resource(display_info.rect));
 
     // 2. Attach backing storage using  VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING
-    TRY(ensure_backing_storage(buffer.resource_id, connector.framebuffer_region(), buffer.framebuffer_offset, framebuffer_size));
+    if constexpr (AK::HostIsLittleEndian) {
+        TRY(ensure_backing_storage(buffer.resource_id, connector.framebuffer_region(), buffer.framebuffer_offset, framebuffer_size));
+    } else {
+        buffer.host_framebuffer_region = TRY(MM.allocate_kernel_region(framebuffer_size, "VirtIO GPU host framebuffer"sv, Memory::Region::Access::ReadWrite, AllocationStrategy::AllocateNow));
+        TRY(ensure_backing_storage(buffer.resource_id, *buffer.host_framebuffer_region, 0, framebuffer_size));
+    }
     // 3. Use VIRTIO_GPU_CMD_SET_SCANOUT to link the framebuffer to a display scanout.
     TRY(set_scanout_resource(connector.scanout_id(), buffer.resource_id, display_info.rect));
 
