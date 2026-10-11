@@ -6,11 +6,22 @@
 
 #pragma once
 
+#define POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT 2
+#define POWERPC_PEGASOS2_PCI_MAX_RANGES 8
+
 struct PowerPCPCIRange {
     unsigned int space;
     unsigned long long bus_address;
     unsigned long long host_address;
     unsigned long long length;
+};
+
+struct PowerPCPCIHostBridgeInfo {
+    unsigned int bridge_number;
+    unsigned int start_bus;
+    unsigned int end_bus;
+    unsigned int range_count;
+    struct PowerPCPCIRange ranges[POWERPC_PEGASOS2_PCI_MAX_RANGES];
 };
 
 #ifdef __cplusplus

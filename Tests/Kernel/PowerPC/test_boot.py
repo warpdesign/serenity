@@ -72,7 +72,7 @@ def main():
         b"SerenityOS PowerPC: HPT external IRQ stack passed",
         b"SerenityOS PowerPC: HPT high IRQ handler passed",
         b"SerenityOS PowerPC: user-mode external IRQ resume passed",
-        b"SerenityOS PowerPC: HPT and timebase boot handoff passed",
+        b"SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff passed",
         b"SerenityOS PowerPC: HPT quickmap alias passed",
         b"SerenityOS PowerPC: HPT physical metadata array passed",
         b"SerenityOS PowerPC: HPT duplicate mapping rejected",

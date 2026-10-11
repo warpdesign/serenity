@@ -24,6 +24,8 @@ static char s_model[64];
 static volatile unsigned char* s_uart;
 static struct BootMemoryRange s_memory_ranges[32];
 static Cell s_memory_range_count;
+static struct PowerPCPCIHostBridgeInfo s_pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT];
+static Cell s_pci_host_bridge_count;
 
 extern Cell powerpc_kernel_mapping_base(void);
 extern int powerpc_setjmp_self_test(void);
@@ -34,7 +36,8 @@ extern int powerpc_cache_maintenance_test(void);
 extern int powerpc_tlb_maintenance_test(void);
 extern int powerpc_vsid_allocator_test(void);
 extern int powerpc_firmware_memory_map_test(struct BootMemoryRange const*, unsigned int, unsigned long long);
-extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell, Cell);
+extern int powerpc_boot_handoff_test(struct BootMemoryRange const*, unsigned int, unsigned long long, Cell, Cell,
+    struct PowerPCPCIHostBridgeInfo const*, Cell);
 extern int powerpc_page_mapping_test(void);
 extern Cell powerpc_cpu_pvr(void);
 extern int powerpc_short_string_layout_test(void);
@@ -164,24 +167,64 @@ static Cell discover_mv64361_registers_base(Cell root, Cell* south_bridge)
     return 0;
 }
 
-static int test_pci_firmware_ranges(Cell root, Cell bridge)
+static int discover_pci_host_bridges(Cell root, Cell south_bridge)
 {
-    if (bridge == 0)
+    if (south_bridge == 0)
         return 0;
     Cell parent_address_cells = 1;
-    Cell child_address_cells = 0;
-    Cell size_cells = 0;
     if (get_property(root, "#address-cells", &parent_address_cells, sizeof(parent_address_cells)) != sizeof(parent_address_cells))
         parent_address_cells = 1;
-    if (get_property(bridge, "#address-cells", &child_address_cells, sizeof(child_address_cells)) != sizeof(child_address_cells)
-        || get_property(bridge, "#size-cells", &size_cells, sizeof(size_cells)) != sizeof(size_cells)
-        || child_address_cells != 3)
+    if (parent_address_cells < 1 || parent_address_cells > 2)
         return 0;
-    Cell cells[96];
-    int length = get_property(bridge, "ranges", cells, sizeof(cells));
-    if (length <= 0 || length % sizeof(Cell) != 0)
-        return 0;
-    return powerpc_open_firmware_pci_ranges_test(cells, (Cell)length / sizeof(Cell), parent_address_cells, size_cells);
+
+    s_pci_host_bridge_count = 0;
+    Cell seen_bridges = 0;
+    for (Cell bridge = first_child(root); bridge != 0 && bridge != (Cell)-1; bridge = next_peer(bridge)) {
+        char device_type[8] = {};
+        int type_length = get_property(bridge, "device_type", device_type, sizeof(device_type));
+        if (type_length < 3 || device_type[0] != 'p' || device_type[1] != 'c' || device_type[2] != 'i'
+            || (type_length > 3 && device_type[3] != '\0'))
+            continue;
+
+        Cell bridge_number;
+        if (get_property(bridge, "pci-bridge-number", &bridge_number, sizeof(bridge_number)) != sizeof(bridge_number))
+            bridge_number = bridge == south_bridge ? 0 : 1;
+        if (bridge_number >= POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT || (seen_bridges & (1u << bridge_number))
+            || (bridge == south_bridge && bridge_number != 0))
+            return 0;
+
+        Cell child_address_cells = 0;
+        Cell size_cells = 0;
+        if (get_property(bridge, "#address-cells", &child_address_cells, sizeof(child_address_cells)) != sizeof(child_address_cells)
+            || get_property(bridge, "#size-cells", &size_cells, sizeof(size_cells)) != sizeof(size_cells)
+            || child_address_cells != 3)
+            return 0;
+
+        Cell bus_range[2] = { 0, 255 };
+        int bus_length = get_property(bridge, "bus-range", bus_range, sizeof(bus_range));
+        if (bus_length != -1 && bus_length != sizeof(bus_range))
+            return 0;
+        if (bus_range[0] > bus_range[1] || bus_range[1] > 255)
+            return 0;
+
+        Cell cells[96];
+        int length = get_property(bridge, "ranges", cells, sizeof(cells));
+        if (length <= 0 || length % sizeof(Cell) != 0)
+            return 0;
+        struct PowerPCPCIHostBridgeInfo* info = &s_pci_host_bridges[bridge_number];
+        if (!powerpc_parse_open_firmware_pci_ranges(cells, (Cell)length / sizeof(Cell),
+                child_address_cells, parent_address_cells, size_cells, info->ranges,
+                POWERPC_PEGASOS2_PCI_MAX_RANGES, &info->range_count))
+            return 0;
+        if (bridge_number == 0 && !powerpc_open_firmware_pci_ranges_test(cells, (Cell)length / sizeof(Cell), parent_address_cells, size_cells))
+            return 0;
+        info->bridge_number = bridge_number;
+        info->start_bus = bus_range[0];
+        info->end_bus = bus_range[1];
+        seen_bridges |= 1u << bridge_number;
+        ++s_pci_host_bridge_count;
+    }
+    return seen_bridges == 3;
 }
 
 static void write_console(char const* string)
@@ -382,7 +425,7 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write_hex(powerpc_pegasos2_pci_config_debug);
             serial_write("\r\n");
         }
-        if (test_pci_firmware_ranges(root, south_bridge))
+        if (discover_pci_host_bridges(root, south_bridge))
             serial_write("SerenityOS PowerPC: Pegasos 2 PCI firmware ranges passed\r\n");
         else
             serial_write("SerenityOS PowerPC: Pegasos 2 PCI firmware ranges failed\r\n");
@@ -542,10 +585,11 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: user-mode external IRQ resume passed\r\n");
         else
             serial_write("SerenityOS PowerPC: user-mode external IRQ resume failed\r\n");
-        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency, mv64361_registers_base))
-            serial_write("SerenityOS PowerPC: HPT and timebase boot handoff passed\r\n");
+        if (powerpc_boot_handoff_test(s_memory_ranges, s_memory_range_count, total_bytes, timebase_frequency,
+                mv64361_registers_base, s_pci_host_bridges, s_pci_host_bridge_count))
+            serial_write("SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff passed\r\n");
         else
-            serial_write("SerenityOS PowerPC: HPT and timebase boot handoff failed\r\n");
+            serial_write("SerenityOS PowerPC: HPT, timebase, and PCI bridge handoff failed\r\n");
         if (powerpc_hpt_quickmap_roundtrip())
             serial_write("SerenityOS PowerPC: HPT quickmap alias passed\r\n");
         else

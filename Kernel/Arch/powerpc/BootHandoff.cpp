@@ -28,6 +28,29 @@ Optional<u32> boot_mv64361_registers_base(BootInfo const& boot_info)
     return base;
 }
 
+Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo const& boot_info)
+{
+    if (!boot_mv64361_registers_base(boot_info).has_value())
+        return {};
+    auto const& arch = boot_info.arch_specific;
+    if (arch.pci_host_bridge_count != POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT)
+        return {};
+    for (u32 index = 0; index < arch.pci_host_bridge_count; ++index) {
+        auto const& bridge = arch.pci_host_bridges[index];
+        if (bridge.bridge_number != index || bridge.start_bus > bridge.end_bus || bridge.end_bus > 255
+            || bridge.range_count == 0 || bridge.range_count > POWERPC_PEGASOS2_PCI_MAX_RANGES)
+            return {};
+        for (u32 range_index = 0; range_index < bridge.range_count; ++range_index) {
+            auto const& range = bridge.ranges[range_index];
+            if (range.space < 1 || range.space > 3 || range.length == 0
+                || range.host_address >= 0x100000000ull || range.length > 0x100000000ull - range.host_address
+                || range.bus_address > ~0ull - range.length)
+                return {};
+        }
+    }
+    return ReadonlySpan<PowerPCPCIHostBridgeInfo> { arch.pci_host_bridges, arch.pci_host_bridge_count };
+}
+
 bool boot_hpt_from_boot_info(BootInfo const& boot_info, PowerPCHashPageTable& table)
 {
     if (boot_info.boot_method != BootMethod::FirmwareMemoryMap || boot_info.kernel_mapping_base != KERNEL_MAPPING_BASE)

@@ -24,6 +24,7 @@ static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::open_firmware_entry)
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::hpt_virtual_address)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::timebase_frequency_hz)) == 4);
 static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::mv64361_registers_physical_base)) == 4);
+static_assert(sizeof(decltype(Kernel::ArchSpecificBootInfo::pci_host_bridge_count)) == 4);
 static_assert(sizeof(PowerPCHPTEntry) == 8);
 static_assert(sizeof(PowerPCHashPageTable) == 8);
 static_assert(sizeof(PowerPCExceptionState) == 152);
@@ -37,9 +38,11 @@ extern "C" u32 powerpc_hpt_table_physical();
 extern "C" u32 powerpc_hpt_group_count();
 extern "C" u32 powerpc_quickmap_probe_address();
 
-extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes, u32 timebase_frequency, u32 controller_base)
+extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 range_count, unsigned long long total_bytes,
+    u32 timebase_frequency, u32 controller_base, PowerPCPCIHostBridgeInfo const* bridges, u32 bridge_count)
 {
-    if (!ranges || range_count == 0 || total_bytes == 0 || controller_base == 0)
+    if (!ranges || range_count == 0 || total_bytes == 0 || controller_base == 0 || !bridges
+        || bridge_count != POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT)
         return 0;
     if (powerpc_quickmap_probe_address() != KERNEL_MAPPING_BASE + KERNEL_PT1024_OFFSET + 3 * KERNEL_MAX_CPU_COUNT * POWERPC_HPT_PAGE_SIZE)
         return 0;
@@ -57,6 +60,34 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     boot_info.arch_specific.hpt_group_count = powerpc_hpt_group_count();
     boot_info.arch_specific.timebase_frequency_hz = timebase_frequency;
     boot_info.arch_specific.mv64361_registers_physical_base = controller_base;
+    boot_info.arch_specific.pci_host_bridge_count = bridge_count;
+    for (u32 index = 0; index < bridge_count; ++index)
+        boot_info.arch_specific.pci_host_bridges[index] = bridges[index];
+
+    auto pci_bridges = Kernel::PowerPC::boot_pci_host_bridges(boot_info);
+    if (!pci_bridges.has_value() || pci_bridges->size() != bridge_count
+        || (*pci_bridges)[0].bridge_number != 0 || (*pci_bridges)[1].bridge_number != 1)
+        return 0;
+    boot_info.arch_specific.pci_host_bridge_count = 1;
+    if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.pci_host_bridge_count = bridge_count;
+    boot_info.arch_specific.pci_host_bridges[1].range_count = 0;
+    if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.pci_host_bridges[1] = bridges[1];
+    auto original_host_address = boot_info.arch_specific.pci_host_bridges[0].ranges[0].host_address;
+    boot_info.arch_specific.pci_host_bridges[0].ranges[0].host_address = 0xfffff000ull;
+    boot_info.arch_specific.pci_host_bridges[0].ranges[0].length = 0x2000;
+    if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.pci_host_bridges[0] = bridges[0];
+    if (boot_info.arch_specific.pci_host_bridges[0].ranges[0].host_address != original_host_address)
+        return 0;
+    boot_info.arch_specific.pci_host_bridges[1].bridge_number = 0;
+    if (Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value())
+        return 0;
+    boot_info.arch_specific.pci_host_bridges[1] = bridges[1];
 
     auto pci_base = Kernel::PowerPC::boot_mv64361_registers_base(boot_info);
     if (!pci_base.has_value() || pci_base.value() != controller_base)

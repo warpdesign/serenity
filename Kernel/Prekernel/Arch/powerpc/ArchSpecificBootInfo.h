@@ -8,6 +8,7 @@
 
 #include <AK/Platform.h>
 #include <AK/Types.h>
+#include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
 #include <Kernel/Memory/PhysicalAddress.h>
 
 VALIDATE_IS_POWERPC32()
@@ -21,6 +22,8 @@ struct ArchSpecificBootInfo {
     u32 hpt_group_count { 0 };
     u32 timebase_frequency_hz { 0 };
     u32 mv64361_registers_physical_base { 0 };
+    u32 pci_host_bridge_count { 0 };
+    PowerPCPCIHostBridgeInfo pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT] {};
 };
 
 }

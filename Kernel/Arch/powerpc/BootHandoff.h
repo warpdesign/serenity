@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Optional.h>
+#include <AK/Span.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Boot/BootInfo.h>
 
@@ -16,5 +17,6 @@ namespace Kernel::PowerPC {
 bool boot_hpt_from_boot_info(BootInfo const&, PowerPCHashPageTable&);
 Optional<u32> boot_timebase_frequency(BootInfo const&);
 Optional<u32> boot_mv64361_registers_base(BootInfo const&);
+Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo const&);
 
 }
