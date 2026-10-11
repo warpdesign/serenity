@@ -1,0 +1,41 @@
+# Copyright (c) 2026, SerenityOS developers.
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+find_program(POWERPC_LOADER_MAKE NAMES gmake make REQUIRED)
+string(REGEX REPLACE "gcc$" "" POWERPC_LOADER_CROSS_COMPILE "${CMAKE_C_COMPILER}")
+
+set(POWERPC_LOADER_BUILD_DIR "${CMAKE_CURRENT_BINARY_DIR}/image")
+set(POWERPC_LOADER_IMAGE "${POWERPC_LOADER_BUILD_DIR}/serenity-powerpc-loader.elf")
+set(POWERPC_KERNEL_ELF "${CMAKE_BINARY_DIR}/Kernel/Kernel")
+
+add_custom_target(PowerPCFirmwareLoader
+    COMMAND "${POWERPC_LOADER_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" all
+        "BUILD_DIR=${POWERPC_LOADER_BUILD_DIR}"
+        "KERNEL_ELF=${POWERPC_KERNEL_ELF}"
+        "CROSS_COMPILE=${POWERPC_LOADER_CROSS_COMPILE}"
+    DEPENDS Kernel
+    BYPRODUCTS "${POWERPC_LOADER_IMAGE}"
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(PowerPCFirmwareLoaderCheckQuick
+    COMMAND "${POWERPC_LOADER_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" check-quick
+        "BUILD_DIR=${POWERPC_LOADER_BUILD_DIR}"
+        "KERNEL_ELF=${POWERPC_KERNEL_ELF}"
+        "CROSS_COMPILE=${POWERPC_LOADER_CROSS_COMPILE}"
+    DEPENDS PowerPCFirmwareLoader
+    USES_TERMINAL
+    VERBATIM
+)
+
+add_custom_target(PowerPCFirmwareLoaderCheck
+    COMMAND "${POWERPC_LOADER_MAKE}" -C "${CMAKE_CURRENT_SOURCE_DIR}" check
+        "BUILD_DIR=${POWERPC_LOADER_BUILD_DIR}"
+        "KERNEL_ELF=${POWERPC_KERNEL_ELF}"
+        "CROSS_COMPILE=${POWERPC_LOADER_CROSS_COMPILE}"
+    DEPENDS PowerPCFirmwareLoader
+    USES_TERMINAL
+    VERBATIM
+)

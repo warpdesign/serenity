@@ -1067,6 +1067,7 @@ endif()
 
 if ("${SERENITY_ARCH}" STREQUAL "powerpc")
     add_subdirectory(Arch/powerpc/Boot)
+    add_subdirectory(Arch/powerpc/Loader)
 else()
     add_subdirectory(EFIPrekernel)
 endif()
