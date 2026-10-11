@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, the SerenityOS developers.
+ * Copyright (c) 2020-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -9,6 +9,20 @@
 #include <AK/Array.h>
 #include <AK/MemoryStream.h>
 #include <LibCompress/Zlib.h>
+
+TEST_CASE(zlib_decompress_standard_header_and_payload)
+{
+    // Generated with Python's zlib.compress(b"cursor pixel test", 6).
+    Array<u8, 25> const compressed {
+        0x78, 0x9c, 0x4b, 0x2e, 0x2d, 0x2a, 0xce, 0x2f, 0x52, 0x28,
+        0xc8, 0xac, 0x48, 0xcd, 0x51, 0x28, 0x49, 0x2d, 0x2e, 0x01,
+        0x00, 0x3d, 0x5c, 0x06, 0xc1,
+    };
+    auto stream = make<FixedMemoryStream>(compressed);
+    auto decompressor = TRY_OR_FAIL(Compress::ZlibDecompressor::create(move(stream)));
+    auto decompressed = TRY_OR_FAIL(decompressor->read_until_eof());
+    EXPECT_EQ(decompressed.bytes(), "cursor pixel test"sv.bytes());
+}
 
 TEST_CASE(zlib_decompress_simple)
 {

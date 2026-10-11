@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -19,13 +19,13 @@ ErrorOr<NonnullOwnPtr<ZlibDecompressor>> ZlibDecompressor::create(MaybeOwned<Str
 {
     auto header = TRY(stream->read_value<ZlibHeader>());
 
-    if (header.compression_method != ZlibCompressionMethod::Deflate || header.compression_info > 7)
+    if (header.compression_method() != ZlibCompressionMethod::Deflate || header.compression_info() > 7)
         return Error::from_string_literal("Non-DEFLATE compression inside Zlib is not supported");
 
-    if (header.present_dictionary)
+    if (header.present_dictionary())
         return Error::from_string_literal("Zlib compression with a pre-defined dictionary is currently not supported");
 
-    if (header.as_u16 % 31 != 0)
+    if (header.value() % 31 != 0)
         return Error::from_string_literal("Zlib error correction code does not match");
 
     auto bit_stream = make<LittleEndianInputBitStream>(move(stream));
@@ -98,17 +98,14 @@ ErrorOr<void> ZlibCompressor::write_header(ZlibCompressionMethod compression_met
     }
 
     ZlibHeader header {
-        .compression_method = compression_method,
-        .compression_info = compression_info,
-        .check_bits = 0,
-        .present_dictionary = false,
-        .compression_level = compression_level,
+        .compression_method_and_info = static_cast<u8>((compression_info << 4) | to_underlying(compression_method)),
+        .flags = static_cast<u8>(to_underlying(compression_level) << 6),
     };
-    header.check_bits = 0b11111 - header.as_u16 % 31;
+    header.flags |= static_cast<u8>((31 - header.value() % 31) % 31);
 
     // FIXME: Support pre-defined dictionaries.
 
-    TRY(m_output_stream->write_value(header.as_u16));
+    TRY(m_output_stream->write_value(header));
 
     return {};
 }
