@@ -20,7 +20,7 @@ check-quick:
 	cmake -DSERENITY_SOURCE_DIR=$(abspath ../../..) -DTEST_BINARY_DIR=$(abspath $(BUILD_DIR)) -P TestGNUToolchain.cmake
 	cmake -S CMakeDataModel -B $(BUILD_DIR)/CMakeDataModel -DCMAKE_TOOLCHAIN_FILE=$(abspath $(BUILD_DIR))/GNUToolchain-powerpc.cmake
 	cmake --build $(BUILD_DIR)/CMakeDataModel --target PowerPCBootProbe
-	python3 ../../Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(CMAKE_BOOT_IMAGE) --memory 256
+	python3 ../../Kernel/PowerPC/test_boot.py --qemu $(QEMU) --kernel $(CMAKE_BOOT_IMAGE) --memory 512
 
 clean:
 	rm -rf $(BUILD_DIR)
