@@ -20,6 +20,7 @@ namespace Kernel {
 // The base class is the exact integer frame written by the PowerPC exception
 // entry. Floating-point registers are saved separately with thread FPU state.
 struct RegisterState : PowerPCExceptionState {
+    static constexpr bool supports_user_backtrace = true;
     FlatPtr userspace_sp() const { return gpr[1]; }
     void set_userspace_sp(FlatPtr value) { gpr[1] = value; }
 

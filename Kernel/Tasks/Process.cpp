@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, Timon Kruiper <timonkruiper@gmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, Timon Kruiper <timonkruiper@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,6 +13,7 @@
 #include <Kernel/API/POSIX/sys/limits.h>
 #include <Kernel/API/Syscall.h>
 #include <Kernel/Arch/PageDirectory.h>
+#include <Kernel/Arch/Processor.h>
 #include <Kernel/Debug.h>
 #include <Kernel/Devices/BaseDevices.h>
 #include <Kernel/Devices/Device.h>
@@ -431,122 +432,6 @@ Process::~Process()
     PerformanceManager::add_process_exit_event(*this);
 }
 
-// Make sure the compiler doesn't "optimize away" this function:
-extern void signal_trampoline_dummy() __attribute__((used));
-void signal_trampoline_dummy()
-{
-    // The trampoline preserves the current return value, and then calls the signal handler.
-    // We do this because, when interrupting a blocking syscall, that syscall may return
-    // some special error code; This error code would likely be overwritten by the signal handler,
-    // so it's necessary to preserve it here.
-
-    // Stack state:
-    //   syscall return value (initialized with 0)  <- stack pointer + offset_to_return_value_slot
-    //   __ucontext
-    //   siginfo
-    //   FPUState
-    //   __ucontext*
-    //   siginfo*
-    //   signal number
-    //   handler address                            <- stack pointer
-
-    constexpr static auto offset_to_return_value_slot = sizeof(__ucontext) + sizeof(siginfo) + sizeof(FPUState) + 4 * sizeof(FlatPtr);
-
-#if ARCH(X86_64)
-    asm(
-        ".intel_syntax noprefix\n"
-        ".globl asm_signal_trampoline\n"
-        "asm_signal_trampoline:\n"
-
-        // we have to save rax 'cause it might be the return value from a syscall
-        "mov [rsp+%P1], rax\n"
-        // Pop the handler into rcx
-        "pop rcx\n" // save handler
-        // pop signal number into rdi (first param)
-        "pop rdi\n"
-        // pop siginfo* into rsi (second param)
-        "pop rsi\n"
-        // pop ucontext* into rdx (third param)
-        "pop rdx\n"
-        // Note that the stack is currently aligned to 16 bytes as we popped the extra entries above.
-        // call the signal handler
-        "call rcx\n"
-        // Current stack state is just saved_rax, ucontext, signal_info, fpu_state.
-        // syscall SC_sigreturn
-        "mov rax, %P0\n"
-        "syscall\n"
-        ".globl asm_signal_trampoline_end\n"
-        "asm_signal_trampoline_end:\n"
-        ".att_syntax"
-        :
-        : "i"(Syscall::SC_sigreturn),
-        "i"(offset_to_return_value_slot));
-#elif ARCH(AARCH64)
-    asm(
-        ".global asm_signal_trampoline\n"
-        "asm_signal_trampoline:\n"
-
-        // Store x0 (return value from a syscall) into the register slot, such that we can return the correct value in sys$sigreturn.
-        "str x0, [sp, %[offset_to_return_value_slot]]\n"
-        // Load the handler address into x3.
-        "ldr x3, [sp, #0]\n"
-        // Load the signal number into the first argument.
-        "ldr x0, [sp, #8]\n"
-        // Load a pointer to the signal_info structure into the second argument.
-        "ldr x1, [sp, #16]\n"
-        // Load a pointer to the ucontext into the third argument.
-        "ldr x2, [sp, #24]\n"
-        // Pop the values off the stack.
-        "add sp, sp, 32\n"
-        // Call the signal handler.
-        "blr x3\n"
-
-        // Call sys$sigreturn.
-        "mov x8, %[sigreturn_syscall_number]\n"
-        "svc #0\n"
-        // We should never return, so trap if we do return.
-        "brk #0\n"
-        "\n"
-        ".global asm_signal_trampoline_end\n"
-        "asm_signal_trampoline_end: \n" ::[sigreturn_syscall_number] "i"(Syscall::SC_sigreturn),
-        [offset_to_return_value_slot] "i"(offset_to_return_value_slot));
-#elif ARCH(RISCV64)
-    asm(
-        ".global asm_signal_trampoline\n"
-        "asm_signal_trampoline:\n"
-
-        // Store a0 (return value from a syscall) into the register slot, such that we can return the correct value in sys$sigreturn.
-        "lui t0, %%hi(%[offset_to_return_value_slot])\n" // FIXME: Move the return value slot before the FPUState to avoid having an extra lui+add pair here.
-        "add t0, t0, sp\n"
-        "sd a0, %%lo(%[offset_to_return_value_slot])(t0)\n"
-        // Load the handler address into t0.
-        "ld t0, 0(sp)\n"
-        // Load the signal number into the first argument.
-        "ld a0, 8(sp)\n"
-        // Load a pointer to the signal_info structure into the second argument.
-        "ld a1, 16(sp)\n"
-        // Load a pointer to the ucontext into the third argument.
-        "ld a2, 24(sp)\n"
-        // Pop the values off the stack.
-        "addi sp, sp, 32\n"
-        // Call the signal handler.
-        "jalr t0\n"
-
-        // Call sys$sigreturn.
-        "li a7, %[sigreturn_syscall_number]\n"
-        "ecall\n"
-        // We should never return, so trap if we do return.
-        "unimp\n"
-
-        "\n"
-        ".global asm_signal_trampoline_end\n"
-        "asm_signal_trampoline_end: \n" ::[sigreturn_syscall_number] "i"(Syscall::SC_sigreturn),
-        [offset_to_return_value_slot] "i"(offset_to_return_value_slot));
-#else
-#    error Unknown architecture
-#endif
-}
-
 extern "C" char const asm_signal_trampoline[];
 extern "C" char const asm_signal_trampoline_end[];
 
@@ -557,9 +442,11 @@ void create_signal_trampoline()
     g_signal_trampoline_region->set_syscall_region(true);
 
     size_t trampoline_size = asm_signal_trampoline_end - asm_signal_trampoline;
+    VERIFY(trampoline_size <= PAGE_SIZE);
 
     u8* code_ptr = (u8*)g_signal_trampoline_region->vaddr().as_ptr();
     memcpy(code_ptr, asm_signal_trampoline, trampoline_size);
+    Processor::flush_instruction_cache(g_signal_trampoline_region->vaddr(), trampoline_size);
 
     g_signal_trampoline_region->set_writable(false);
     g_signal_trampoline_region->remap();
@@ -581,16 +468,7 @@ void Process::crash(int signal, Optional<RegisterState const&> regs, bool out_of
         } else {
             dbgln("\033[31;1m{:p}  (?)\033[0m\n", ip);
         }
-#if ARCH(X86_64)
-        constexpr bool userspace_backtrace = false;
-#elif ARCH(AARCH64)
-        constexpr bool userspace_backtrace = true;
-#elif ARCH(RISCV64)
-        constexpr bool userspace_backtrace = true;
-#else
-#    error "Unknown architecture"
-#endif
-        if constexpr (userspace_backtrace) {
+        if constexpr (RegisterState::supports_user_backtrace) {
             dbgln("Userspace backtrace:");
             auto bp = regs.has_value() ? regs->bp() : 0;
             dump_backtrace_from_base_pointer(bp);

@@ -43,6 +43,7 @@ extern int pci_address_assignment_test(void);
 extern int nvme_endian_test(void);
 extern int sd_adma_address_test(void);
 extern int powerpc_deferred_key_press_test(void);
+extern int powerpc_signal_trampoline_test(void);
 extern int powerpc_fenv_test(void);
 extern int powerpc_fpu_state_test(void);
 extern int powerpc_native_elf_header_test(void);
@@ -322,6 +323,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: deferred key press passed\r\n");
         else
             serial_write("SerenityOS PowerPC: deferred key press failed\r\n");
+        if (powerpc_signal_trampoline_test())
+            serial_write("SerenityOS PowerPC: signal trampoline layout passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: signal trampoline layout failed\r\n");
         int fenv_result = powerpc_fenv_test();
         if (fenv_result == 1)
             serial_write("SerenityOS PowerPC: FPSCR environment passed\r\n");

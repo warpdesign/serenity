@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2023-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -19,6 +19,7 @@ VALIDATE_IS_RISCV64()
 namespace Kernel {
 
 struct alignas(16) RegisterState {
+    static constexpr bool supports_user_backtrace = true;
     u64 x[31];
 
     RISCV64::CSR::SSTATUS sstatus;

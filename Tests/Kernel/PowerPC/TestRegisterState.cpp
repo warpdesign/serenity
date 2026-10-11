@@ -9,6 +9,7 @@
 #include <Kernel/Arch/powerpc/ExceptionState.h>
 
 static_assert(sizeof(Kernel::RegisterState) == sizeof(PowerPCExceptionState));
+static_assert(Kernel::RegisterState::supports_user_backtrace);
 static_assert(sizeof(Kernel::TrapFrame) == 8);
 
 extern "C" volatile PowerPCExceptionState powerpc_user_probe_frame;

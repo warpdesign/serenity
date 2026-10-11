@@ -36,6 +36,7 @@ def main():
         b"SerenityOS PowerPC: NVMe little-endian wire format passed",
         b"SerenityOS PowerPC: SD ADMA physical addresses passed",
         b"SerenityOS PowerPC: deferred key press passed",
+        b"SerenityOS PowerPC: signal trampoline layout passed",
         b"SerenityOS PowerPC: FPSCR environment passed",
         b"SerenityOS PowerPC: FPU state roundtrip passed",
         b"SerenityOS PowerPC: ELF32 big-endian header passed",

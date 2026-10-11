@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, James Mintram <me@jamesrm.com>
+ * Copyright (c) 2018-2026, James Mintram <me@jamesrm.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -19,6 +19,7 @@ VALIDATE_IS_AARCH64()
 namespace Kernel {
 
 struct alignas(16) RegisterState {
+    static constexpr bool supports_user_backtrace = true;
     u64 x[31];     // Saved general purpose registers
     u64 spsr_el1;  // Save Processor Status Register, EL1
     u64 elr_el1;   // Exception Link Register, EL1
