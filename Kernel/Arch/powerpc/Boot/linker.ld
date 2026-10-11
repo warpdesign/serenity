@@ -9,7 +9,17 @@ ENTRY(_start)
 SECTIONS
 {
     . = 0x00200000;
-    .text : { KEEP(*(.text.first)) *(.text*) }
+    .text :
+    {
+        KEEP(*(.text.first))
+        start_of_safemem_text = .;
+        KEEP(*(.text.safemem))
+        end_of_safemem_text = .;
+        start_of_safemem_atomic_text = .;
+        KEEP(*(.text.safemem.atomic))
+        end_of_safemem_atomic_text = .;
+        *(.text*)
+    }
     __text_end = .;
     .rodata : { *(.rodata*) }
     .data : { *(.data*) *(.sdata*) }

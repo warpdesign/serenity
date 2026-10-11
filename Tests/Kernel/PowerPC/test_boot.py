@@ -38,6 +38,7 @@ def main():
         b"SerenityOS PowerPC: deferred key press passed",
         b"SerenityOS PowerPC: signal trampoline layout passed",
         b"SerenityOS PowerPC: supervisor access guard passed",
+        b"SerenityOS PowerPC: safe memory operations passed",
         b"SerenityOS PowerPC: FPSCR environment passed",
         b"SerenityOS PowerPC: FPU state roundtrip passed",
         b"SerenityOS PowerPC: ELF32 big-endian header passed",

@@ -45,6 +45,7 @@ extern int sd_adma_address_test(void);
 extern int powerpc_deferred_key_press_test(void);
 extern int powerpc_signal_trampoline_test(void);
 extern int powerpc_smap_disabler_test(void);
+extern int powerpc_safe_mem_test(void);
 extern int powerpc_fenv_test(void);
 extern int powerpc_fpu_state_test(void);
 extern int powerpc_native_elf_header_test(void);
@@ -332,6 +333,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: supervisor access guard passed\r\n");
         else
             serial_write("SerenityOS PowerPC: supervisor access guard failed\r\n");
+        if (powerpc_safe_mem_test())
+            serial_write("SerenityOS PowerPC: safe memory operations passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: safe memory operations failed\r\n");
         int fenv_result = powerpc_fenv_test();
         if (fenv_result == 1)
             serial_write("SerenityOS PowerPC: FPSCR environment passed\r\n");
