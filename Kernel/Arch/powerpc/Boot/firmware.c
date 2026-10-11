@@ -71,6 +71,7 @@ extern int powerpc_mmu_high_alias_roundtrip(void);
 extern int powerpc_hpt_high_alias_roundtrip(void);
 extern int powerpc_debug_output_test(void);
 extern int powerpc_current_time_fallback_test(void);
+extern int powerpc_kernel_context_test(void);
 extern int powerpc_hpt_external_irq_stack_roundtrip(Cell);
 extern int powerpc_hpt_external_irq_high_handler_roundtrip(Cell);
 extern int powerpc_hpt_user_external_irq_observed(void);
@@ -448,6 +449,10 @@ void boot_main(FirmwareEntry firmware_entry)
             serial_write("SerenityOS PowerPC: wall-clock fallback passed\r\n");
         else
             serial_write("SerenityOS PowerPC: wall-clock fallback failed\r\n");
+        if (powerpc_kernel_context_test())
+            serial_write("SerenityOS PowerPC: kernel context switch passed\r\n");
+        else
+            serial_write("SerenityOS PowerPC: kernel context switch failed\r\n");
         if (powerpc_hpt_external_irq_stack_roundtrip(timebase_frequency))
             serial_write("SerenityOS PowerPC: HPT external IRQ stack passed\r\n");
         else

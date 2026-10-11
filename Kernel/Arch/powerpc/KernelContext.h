@@ -1,0 +1,18 @@
+/*
+ * Copyright (c) 2026, SerenityOS developers.
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+
+#pragma once
+
+namespace Kernel {
+class Thread;
+struct ThreadRegisters;
+extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thread);
+}
+
+// Save the outgoing kernel call context and jump to the incoming one. The
+// returned pointer names the thread that switched into the resumed context.
+extern "C" Kernel::Thread* powerpc_switch_kernel_context(Kernel::ThreadRegisters& outgoing,
+    Kernel::ThreadRegisters const& incoming, Kernel::Thread* from_thread, Kernel::Thread* to_thread);
