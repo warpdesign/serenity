@@ -342,7 +342,7 @@ $(BUILD_DIR)/kernel_context.o: ../KernelContext.S ../KernelContextOffsets.h | $(
 $(BUILD_DIR)/test_kernel_context.o: ../../../../Tests/Kernel/PowerPC/TestKernelContext.cpp ../KernelContext.h ../KernelContextOffsets.h ../ThreadRegisters.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
-$(BUILD_DIR)/kernel_exception_return.o: ../KernelExceptionReturn.S ../KernelContextOffsets.h | $(BUILD_DIR)
+$(BUILD_DIR)/kernel_exception_return.o: ../KernelExceptionReturn.S ../KernelContextOffsets.h ../HighSegmentSwitch.inc | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/test_kernel_exception_return.o: ../../../../Tests/Kernel/PowerPC/TestKernelExceptionReturn.S ../KernelContextOffsets.h | $(BUILD_DIR)

@@ -12,6 +12,8 @@ struct RegisterState;
 struct ThreadRegisters;
 extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thread);
 extern "C" [[noreturn]] void powerpc_restore_supervisor_exception_state(RegisterState const&);
+// The frame reference must be a physical address with IR and DR disabled.
+extern "C" [[noreturn]] void powerpc_restore_user_exception_state_real_mode(RegisterState const&);
 extern "C" [[noreturn]] void powerpc_start_initial_context(ThreadRegisters const&, Thread*);
 }
 

@@ -89,7 +89,9 @@ extern int powerpc_hpt_vsid_switch_roundtrip(void);
 extern int powerpc_hpt_kernel_protection_roundtrip(void);
 extern int powerpc_hpt_user_mode_roundtrip(void);
 extern int powerpc_hpt_user_high_vsid_isolation_roundtrip(void);
+extern int powerpc_hpt_user_exception_return_roundtrip(void);
 extern volatile Cell powerpc_hpt_user_high_debug;
+extern volatile Cell powerpc_hpt_user_return_debug;
 extern int powerpc_user_stack_observed(void);
 extern int powerpc_user_syscall_resume_observed(void);
 extern int powerpc_user_exception_frame_observed(void);
@@ -543,6 +545,13 @@ void boot_main(FirmwareEntry firmware_entry)
         else {
             serial_write("SerenityOS PowerPC: user high VSID isolation failed checks 0x");
             serial_write_hex(powerpc_hpt_user_high_debug);
+            serial_write("\r\n");
+        }
+        if (powerpc_hpt_user_exception_return_roundtrip())
+            serial_write("SerenityOS PowerPC: real-mode user frame return passed\r\n");
+        else {
+            serial_write("SerenityOS PowerPC: real-mode user frame return failed checks 0x");
+            serial_write_hex(powerpc_hpt_user_return_debug);
             serial_write("\r\n");
         }
         if (powerpc_register_state_test())

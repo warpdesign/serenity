@@ -150,6 +150,40 @@ powerpc_user_probe_supervisor_resume:
     blr
 .size powerpc_enter_user_probe, .-powerpc_enter_user_probe
 
+.global powerpc_enter_user_exception_frame_probe
+.type powerpc_enter_user_exception_frame_probe,@function
+powerpc_enter_user_exception_frame_probe:
+    // Run the architecture's real-mode user return with a physical frame.
+    // Keep the probe's original supervisor state for its second syscall.
+    stwu 1,-128(1)
+    stw 2,8(1)
+    stmw 13,40(1)
+    mflr 0
+    stw 0,0(3) // User r0 is kept across the two-syscall probe.
+    mfcr 12
+    lis 11,powerpc_user_probe_saved_supervisor_cr@ha
+    stw 12,powerpc_user_probe_saved_supervisor_cr@l(11)
+    mfmsr 12
+    lis 11,powerpc_user_probe_saved_msr@ha
+    stw 12,powerpc_user_probe_saved_msr@l(11)
+    lis 12,.Lreturn_from_user_frame@ha
+    addi 12,12,.Lreturn_from_user_frame@l
+    lis 11,powerpc_user_probe_resume_address@ha
+    stw 12,powerpc_user_probe_resume_address@l(11)
+    lis 11,powerpc_user_probe_saved_supervisor_stack@ha
+    stw 1,powerpc_user_probe_saved_supervisor_stack@l(11)
+    b powerpc_restore_user_exception_state_real_mode
+.Lreturn_from_user_frame:
+    lis 11,powerpc_user_probe_saved_supervisor_cr@ha
+    lwz 11,powerpc_user_probe_saved_supervisor_cr@l(11)
+    mtcrf 255,11
+    lwz 2,8(1)
+    lmw 13,40(1)
+    mtlr 0
+    addi 1,1,128
+    blr
+.size powerpc_enter_user_exception_frame_probe, .-powerpc_enter_user_exception_frame_probe
+
 // Use a mapped user stack and data page, then fault on the high kernel load.
 .section .text.user_mode_probe, "ax"
 .balign 4096

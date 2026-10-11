@@ -74,12 +74,14 @@ static volatile Word s_physical_array_payload[3 * PageSize / sizeof(Word)] __att
 };
 static volatile Word s_user_data_page[PageSize / sizeof(Word)] __attribute__((aligned(PageSize)));
 static volatile Word s_user_stack[PageSize / sizeof(Word)] __attribute__((aligned(PageSize)));
+static struct PowerPCExceptionState s_user_return_frame;
 static int s_hpt_unmapped_fault_observed;
 static int s_user_stack_observed;
 static int s_user_syscall_resume_observed;
 static int s_user_exception_frame_observed;
 static int s_user_external_irq_observed;
 volatile Word powerpc_hpt_user_high_debug;
+volatile Word powerpc_hpt_user_return_debug;
 volatile Word powerpc_probe_dsi_high_segment;
 
 volatile struct PowerPCExceptionState powerpc_user_probe_frame;
@@ -107,6 +109,7 @@ extern Word powerpc_user_irq_probe_end[];
 extern Word powerpc_user_probe_after_first_syscall[];
 extern Word powerpc_user_probe_after_second_syscall[];
 extern Word powerpc_enter_user_probe(Word user_entry, Word protected_address, Word user_data_address, Word value, Word user_stack_top, Word extra_msr_bits);
+extern Word powerpc_enter_user_exception_frame_probe(struct PowerPCExceptionState* frame);
 extern int powerpc_test_map_kernel_page(struct PowerPCHashPageTable const*, Word effective_address, Word physical_address);
 extern unsigned char powerpc_probe_high_stack[];
 extern unsigned char powerpc_probe_exception_stack[];
@@ -961,6 +964,112 @@ int powerpc_hpt_user_high_vsid_isolation_roundtrip(void)
     powerpc_hpt_user_high_debug |= second_syscall_high_segment == (0x20000000u | (user_base + 12)) ? 1u << 14 : 0u;
     powerpc_hpt_user_high_debug |= powerpc_probe_dsi_high_segment == (0x20000000u | 12) ? 1u << 15 : 0u;
     return powerpc_hpt_user_high_debug == 0xffffu;
+}
+
+int powerpc_hpt_user_exception_return_roundtrip(void)
+{
+    powerpc_hpt_user_return_debug = 0x10000u;
+    Word machine_state;
+    __asm__ volatile("mfmsr %0" : "=r"(machine_state));
+    if ((machine_state & 0x4030u) != 0)
+        return 0;
+    powerpc_hpt_user_return_debug = 0x20000u;
+
+    struct PowerPCHPTEntry* kernel_entry = find_high_page(HighDataPage);
+    if (!kernel_entry || (kernel_entry->lower & 3u) != POWERPC_HPT_SUPERVISOR_ONLY)
+        return 0;
+    powerpc_hpt_user_return_debug = 0x30000u;
+    Word original_lower = kernel_entry->lower;
+    Word physical = original_lower & ~(Word)(PageSize - 1);
+    Word read_only_flags = (original_lower & (PageSize - 1) & ~3u) | POWERPC_HPT_READ_ONLY;
+    if (!powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, read_only_flags))
+        return 0;
+    powerpc_hpt_user_return_debug = 0x40000u;
+
+    Word code_physical = (Word)(__UINTPTR_TYPE__)powerpc_user_probe_start;
+    Word data_physical = (Word)(__UINTPTR_TYPE__)s_user_data_page;
+    Word stack_physical = (Word)(__UINTPTR_TYPE__)s_user_stack;
+    int mapped_code = powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeCodePage, code_physical, UserPageFlags);
+    int mapped_data = mapped_code && powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeDataPage, data_physical, UserPageFlags);
+    int mapped_stack = mapped_data && powerpc_hpt_map(&s_hpt, UserProbeVSID, UserProbeStackPage, stack_physical, UserPageFlags);
+    if (!mapped_stack) {
+        if (mapped_data)
+            (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage);
+        if (mapped_code)
+            (void)powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage);
+        (void)powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, original_lower & (PageSize - 1));
+        return 0;
+    }
+    powerpc_hpt_user_return_debug = 0x50000u;
+
+    for (Word index = 0; index < 32; ++index)
+        s_user_return_frame.gpr[index] = 0;
+    s_user_return_frame.gpr[1] = UserProbeStackPage + PageSize - 16;
+    s_user_return_frame.gpr[2] = 0x10293847u;
+    s_user_return_frame.gpr[4] = HighDataPage;
+    s_user_return_frame.gpr[5] = UserProbeDataPage;
+    s_user_return_frame.gpr[6] = 0x2468ace0u;
+    s_user_return_frame.gpr[14] = 0x31415926u;
+    s_user_return_frame.cr = 0;
+    s_user_return_frame.ctr = 0;
+    s_user_return_frame.xer = 0;
+    s_user_return_frame.lr = 0;
+    s_user_return_frame.srr0 = UserProbeCodePage;
+    s_user_return_frame.srr1 = 0x6030u;
+
+    Word original_user_segment = powerpc_read_segment_register(1);
+    Word original_high_segments[4];
+    for (Word segment = 12; segment < 16; ++segment)
+        original_high_segments[segment - 12] = powerpc_read_segment_register(segment);
+    powerpc_write_segment_register(1, 0x20000000u | UserProbeVSID);
+    powerpc_user_probe_syscall_count = 0;
+    powerpc_user_probe_observed_srr1 = 0;
+    s_user_data_page[0] = 0;
+
+    Word fault_count_before;
+    Word supervisor_stack_before;
+    __asm__ volatile("mfspr %0,272; mr %1,1" : "=r"(fault_count_before), "=r"(supervisor_stack_before));
+    Word result = powerpc_enter_user_exception_frame_probe(&s_user_return_frame);
+    Word fault_count_after;
+    Word fault_address;
+    Word returned_state;
+    Word supervisor_stack_after;
+    __asm__ volatile("mfspr %0,272; mfspr %1,274; mfmsr %2; mr %3,1"
+        : "=r"(fault_count_after), "=r"(fault_address), "=r"(returned_state), "=r"(supervisor_stack_after));
+
+    int kernel_high_restored = 1;
+    for (Word segment = 12; segment < 16; ++segment) {
+        if (powerpc_read_segment_register(segment) != (0x20000000u | segment))
+            kernel_high_restored = 0;
+        powerpc_write_segment_register(segment, original_high_segments[segment - 12]);
+    }
+    powerpc_write_segment_register(1, original_user_segment);
+
+    Word checks = (result == 0x2468ace0u ? 1u : 0u)
+        | (s_user_data_page[0] == 0x2468ace0u ? 1u << 1 : 0u)
+        | (fault_count_after == fault_count_before + 1 ? 1u << 2 : 0u)
+        | (fault_address == HighDataPage ? 1u << 3 : 0u)
+        | (powerpc_user_probe_syscall_count == 2 ? 1u << 4 : 0u)
+        | ((powerpc_user_probe_observed_srr1 & 0x6030u) == 0x6030u ? 1u << 5 : 0u)
+        | (powerpc_user_probe_frame.gpr[1] == UserProbeStackPage + PageSize - 16 ? 1u << 6 : 0u)
+        | (powerpc_user_probe_frame.gpr[2] == 0x10293847u ? 1u << 7 : 0u)
+        | (powerpc_user_probe_frame.gpr[14] == 0x31415926u ? 1u << 8 : 0u)
+        | ((powerpc_user_probe_frame.srr1 & 0x6030u) == 0x6030u ? 1u << 9 : 0u)
+        | (powerpc_user_probe_saved_supervisor_stack == supervisor_stack_before - 128 ? 1u << 10 : 0u)
+        | (supervisor_stack_after == supervisor_stack_before ? 1u << 11 : 0u)
+        | ((returned_state & 0x4030u) == 0 ? 1u << 12 : 0u)
+        | (kernel_high_restored ? 1u << 13 : 0u);
+
+    for (Word index = 0; index < 11; ++index)
+        s_user_data_page[index] = 0;
+    s_user_stack[(PageSize - 32) / sizeof(Word)] = 0;
+    s_user_stack[(PageSize - 24) / sizeof(Word)] = 0;
+    int restored = powerpc_hpt_remap(&s_hpt, KernelVSID, HighDataPage, physical, original_lower & (PageSize - 1));
+    int unmapped = powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeCodePage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeDataPage)
+        && powerpc_hpt_unmap(&s_hpt, UserProbeVSID, UserProbeStackPage);
+    powerpc_hpt_user_return_debug = checks | (restored ? 1u << 14 : 0u) | (unmapped ? 1u << 15 : 0u);
+    return powerpc_hpt_user_return_debug == 0xffffu;
 }
 
 int powerpc_user_stack_observed(void)
