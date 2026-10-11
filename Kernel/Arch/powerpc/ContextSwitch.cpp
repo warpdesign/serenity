@@ -112,10 +112,10 @@ extern "C" void powerpc_enter_thread_context(Thread* from_thread, Thread* to_thr
     VERIFY(from_directory);
     VERIFY(to_directory);
     if (from_thread == to_thread || from_directory != to_directory) {
-        if (to_thread->process().is_kernel_process())
-            Memory::activate_kernel_page_directory(*to_directory);
-        else
+        if (to_directory->process())
             Memory::activate_page_directory(*to_directory, to_thread);
+        else
+            Memory::activate_kernel_page_directory(*to_directory);
     }
 
     to_thread->set_cpu(Processor::current().id());

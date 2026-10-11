@@ -5,6 +5,11 @@
  */
 
 #include <Kernel/Arch/Processor.h>
+#include <Kernel/Arch/powerpc/ExceptionSetup.h>
+
+namespace Kernel::PowerPC {
+void initialize_exception_vectors() { }
+}
 
 namespace Kernel {
 Atomic<u32> g_total_processors;

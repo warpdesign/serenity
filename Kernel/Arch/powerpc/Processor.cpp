@@ -6,19 +6,13 @@
 
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/CPUID.h>
-#include <Kernel/Arch/powerpc/ExceptionVectorInstaller.h>
+#include <Kernel/Arch/powerpc/ExceptionSetup.h>
 #include <Kernel/Arch/powerpc/TLB.h>
-#include <Kernel/Boot/BootInfo.h>
 #include <Kernel/Interrupts/InterruptDisabler.h>
 
 namespace Kernel {
 
 Processor* g_current_processor;
-
-extern "C" u8 powerpc_data_storage_vector_start[];
-extern "C" u8 powerpc_data_storage_vector_end[];
-extern "C" void powerpc_data_storage_high_handler();
-alignas(4096) static u8 s_exception_stack[16 * 1024];
 
 StringView ProcessorBase::platform_string()
 {
@@ -51,15 +45,7 @@ void ProcessorBase::initialize(u32 cpu)
 {
     VERIFY(cpu == m_cpu);
     VERIFY((PowerPC::read_msr() & 0x2000u) != 0);
-    auto virtual_stack_top = reinterpret_cast<FlatPtr>(s_exception_stack + sizeof(s_exception_stack));
-    VERIFY(virtual_stack_top >= g_boot_info.physical_to_virtual_offset);
-    auto physical_stack_top = virtual_stack_top - g_boot_info.physical_to_virtual_offset;
-    VERIFY(physical_stack_top < 256 * MiB);
-    *reinterpret_cast<u32*>(virtual_stack_top - sizeof(u32)) = reinterpret_cast<FlatPtr>(powerpc_data_storage_high_handler);
-    asm volatile("mtspr 272,%0" : : "r"(physical_stack_top) : "memory");
-    VERIFY(powerpc_install_exception_vector(0x300, powerpc_data_storage_vector_start, powerpc_data_storage_vector_end));
-    u32 msr = PowerPC::read_msr() & ~0x40u;
-    asm volatile("sync; mtmsr %0; isync" : : "r"(msr) : "memory");
+    PowerPC::initialize_exception_vectors();
     m_deferred_call_pool.init();
     g_total_processors.store(1, AK::MemoryOrder::memory_order_release);
     store_fpu_state(s_clean_fpu_state);

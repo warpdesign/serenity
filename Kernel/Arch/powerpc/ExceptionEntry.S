@@ -7,16 +7,13 @@
 #include "HighSegmentSwitch.inc"
 #include "KernelContextOffsets.h"
 
-// Copied to the low 0x300 exception slot after Open Firmware is finished.
-// SPRG0 contains the physical top of the dedicated kernel exception stack.
-.section .text.powerpc_data_storage_vector, "ax"
-.p2align 2
-.globl powerpc_data_storage_vector_start
-.globl powerpc_data_storage_vector_end
-powerpc_data_storage_vector_start:
+// Copied into the low vector slots after Open Firmware is finished. Each
+// vector uses its own physical stack top in an SPRG and enters the high kernel
+// with an exact RegisterState frame.
+.macro POWERPC_SAVE_AND_ENTER stack_spr
     mtspr 273,0
     mtspr 274,1
-    mfspr 1,272
+    mfspr 1,\stack_spr
     addi 1,1,-256
     stmw 2,PPC_CONTEXT_GPR2(1)
     mfspr 0,273
@@ -44,10 +41,26 @@ powerpc_data_storage_vector_start:
     lwz 12,252(1)
     mtspr 26,12
     mfmsr 12
-    ori 12,12,0x32 // IR | DR | recoverable, with interrupts disabled.
+    ori 12,12,0x2032 // FP | IR | DR | recoverable, with interrupts disabled.
     mtspr 27,12
     rfi
+.endm
+
+.section .text.powerpc_data_storage_vector, "ax"
+.p2align 2
+.globl powerpc_data_storage_vector_start
+.globl powerpc_data_storage_vector_end
+powerpc_data_storage_vector_start:
+    POWERPC_SAVE_AND_ENTER 272
 powerpc_data_storage_vector_end:
+
+.section .text.powerpc_decrementer_vector, "ax"
+.p2align 2
+.globl powerpc_decrementer_vector_start
+.globl powerpc_decrementer_vector_end
+powerpc_decrementer_vector_start:
+    POWERPC_SAVE_AND_ENTER 275
+powerpc_decrementer_vector_end:
 
 .section .text, "ax"
 .p2align 2
@@ -60,3 +73,12 @@ powerpc_data_storage_high_handler:
     addi 1,1,-32 // C++ callee linkage area must not overlap RegisterState.
     b powerpc_data_storage_exception_handler
 .size powerpc_data_storage_high_handler,.-powerpc_data_storage_high_handler
+
+.p2align 2
+.globl powerpc_decrementer_high_handler
+.type powerpc_decrementer_high_handler,@function
+powerpc_decrementer_high_handler:
+    mr 3,1
+    addi 1,1,-32
+    b powerpc_decrementer_exception_handler
+.size powerpc_decrementer_high_handler,.-powerpc_decrementer_high_handler

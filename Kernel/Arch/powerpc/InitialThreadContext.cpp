@@ -19,9 +19,16 @@ FlatPtr prepare_initial_thread_context(ThreadRegisters& registers, FlatPtr kerne
 {
     VERIFY((kernel_stack_top & 15) == 0);
 
-    auto stack_top = kernel_stack_top - sizeof(RegisterState);
+    // An entry function may save LR in its caller's linkage area at SP + 4.
+    // Keep that space above the saved exception frame even for a first entry.
+    constexpr FlatPtr caller_frame_size = 64;
+    auto caller_sp = kernel_stack_top - caller_frame_size;
+    *reinterpret_cast<FlatPtr*>(caller_sp) = 0;
+    auto stack_top = caller_sp - sizeof(RegisterState);
     auto& frame = *reinterpret_cast<RegisterState*>(stack_top);
     static_cast<PowerPCExceptionState&>(frame) = static_cast<PowerPCExceptionState const&>(registers);
+    if ((registers.srr1 & 0x4000u) == 0)
+        frame.gpr[1] = caller_sp;
     if (frame.lr == 0)
         frame.lr = FlatPtr(&exit_kernel_thread);
 

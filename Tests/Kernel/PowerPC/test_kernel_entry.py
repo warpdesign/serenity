@@ -31,7 +31,7 @@ def main():
             "-serial", f"file:{serial}",
             "-monitor", "none",
             "-no-reboot",
-            "-d", "trace:vof_write",
+            "-d", "int,trace:vof_write",
             "-D", str(trace),
         ]
         if args.cpu:
@@ -41,7 +41,7 @@ def main():
             deadline = time.monotonic() + 10
             while time.monotonic() < deadline and process.poll() is None:
                 serial_output = serial.read_bytes() if serial.exists() else b""
-                if b"KernelRng: No entropy source available!" in serial_output:
+                if b"VFS SyncTask is running" in serial_output:
                     break
                 time.sleep(0.05)
         finally:
@@ -56,6 +56,8 @@ def main():
             b"Kernel Commandline: serenity-loader-enter-kernel serial_debug",
             b"Boot method: FirmwareMemoryMap",
             b"KernelRng: No entropy source available!",
+            b"Scheduler[0]: idle loop running",
+            b"VFS SyncTask is running",
         )
         expected_firmware = (
             b"SerenityOS PowerPC loader: boot handoff validated",
@@ -63,8 +65,10 @@ def main():
         )
         missing = [marker for marker in expected_serial if marker not in serial_output]
         missing += [marker for marker in expected_firmware if marker not in trace_output]
-        if b"KERNEL PANIC" in serial_output:
-            missing.append(b"no kernel panic during page fault recovery")
+        if b"DECR (10)" not in trace_output:
+            missing.append(b"decrementer interrupt")
+        if b"KERNEL PANIC" in serial_output.split(b"VFS SyncTask is running", 1)[0]:
+            missing.append(b"no kernel panic before scheduler progress")
         if missing:
             raise SystemExit(
                 f"Pegasos 2 kernel entry missed {missing!r}:\n"

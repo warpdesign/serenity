@@ -18,6 +18,11 @@ struct TrapFrame {
     RegisterState* regs; // must be last
 
     TrapFrame() = delete;
+    explicit TrapFrame(RegisterState* registers)
+        : next_trap(nullptr)
+        , regs(registers)
+    {
+    }
     TrapFrame(TrapFrame const&) = delete;
     TrapFrame(TrapFrame&&) = delete;
     TrapFrame& operator=(TrapFrame const&) = delete;

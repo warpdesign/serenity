@@ -28,12 +28,13 @@ extern "C" int powerpc_initial_thread_context_test()
     kernel_registers.gpr[14] = 0x45678901u;
     Kernel::TrapFrame* kernel_trap = nullptr;
     auto kernel_context_sp = Kernel::prepare_initial_thread_context(kernel_registers, stack_top, kernel_trap);
-    if (kernel_context_sp != stack_top - sizeof(Kernel::RegisterState) - sizeof(Kernel::TrapFrame)
+    if (kernel_context_sp != stack_top - 64 - sizeof(Kernel::RegisterState) - sizeof(Kernel::TrapFrame)
         || kernel_trap != reinterpret_cast<Kernel::TrapFrame*>(kernel_context_sp)
         || kernel_trap->next_trap != nullptr
         || kernel_trap->regs != reinterpret_cast<Kernel::RegisterState*>(kernel_context_sp + sizeof(Kernel::TrapFrame))
         || kernel_trap->regs->ip() != 0x12345678u
-        || kernel_trap->regs->userspace_sp() != 0x87654320u
+        || kernel_trap->regs->userspace_sp() != stack_top - 64
+        || *reinterpret_cast<FlatPtr const*>(stack_top - 64) != 0
         || kernel_trap->regs->srr1 != 0xa030u
         || kernel_trap->regs->gpr[3] != 0x34567890u
         || kernel_trap->regs->gpr[14] != 0x45678901u
