@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2020, Sergey Bugaev <bugaevc@serenityos.org>
- * Copyright (c) 2021-2024, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Sergey Bugaev <bugaevc@serenityos.org>
+ * Copyright (c) 2021-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -20,6 +20,7 @@
 #include <Kernel/Devices/GPU/Management.h>
 #include <Kernel/Devices/Input/Management.h>
 #include <Kernel/Devices/TTY/VirtualConsole.h>
+#include <Kernel/Devices/TTY/DeferredKeyPress.h>
 #include <Kernel/Heap/kmalloc.h>
 #include <Kernel/Library/Panic.h>
 #include <Kernel/Library/StdLib.h>
@@ -373,9 +374,9 @@ void VirtualConsole::on_key_pressed(KeyEvent event)
     if (!event.is_press())
         return;
 
-    Processor::deferred_call_queue([this, event]() {
-        m_console_impl.handle_key_press(event.key, event.code_point, event.flags);
-    });
+    Processor::deferred_call_queue(make_deferred_key_press(event, [this](KeyCode key, u32 code_point, u8 flags) {
+        m_console_impl.handle_key_press(key, code_point, flags);
+    }));
 }
 
 ErrorOr<size_t> VirtualConsole::on_tty_write(UserOrKernelBuffer const& data, size_t size)

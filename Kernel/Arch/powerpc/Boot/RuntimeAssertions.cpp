@@ -10,3 +10,14 @@
 {
     for (;;) { }
 }
+
+void operator delete(void*) noexcept
+{
+    // The boot probe has no heap. Reaching outline Function storage is a bug.
+    __builtin_trap();
+}
+
+void operator delete(void* pointer, __SIZE_TYPE__) noexcept
+{
+    operator delete(pointer);
+}
