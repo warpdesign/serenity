@@ -85,7 +85,13 @@ private:
     ErrorOr<Graphics::VirtIOGPU::ContextID> create_context();
     ErrorOr<void> attach_resource_to_context(Graphics::VirtIOGPU::ResourceID resource_id, Graphics::VirtIOGPU::ContextID context_id);
     ErrorOr<void> submit_command_buffer(Graphics::VirtIOGPU::ContextID, Function<size_t(Bytes)> buffer_writer);
-    Graphics::VirtIOGPU::Protocol::TextureFormat get_framebuffer_format() const { return Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM; }
+    Graphics::VirtIOGPU::Protocol::TextureFormat get_framebuffer_format() const
+    {
+        // Gfx::ARGB32 pixels are stored in native byte order in the framebuffer.
+        return AK::HostIsLittleEndian
+            ? Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM
+            : Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_X8R8G8B8_UNORM;
+    }
 
     auto& operation_lock() { return m_operation_lock; }
     Graphics::VirtIOGPU::ResourceID allocate_resource_id();

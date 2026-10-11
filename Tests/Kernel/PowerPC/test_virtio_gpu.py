@@ -5,6 +5,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import shutil
 import socket
 import subprocess
@@ -38,6 +39,18 @@ def image_size(path):
         return tuple(int(value) for value in dimensions)
 
 
+def image_has_light_gray_text(path):
+    with path.open("rb") as image:
+        if image.readline().strip() != b"P6":
+            return False
+        line = image.readline()
+        while line.startswith(b"#"):
+            line = image.readline()
+        if line.split() != [b"1024", b"768"] or image.readline().strip() != b"255":
+            return False
+        return image.read().count(b"\xd3\xd3\xd3") >= 50
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--qemu", required=True)
@@ -54,6 +67,16 @@ def main():
             mke2fs = str(homebrew_mke2fs)
     if mke2fs is None:
         raise SystemExit("mke2fs is required for the PowerPC VirtIO GPU test")
+    debugfs = shutil.which("debugfs")
+    if debugfs is None:
+        homebrew_debugfs = Path("/opt/homebrew/opt/e2fsprogs/sbin/debugfs")
+        if homebrew_debugfs.exists():
+            debugfs = str(homebrew_debugfs)
+    if debugfs is None:
+        raise SystemExit("debugfs is required for the PowerPC VirtIO GPU color test")
+
+    syscall_header = Path(__file__).parents[3] / "Kernel/API/Syscall.h"
+    syscall_names = re.findall(r"^\s*S\((\w+),", syscall_header.read_text(), re.MULTILINE)
 
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-virtio-gpu-") as directory:
         work = Path(directory)
@@ -62,7 +85,9 @@ def main():
         executable = work / "init"
         subprocess.run([
             args.cross_compile + "gcc", "-m32", "-msdata=none", "-ffreestanding", "-fno-pic", "-fno-pie",
-            "-c", str(fixtures / "GPUWait.S"), "-o", str(object_file),
+            f"-DSYSCALL_OPEN={syscall_names.index('open')}",
+            f"-DSYSCALL_WRITE={syscall_names.index('write')}",
+            "-c", str(fixtures / "GPUConsoleColor.S"), "-o", str(object_file),
         ], check=True)
         subprocess.run([
             args.cross_compile + "ld", "-m", "elf32ppcserenity", "-shared", "--no-dynamic-linker",
@@ -71,11 +96,20 @@ def main():
 
         root = work / "root"
         root.mkdir()
+        (root / "dev").mkdir()
         shutil.copy2(executable, root / "init")
         disk = work / "root.ext2"
         with disk.open("wb") as file:
             file.truncate(16 * 1024 * 1024)
         subprocess.run([mke2fs, "-q", "-F", "-t", "ext2", "-O", "none", "-b", "1024", "-d", str(root), str(disk)], check=True)
+        subprocess.run(
+            [debugfs, "-w", "-f", "-", str(disk)],
+            input="cd /dev\nmknod tty0 c 35 0\nset_inode_field /dev/tty0 mode 020666\n",
+            check=True, capture_output=True, text=True,
+        )
+        device = subprocess.run([debugfs, "-R", "stat /dev/tty0", str(disk)], check=True, capture_output=True, text=True)
+        if "Type: character special" not in device.stdout:
+            raise SystemExit("Failed to create /dev/tty0 in VirtIO GPU test image")
         with disk.open("r+b") as file:
             file.seek(510)
             file.write(b"\x55\xaa")
@@ -99,8 +133,9 @@ def main():
             command.extend(("-cpu", args.cpu))
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         observed_size = None
+        observed_gray_text = False
         try:
-            deadline = time.monotonic() + 10
+            deadline = time.monotonic() + 15
             while not monitor_path.exists() and time.monotonic() < deadline and process.poll() is None:
                 time.sleep(0.05)
             with socket.socket(socket.AF_UNIX) as monitor:
@@ -115,7 +150,8 @@ def main():
                         break
                     read_monitor(monitor, f"screendump {screenshot}")
                     observed_size = image_size(screenshot)
-                    if observed_size == (1024, 768):
+                    if observed_size == (1024, 768) and image_has_light_gray_text(screenshot):
+                        observed_gray_text = True
                         break
                     time.sleep(0.1)
         finally:
@@ -123,15 +159,15 @@ def main():
             _, errors = process.communicate(timeout=5)
 
         output = serial.read_bytes() if serial.exists() else b""
-        if (observed_size != (1024, 768) or b"VirtIOGPU: Found" not in output
+        if (observed_size != (1024, 768) or not observed_gray_text or b"VirtIOGPU: Found" not in output
                 or b"Failed to get EDID" in output or b"No graphics adapter was initialized" in output
                 or b"KERNEL PANIC" in output):
             raise SystemExit(
-                f"Pegasos 2 VirtIO GPU did not initialize a 1024x768 scanout: {observed_size}\n"
+                f"Pegasos 2 VirtIO GPU did not render light gray console text on a 1024x768 scanout: {observed_size}, gray={observed_gray_text}\n"
                 + output.decode(errors="replace")[-3000:]
                 + errors.decode(errors="replace")[-1000:]
             )
-    print("Pegasos 2 VirtIO GPU scanout passed")
+    print("Pegasos 2 VirtIO GPU scanout and console color passed")
 
 
 if __name__ == "__main__":

@@ -257,7 +257,7 @@ ErrorOr<Graphics::VirtIOGPU::ResourceID> VirtIOGraphicsAdapter::create_2d_resour
     request.resource_id = resource_id.value();
     request.width = rect.width;
     request.height = rect.height;
-    request.format = to_underlying(Graphics::VirtIOGPU::Protocol::TextureFormat::VIRTIO_GPU_FORMAT_B8G8R8X8_UNORM);
+    request.format = to_underlying(get_framebuffer_format());
 
     TRY(synchronous_virtio_gpu_command(COMMAND_TIMEOUT_US, start_of_scratch_space(), sizeof(request), sizeof(response)));
 
