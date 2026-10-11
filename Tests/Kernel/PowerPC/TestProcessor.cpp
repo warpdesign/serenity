@@ -17,6 +17,7 @@ extern "C" int powerpc_processor_test()
         && Kernel::Processor::current_id() == 0
         && processor.has_feature(Kernel::CPUFeature::FPU)
         && processor.has_feature(Kernel::CPUFeature::HashedMMU)
+        && Kernel::Processor::platform_string() == "powerpc"sv
         && !processor.has_nx()
         && Kernel::Processor::in_critical() == 0;
 

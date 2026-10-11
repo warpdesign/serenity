@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/ArchSpecificThreadData.h>
 #include <Kernel/Arch/ForkRegisters.h>
+#include <Kernel/Arch/ProcessEntry.h>
 #include <Kernel/Arch/RegisterState.h>
 #include <Kernel/Arch/ThreadRegisters.h>
 #include <Kernel/Arch/powerpc/ExceptionState.h>
@@ -41,6 +42,11 @@ extern "C" int powerpc_thread_registers_test()
     if (registers.ip() != 0x10010000u || registers.sp() != 0x10030ff0u
         || registers.page_directory != &second_directory || registers.gpr[2] != 0
         || (registers.srr1 & 0x4000u) == 0 || (registers.srr1 & 0x30u) != 0x30u)
+        return 0;
+    Kernel::set_process_entry_arguments(registers, 3, 0x10030000u, 0x10030100u);
+    if (registers.gpr[3] != 3 || registers.gpr[4] != 0x10030000u
+        || registers.gpr[5] != 0x10030100u || registers.sp() != 0x10030ff0u
+        || Kernel::process_entry_hwcap() != 0)
         return 0;
 
     Kernel::RegisterState parent {};

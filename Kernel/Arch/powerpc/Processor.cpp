@@ -12,6 +12,11 @@ namespace Kernel {
 
 Processor* g_current_processor;
 
+StringView ProcessorBase::platform_string()
+{
+    return "powerpc"sv;
+}
+
 void ProcessorBase::early_initialize(u32 cpu)
 {
     VERIFY(cpu == 0);
