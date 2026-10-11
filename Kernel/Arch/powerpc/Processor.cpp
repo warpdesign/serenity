@@ -39,6 +39,22 @@ void ProcessorBase::early_initialize(u32 cpu)
     g_current_processor = static_cast<Processor*>(this);
 }
 
+void ProcessorBase::initialize(u32 cpu)
+{
+    VERIFY(cpu == m_cpu);
+    VERIFY((PowerPC::read_msr() & 0x2000u) != 0);
+    m_deferred_call_pool.init();
+    g_total_processors.store(1, AK::MemoryOrder::memory_order_release);
+    store_fpu_state(s_clean_fpu_state);
+}
+
+[[noreturn]] void ProcessorBase::halt()
+{
+    disable_interrupts();
+    for (;;)
+        asm volatile("nop" : : : "memory");
+}
+
 void ProcessorBase::store_fpu_state(FPUState& state)
 {
     ::Kernel::store_fpu_state(&state);

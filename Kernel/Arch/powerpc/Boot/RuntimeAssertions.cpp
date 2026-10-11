@@ -21,3 +21,9 @@ void operator delete(void* pointer, __SIZE_TYPE__) noexcept
 {
     operator delete(pointer);
 }
+
+void* operator new(__SIZE_TYPE__)
+{
+    // Unexpected dynamic allocation in the freestanding boot probe.
+    __builtin_trap();
+}

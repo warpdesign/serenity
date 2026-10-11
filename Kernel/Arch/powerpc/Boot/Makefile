@@ -22,7 +22,7 @@ SYSCALL_TEST_OBJECTS := $(BUILD_DIR)/libsystem_syscall.o $(BUILD_DIR)/test_sysca
 FENV_TEST_OBJECTS := $(BUILD_DIR)/libc_powerpc_fenv.o $(BUILD_DIR)/libc_fenv.o $(BUILD_DIR)/test_fenv.o
 FPU_STATE_TEST_OBJECTS := $(BUILD_DIR)/fpu_state.o $(BUILD_DIR)/test_fpu_state.o
 CPU_TEST_OBJECTS := $(BUILD_DIR)/cpu_features.o $(BUILD_DIR)/test_cpu_features.o
-PROCESSOR_TEST_OBJECTS := $(BUILD_DIR)/processor.o $(BUILD_DIR)/test_processor.o
+PROCESSOR_TEST_OBJECTS := $(BUILD_DIR)/processor.o $(BUILD_DIR)/test_processor.o $(BUILD_DIR)/deferred_call_pool.o
 MEMORY_FENCES_TEST_OBJECTS := $(BUILD_DIR)/test_memory_fences.o
 CACHE_TEST_OBJECTS := $(BUILD_DIR)/test_cache_maintenance.o
 TLB_TEST_OBJECTS := $(BUILD_DIR)/tlb.o $(BUILD_DIR)/test_tlb_maintenance.o
@@ -126,6 +126,9 @@ $(BUILD_DIR)/processor.o: ../Processor.cpp ../Processor.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_processor.o: ../../../../Tests/Kernel/PowerPC/TestProcessor.cpp ../Processor.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
+
+$(BUILD_DIR)/deferred_call_pool.o: ../../../../Kernel/Arch/DeferredCallPool.cpp ../../../../Kernel/Arch/DeferredCallPool.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -I../../../../Userland/Libraries/LibC -Wno-literal-suffix -c $< -o $@
 
 $(BUILD_DIR)/test_memory_fences.o: ../../../../Tests/Kernel/PowerPC/TestMemoryFences.cpp ../MemoryFences.h | $(BUILD_DIR)

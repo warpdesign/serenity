@@ -6,6 +6,11 @@
 
 #include <Kernel/Arch/Processor.h>
 
+namespace Kernel {
+Atomic<u32> g_total_processors;
+FPUState s_clean_fpu_state;
+}
+
 extern "C" int powerpc_processor_test()
 {
     if (Kernel::Processor::is_initialized())
@@ -20,6 +25,9 @@ extern "C" int powerpc_processor_test()
         && Kernel::Processor::platform_string() == "powerpc"sv
         && !processor.has_nx()
         && Kernel::Processor::in_critical() == 0;
+
+    processor.initialize(0);
+    passed &= Kernel::g_total_processors.load(AK::MemoryOrder::memory_order_acquire) == 1;
 
     Kernel::Processor::enter_critical();
     passed &= Kernel::Processor::in_critical() == 1;
