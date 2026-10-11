@@ -88,6 +88,7 @@ def main():
         b"SerenityOS PowerPC: user high VSID isolation passed",
         b"SerenityOS PowerPC: real-mode user frame return passed",
         b"SerenityOS PowerPC: translated supervisor user return passed",
+        b"SerenityOS PowerPC: high-frame user return passed",
         b"SerenityOS PowerPC: register state from user trap passed",
         b"SerenityOS PowerPC: thread register setup passed",
         b"SerenityOS PowerPC: stack backchain unwinder passed",

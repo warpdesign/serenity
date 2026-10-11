@@ -30,13 +30,20 @@ powerpc_system_call_probe_handler:
     andi. 11,11,0x4000
     bne .Luser_system_call
     cmpwi 0,0x5352
+    beq .Lrecord_supervisor_return
+    cmpwi 0,0x5353
     bne .Lunexpected_supervisor_system_call
+.Lrecord_supervisor_return:
     mfspr 11,27
     lis 12,powerpc_probe_supervisor_return_srr1@ha
     stw 11,powerpc_probe_supervisor_return_srr1@l(12)
     mfspr 11,26
     lis 12,powerpc_probe_supervisor_return_srr0@ha
     stw 11,powerpc_probe_supervisor_return_srr0@l(12)
+    cmpwi 0,0x5353
+    bne .Lrestore_physical_user_frame
+    b powerpc_restore_user_exception_state_from_high_real_mode
+.Lrestore_physical_user_frame:
     b powerpc_restore_user_exception_state_real_mode
 
 .Lunexpected_supervisor_system_call:
@@ -224,7 +231,6 @@ powerpc_enter_user_translated_exception_frame_probe:
     stw 2,8(1)
     stmw 13,40(1)
     mflr 0
-    stw 0,0(3)
     mfcr 12
     lis 11,powerpc_user_probe_saved_supervisor_cr@ha
     stw 12,powerpc_user_probe_saved_supervisor_cr@l(11)
@@ -242,7 +248,10 @@ powerpc_enter_user_translated_exception_frame_probe:
     sync
     mtmsr 11
     isync
-    li 0,0x5352
+    // r3 may name a high kernel alias, so write the saved return register
+    // only after data translation makes that alias accessible.
+    stw 0,0(3)
+    mr 0,4 // 0x5352 for a physical frame, 0x5353 for a high virtual frame.
     sc
 .global powerpc_user_translated_return_resume
 powerpc_user_translated_return_resume:
