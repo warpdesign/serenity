@@ -7,6 +7,7 @@ import argparse
 from pathlib import Path
 import re
 import socket
+import struct
 import subprocess
 import tempfile
 import time
@@ -92,13 +93,23 @@ def main():
             if not physical:
                 raise SystemExit("PowerPC loader did not report the claimed physical address")
             base = int(physical.group(1), 16)
+            runtime_suffix = output.split(b"SerenityOS PowerPC loader: runtime base", 1)[1]
+            runtime_match = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', runtime_suffix)
+            if not runtime_match:
+                raise SystemExit("PowerPC loader did not report the runtime base")
+            runtime_base = int(runtime_match.group(1), 16)
             phoff = int.from_bytes(source[28:32], "big")
             phentsize = int.from_bytes(source[42:44], "big")
             phnum = int.from_bytes(source[44:46], "big")
             segments = []
+            dynamic = None
             for index in range(phnum):
                 header = phoff + index * phentsize
-                if int.from_bytes(source[header:header + 4], "big") != 1:
+                segment_type = int.from_bytes(source[header:header + 4], "big")
+                if segment_type == 2:
+                    dynamic = (int.from_bytes(source[header + 4:header + 8], "big"),
+                               int.from_bytes(source[header + 16:header + 20], "big"))
+                if segment_type != 1:
                     continue
                 file_offset = int.from_bytes(source[header + 4:header + 8], "big")
                 virtual_offset = int.from_bytes(source[header + 8:header + 12], "big")
@@ -106,26 +117,59 @@ def main():
                 memory_size = int.from_bytes(source[header + 20:header + 24], "big")
                 segments.append((virtual_offset, file_offset, file_size, memory_size))
             first = min(segment[0] for segment in segments)
+            if runtime_base != 0xc0000000 + base - first:
+                raise SystemExit("PowerPC loader selected the wrong high kernel base")
             reads = []
             for virtual_offset, file_offset, file_size, memory_size in segments:
                 target = base + virtual_offset - first
                 if file_size:
                     count = min(16, file_size)
-                    reads.append((target, source[file_offset:file_offset + count]))
-                    reads.append((target + file_size - count, source[file_offset + file_size - count:file_offset + file_size]))
+                    reads.append((target, bytearray(source[file_offset:file_offset + count])))
+                    reads.append((target + file_size - count, bytearray(source[file_offset + file_size - count:file_offset + file_size])))
                 if memory_size > file_size:
                     count = min(16, memory_size - file_size)
-                    reads.append((target + file_size, bytes(count)))
-                    reads.append((target + memory_size - count, bytes(count)))
+                    reads.append((target + file_size, bytearray(count)))
+                    reads.append((target + memory_size - count, bytearray(count)))
+
+            if dynamic is None:
+                raise SystemExit("The linked kernel has no dynamic section")
+            dynamic_offset, dynamic_size = dynamic
+            tags = {}
+            for offset in range(dynamic_offset, dynamic_offset + dynamic_size, 8):
+                tag, value = struct.unpack_from(">II", source, offset)
+                if tag == 0:
+                    break
+                tags[tag] = value
+            rela_address, relative_count = tags[7], tags[0x6FFFFFF9]
+            rela_file = next(file_offset + rela_address - virtual_offset
+                             for virtual_offset, file_offset, file_size, _ in segments
+                             if virtual_offset <= rela_address < virtual_offset + file_size)
+            selected_relocations = {0, relative_count // 2, relative_count - 1}
+            for index in range(relative_count):
+                patch_offset, info, addend = struct.unpack_from(">IIi", source, rela_file + index * 12)
+                if info & 0xFF != 22:
+                    raise SystemExit("The kernel's relative relocation prefix changed")
+                patch = (runtime_base + addend).to_bytes(4, "big")
+                target = base + patch_offset - first
+                for address, expected in reads:
+                    for byte_index in range(4):
+                        position = target + byte_index - address
+                        if 0 <= position < len(expected):
+                            expected[position] = patch[byte_index]
+                if index in selected_relocations:
+                    reads.append((target, bytearray(patch)))
             read_physical_memory(monitor, reads)
 
-        output = boot_and_capture(args.qemu, args.loader, b"SerenityOS PowerPC loader: physical base", True, inspect)
+        output = boot_and_capture(args.qemu, args.loader, b"SerenityOS PowerPC loader: runtime base", True, inspect)
         for marker in (
             b"SerenityOS PowerPC loader: kernel ELF32 validated",
             b"SerenityOS PowerPC loader: load span",
             b"SerenityOS PowerPC loader: entry",
             b"SerenityOS PowerPC loader: kernel segments loaded",
             b"SerenityOS PowerPC loader: physical base",
+            b"SerenityOS PowerPC loader: kernel relocations applied",
+            b"SerenityOS PowerPC loader: relocation count",
+            b"SerenityOS PowerPC loader: runtime base",
         ):
             if marker not in output:
                 raise SystemExit(f"PowerPC loader missed {marker!r}:\n{output.decode(errors='replace')}")
@@ -148,13 +192,22 @@ def main():
         physical = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', suffix)
         if not physical or int(physical.group(1), 16) % (2 * 1024 * 1024) != 0:
             raise SystemExit(f"PowerPC loader did not claim aligned RAM:\n{output.decode(errors='replace')}")
+        count_suffix = output.split(b"SerenityOS PowerPC loader: relocation count", 1)[1]
+        observed_count = re.search(rb'vof_write[^\n]*"0x([0-9a-f]{8})', count_suffix)
+        dynamic_header = next(phoff + index * phentsize for index in range(phnum)
+                              if int.from_bytes(source[phoff + index * phentsize:phoff + index * phentsize + 4], "big") == 2)
+        dynamic_offset = int.from_bytes(source[dynamic_header + 4:dynamic_header + 8], "big")
+        dynamic_size = int.from_bytes(source[dynamic_header + 16:dynamic_header + 20], "big")
+        tags = dict(struct.iter_unpack(">II", source[dynamic_offset:dynamic_offset + dynamic_size]))
+        if not observed_count or int(observed_count.group(1), 16) != tags[0x6FFFFFF9]:
+            raise SystemExit("PowerPC loader reported the wrong relocation count")
         print("Pegasos 2 kernel ELF loader probe passed")
         return
 
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-loader-invalid-") as directory:
         work = Path(directory)
 
-        def check_rejected(name: str, image: bytearray):
+        def check_rejected(name: str, image: bytearray, expected_marker: bytes):
             bad_kernel = work / f"{name}.elf"
             bad_kernel.write_bytes(image)
             bad_loader = work / name / "serenity-powerpc-loader.elf"
@@ -165,14 +218,14 @@ def main():
                 f"CROSS_COMPILE={args.cross_compile}",
             ]
             subprocess.run(command, check=True, capture_output=True)
-            output = boot_and_capture(args.qemu, bad_loader, b"SerenityOS PowerPC loader: kernel ELF invalid")
-            if b"SerenityOS PowerPC loader: kernel ELF invalid" not in output or b"kernel ELF32 validated" in output:
+            output = boot_and_capture(args.qemu, bad_loader, expected_marker)
+            if expected_marker not in output or b"kernel relocations applied" in output:
                 raise SystemExit(f"PowerPC loader accepted {name}:\n{output.decode(errors='replace')}")
 
         source = args.kernel_elf.read_bytes()
         wrong_endian = bytearray(source)
         wrong_endian[5] = 1  # EI_DATA: little-endian kernel on big-endian PPC.
-        check_rejected("wrong-endian", wrong_endian)
+        check_rejected("wrong-endian", wrong_endian, b"SerenityOS PowerPC loader: kernel ELF invalid")
 
         overlapping = bytearray(source)
         phoff = int.from_bytes(source[28:32], "big")
@@ -184,8 +237,33 @@ def main():
             raise SystemExit("The linked kernel has fewer than two loadable segments")
         second = load_headers[1]
         overlapping[second + 8:second + 16] = source[load_headers[0] + 8:load_headers[0] + 16]
-        check_rejected("overlapping-loads", overlapping)
-    print("Pegasos 2 corrupt kernel ELF layouts rejected")
+        check_rejected("overlapping-loads", overlapping, b"SerenityOS PowerPC loader: kernel ELF invalid")
+
+        bad_relocations = bytearray(source)
+        dynamic_header = next(phoff + index * phentsize for index in range(phnum)
+                              if int.from_bytes(source[phoff + index * phentsize:phoff + index * phentsize + 4], "big") == 2)
+        dynamic_offset = int.from_bytes(source[dynamic_header + 4:dynamic_header + 8], "big")
+        dynamic_size = int.from_bytes(source[dynamic_header + 16:dynamic_header + 20], "big")
+        for offset in range(dynamic_offset, dynamic_offset + dynamic_size, 8):
+            if int.from_bytes(source[offset:offset + 4], "big") == 7:
+                bad_relocations[offset + 4:offset + 8] = (0xFFFFFF00).to_bytes(4, "big")
+                break
+        check_rejected("invalid-rela-address", bad_relocations, b"SerenityOS PowerPC loader: kernel relocation failed")
+
+        tags = dict(struct.iter_unpack(">II", source[dynamic_offset:dynamic_offset + dynamic_size]))
+        rela_address = tags[7]
+        rela_file = next(
+            int.from_bytes(source[header + 4:header + 8], "big")
+            + rela_address - int.from_bytes(source[header + 8:header + 12], "big")
+            for header in load_headers
+            if int.from_bytes(source[header + 8:header + 12], "big") <= rela_address
+            < int.from_bytes(source[header + 8:header + 12], "big")
+            + int.from_bytes(source[header + 16:header + 20], "big")
+        )
+        bad_target = bytearray(source)
+        bad_target[rela_file:rela_file + 4] = (0xFFFFFFFC).to_bytes(4, "big")
+        check_rejected("invalid-relocation-target", bad_target, b"SerenityOS PowerPC loader: kernel relocation failed")
+    print("Pegasos 2 corrupt kernel ELF and relocation layouts rejected")
 
 
 if __name__ == "__main__":

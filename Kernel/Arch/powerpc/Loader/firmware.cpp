@@ -97,4 +97,19 @@ extern "C" void loader_main(FirmwareEntry firmware)
     write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel segments loaded\r\n");
     write_console(firmware, stdout, "SerenityOS PowerPC loader: physical base ");
     write_hex(firmware, stdout, physical_base);
+
+    u64 runtime_base = static_cast<u64>(KERNEL_MAPPING_BASE) + physical_base - plan.first_virtual_offset;
+    u32 relocation_count = 0;
+    if (runtime_base > 0xffffffffu
+        || !Kernel::PowerPC::Loader::relocate_kernel_image(_binary_kernel_elf_start,
+            _binary_kernel_elf_end - _binary_kernel_elf_start, plan,
+            reinterpret_cast<u8*>(physical_base), span, static_cast<u32>(runtime_base), relocation_count)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel relocation failed\r\n");
+        return;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel relocations applied\r\n");
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: relocation count ");
+    write_hex(firmware, stdout, relocation_count);
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: runtime base ");
+    write_hex(firmware, stdout, static_cast<u32>(runtime_base));
 }
