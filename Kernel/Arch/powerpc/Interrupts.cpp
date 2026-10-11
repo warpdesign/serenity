@@ -7,6 +7,10 @@
 #include <AK/Array.h>
 #include <Kernel/API/POSIX/errno.h>
 #include <Kernel/Arch/Interrupts.h>
+#include <Kernel/Arch/Processor.h>
+#include <Kernel/Arch/TrapFrame.h>
+#include <Kernel/Arch/powerpc/InterruptManagement.h>
+#include <Kernel/Arch/powerpc/KernelContext.h>
 #include <Kernel/Interrupts/GenericInterruptHandler.h>
 #include <Kernel/Interrupts/SharedIRQHandler.h>
 #include <Kernel/Interrupts/UnhandledInterruptHandler.h>
@@ -14,6 +18,29 @@
 namespace Kernel {
 
 static Array<GenericInterruptHandler*, GENERIC_INTERRUPT_HANDLERS_COUNT> s_interrupt_handlers;
+
+extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState*);
+
+extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState* registers)
+{
+    VERIFY(registers);
+    VERIFY(registers->previous_mode() == ExecutionMode::Kernel);
+    TrapFrame trap { registers };
+    Processor::current().enter_trap(trap, true);
+    for (auto& controller : InterruptManagement::the().controllers()) {
+        for (;;) {
+            auto irq = controller->pending_interrupt();
+            if (!irq.has_value())
+                break;
+            auto& handler = get_interrupt_handler(irq.value());
+            handler.increment_call_count();
+            handler.handle_interrupt();
+            handler.eoi();
+        }
+    }
+    Processor::current().exit_trap(trap);
+    powerpc_restore_supervisor_exception_state(*registers);
+}
 
 GenericInterruptHandler& get_interrupt_handler(InterruptNumber number)
 {

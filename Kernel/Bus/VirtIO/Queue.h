@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2021, the SerenityOS developers.
+ * Copyright (c) 2021-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #pragma once
 
+#include <AK/Endian.h>
 #include <Kernel/Locking/Spinlock.h>
 #include <Kernel/Memory/MemoryManager.h>
 
@@ -53,6 +54,7 @@ public:
     u16 size() const { return m_queue_size; }
 
 private:
+    static size_t used_ring_offset(u16 queue_size);
     Queue(NonnullOwnPtr<Memory::Region> queue_region, u16 queue_size, u16 notify_offset);
 
     void reclaim_buffer_chain(u16 chain_start_index, u16 chain_end_index, size_t length_of_chain);
@@ -168,10 +170,10 @@ public:
             return;
         auto index = m_start_of_chain_index.value();
         for (size_t i = 0; i < m_chain_length; ++i) {
-            auto addr = m_queue.m_descriptors[index].address;
-            auto length = m_queue.m_descriptors[index].length;
+            auto addr = AK::convert_between_host_and_little_endian(m_queue.m_descriptors[index].address);
+            auto length = AK::convert_between_host_and_little_endian(m_queue.m_descriptors[index].length);
             callback(PhysicalAddress(addr), length);
-            index = m_queue.m_descriptors[index].next;
+            index = AK::convert_between_host_and_little_endian(m_queue.m_descriptors[index].next);
         }
     }
 

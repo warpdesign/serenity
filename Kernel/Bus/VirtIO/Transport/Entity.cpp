@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2023, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2023-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Endian.h>
 #include <Kernel/Bus/VirtIO/Transport/Entity.h>
 
 namespace Kernel::VirtIO {
@@ -22,12 +23,12 @@ u8 TransportEntity::config_read8(Configuration const& config, u32 offset)
 
 u16 TransportEntity::config_read16(Configuration const& config, u32 offset)
 {
-    return mapping_for_resource_index(config.resource_index).read16(config.offset + offset);
+    return AK::convert_between_host_and_little_endian(mapping_for_resource_index(config.resource_index).read16(config.offset + offset));
 }
 
 u32 TransportEntity::config_read32(Configuration const& config, u32 offset)
 {
-    return mapping_for_resource_index(config.resource_index).read32(config.offset + offset);
+    return AK::convert_between_host_and_little_endian(mapping_for_resource_index(config.resource_index).read32(config.offset + offset));
 }
 
 void TransportEntity::config_write8(Configuration const& config, u32 offset, u8 value)
@@ -37,18 +38,18 @@ void TransportEntity::config_write8(Configuration const& config, u32 offset, u8 
 
 void TransportEntity::config_write16(Configuration const& config, u32 offset, u16 value)
 {
-    mapping_for_resource_index(config.resource_index).write16(config.offset + offset, value);
+    mapping_for_resource_index(config.resource_index).write16(config.offset + offset, AK::convert_between_host_and_little_endian(value));
 }
 
 void TransportEntity::config_write32(Configuration const& config, u32 offset, u32 value)
 {
-    mapping_for_resource_index(config.resource_index).write32(config.offset + offset, value);
+    mapping_for_resource_index(config.resource_index).write32(config.offset + offset, AK::convert_between_host_and_little_endian(value));
 }
 
 void TransportEntity::config_write64(Configuration const& config, u32 offset, u64 value)
 {
-    mapping_for_resource_index(config.resource_index).write32(config.offset + offset, (u32)(value & 0xFFFFFFFF));
-    mapping_for_resource_index(config.resource_index).write32(config.offset + offset + 4, (u32)(value >> 32));
+    config_write32(config, offset, static_cast<u32>(value));
+    config_write32(config, offset + 4, static_cast<u32>(value >> 32));
 }
 
 IOWindow& TransportEntity::base_io_window()

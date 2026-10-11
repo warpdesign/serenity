@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, the SerenityOS developers.
+ * Copyright (c) 2021-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,12 +11,17 @@
 
 namespace Kernel::VirtIO {
 
+size_t Queue::used_ring_offset(u16 queue_size)
+{
+    size_t descriptor_bytes = sizeof(QueueDescriptor) * queue_size;
+    size_t available_bytes = sizeof(QueueDriver) + queue_size * sizeof(u16);
+    return (descriptor_bytes + available_bytes + 3) & ~static_cast<size_t>(3);
+}
+
 ErrorOr<NonnullOwnPtr<Queue>> Queue::try_create(u16 queue_size, u16 notify_offset)
 {
-    size_t size_of_descriptors = sizeof(QueueDescriptor) * queue_size;
-    size_t size_of_driver = sizeof(QueueDriver) + queue_size * sizeof(u16);
     size_t size_of_device = sizeof(QueueDevice) + queue_size * sizeof(QueueDeviceItem);
-    auto queue_region_size = TRY(Memory::page_round_up(size_of_descriptors + size_of_driver + size_of_device));
+    auto queue_region_size = TRY(Memory::page_round_up(used_ring_offset(queue_size) + size_of_device));
     OwnPtr<Memory::Region> queue_region;
     if (queue_region_size <= PAGE_SIZE)
         queue_region = TRY(MM.allocate_kernel_region(queue_region_size, "VirtIO Queue"sv, Memory::Region::Access::ReadWrite));
@@ -32,16 +37,15 @@ Queue::Queue(NonnullOwnPtr<Memory::Region> queue_region, u16 queue_size, u16 not
     , m_queue_region(move(queue_region))
 {
     size_t size_of_descriptors = sizeof(QueueDescriptor) * queue_size;
-    size_t size_of_driver = sizeof(QueueDriver) + queue_size * sizeof(u16);
-    // TODO: ensure alignment!!!
     u8* ptr = m_queue_region->vaddr().as_ptr();
     memset(ptr, 0, m_queue_region->size());
     m_descriptors = reinterpret_cast<QueueDescriptor*>(ptr);
     m_driver = reinterpret_cast<QueueDriver*>(ptr + size_of_descriptors);
-    m_device = reinterpret_cast<QueueDevice*>(ptr + size_of_descriptors + size_of_driver);
+    m_device = reinterpret_cast<QueueDevice*>(ptr + used_ring_offset(queue_size));
 
+    // Link the free descriptors in a line using the modern queue's wire order.
     for (auto i = 0; i + 1 < queue_size; i++)
-        m_descriptors[i].next = i + 1; // link all the descriptors in a line
+        m_descriptors[i].next = AK::convert_between_host_and_little_endian(static_cast<u16>(i + 1));
 
     enable_interrupts();
 }
@@ -57,12 +61,12 @@ void Queue::enable_interrupts()
 void Queue::disable_interrupts()
 {
     SpinlockLocker lock(m_lock);
-    m_driver->flags = 1;
+    m_driver->flags = AK::convert_between_host_and_little_endian(static_cast<u16>(1));
 }
 
 bool Queue::new_data_available() const
 {
-    auto const index = AK::atomic_load(&m_device->index, AK::MemoryOrder::memory_order_relaxed);
+    auto const index = AK::convert_between_host_and_little_endian(AK::atomic_load(&m_device->index, AK::MemoryOrder::memory_order_relaxed));
     auto const used_tail = AK::atomic_load(&m_used_tail, AK::MemoryOrder::memory_order_relaxed);
     return index != used_tail;
 }
@@ -78,15 +82,15 @@ QueueChain Queue::pop_used_buffer_chain(size_t& used)
     full_memory_fence();
 
     // Determine used length
-    used = m_device->rings[m_used_tail % m_queue_size].length;
+    used = AK::convert_between_host_and_little_endian(m_device->rings[m_used_tail % m_queue_size].length);
 
     // Determine start, end and number of nodes in chain
-    auto descriptor_index = m_device->rings[m_used_tail % m_queue_size].index;
+    auto descriptor_index = AK::convert_between_host_and_little_endian(m_device->rings[m_used_tail % m_queue_size].index);
     size_t length_of_chain = 1;
     auto last_index = descriptor_index;
-    while (m_descriptors[last_index].flags & VIRTQ_DESC_F_NEXT) {
+    while (AK::convert_between_host_and_little_endian(m_descriptors[last_index].flags) & VIRTQ_DESC_F_NEXT) {
         ++length_of_chain;
-        last_index = m_descriptors[last_index].next;
+        last_index = AK::convert_between_host_and_little_endian(m_descriptors[last_index].next);
     }
 
     // We are now done with this buffer chain
@@ -107,7 +111,7 @@ void Queue::discard_used_buffers()
 void Queue::reclaim_buffer_chain(u16 chain_start_index, u16 chain_end_index, size_t length_of_chain)
 {
     VERIFY(m_lock.is_locked());
-    m_descriptors[chain_end_index].next = m_free_head;
+    m_descriptors[chain_end_index].next = AK::convert_between_host_and_little_endian(m_free_head);
     m_free_head = chain_start_index;
     m_free_buffers += length_of_chain;
 }
@@ -123,7 +127,7 @@ Optional<u16> Queue::take_free_slot()
     VERIFY(m_lock.is_locked());
     if (has_free_slots()) {
         auto descriptor_index = m_free_head;
-        m_free_head = m_descriptors[descriptor_index].next;
+        m_free_head = AK::convert_between_host_and_little_endian(m_descriptors[descriptor_index].next);
         --m_free_buffers;
         return descriptor_index;
     }
@@ -134,7 +138,7 @@ Optional<u16> Queue::take_free_slot()
 bool Queue::should_notify() const
 {
     VERIFY(m_lock.is_locked());
-    auto device_flags = m_device->flags;
+    auto device_flags = AK::convert_between_host_and_little_endian(m_device->flags);
     return !(device_flags & VIRTQ_USED_F_NO_NOTIFY);
 }
 
@@ -156,8 +160,10 @@ bool QueueChain::add_buffer_to_chain(PhysicalAddress buffer_start, size_t buffer
         m_start_of_chain_index = descriptor_index.value();
     } else {
         // Link from previous element in QueueChain
-        m_queue.m_descriptors[m_end_of_chain_index.value()].flags |= VIRTQ_DESC_F_NEXT;
-        m_queue.m_descriptors[m_end_of_chain_index.value()].next = descriptor_index.value();
+        auto& previous = m_queue.m_descriptors[m_end_of_chain_index.value()];
+        previous.flags = AK::convert_between_host_and_little_endian(
+            static_cast<u16>(AK::convert_between_host_and_little_endian(previous.flags) | VIRTQ_DESC_F_NEXT));
+        previous.next = AK::convert_between_host_and_little_endian(descriptor_index.value());
     }
 
     // Update end of chain
@@ -166,9 +172,9 @@ bool QueueChain::add_buffer_to_chain(PhysicalAddress buffer_start, size_t buffer
 
     // Populate buffer info
     VERIFY(buffer_length <= NumericLimits<size_t>::max());
-    m_queue.m_descriptors[descriptor_index.value()].address = static_cast<u64>(buffer_start.get());
-    m_queue.m_descriptors[descriptor_index.value()].flags = static_cast<u16>(buffer_type);
-    m_queue.m_descriptors[descriptor_index.value()].length = static_cast<u32>(buffer_length);
+    m_queue.m_descriptors[descriptor_index.value()].address = AK::convert_between_host_and_little_endian(static_cast<u64>(buffer_start.get()));
+    m_queue.m_descriptors[descriptor_index.value()].flags = AK::convert_between_host_and_little_endian(static_cast<u16>(buffer_type));
+    m_queue.m_descriptors[descriptor_index.value()].length = AK::convert_between_host_and_little_endian(static_cast<u32>(buffer_length));
 
     return true;
 }
@@ -179,10 +185,10 @@ void QueueChain::submit_to_queue()
     VERIFY(m_start_of_chain_index.has_value());
 
     auto next_index = m_queue.m_driver_index_shadow % m_queue.m_queue_size;
-    m_queue.m_driver->rings[next_index] = m_start_of_chain_index.value();
+    m_queue.m_driver->rings[next_index] = AK::convert_between_host_and_little_endian(m_start_of_chain_index.value());
     m_queue.m_driver_index_shadow++;
     full_memory_fence();
-    m_queue.m_driver->index = m_queue.m_driver_index_shadow;
+    m_queue.m_driver->index = AK::convert_between_host_and_little_endian(m_queue.m_driver_index_shadow);
 
     // Reset internal chain state
     m_start_of_chain_index = m_end_of_chain_index = {};

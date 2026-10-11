@@ -10,7 +10,7 @@
 // Copied into the low vector slots after Open Firmware is finished. Each
 // vector uses its own physical stack top in an SPRG and enters the high kernel
 // with an exact RegisterState frame.
-.macro POWERPC_SAVE_AND_ENTER stack_spr
+.macro POWERPC_SAVE_AND_ENTER stack_spr, handler_offset=252
     mtspr 273,0
     mtspr 274,1
     mfspr 1,\stack_spr
@@ -38,7 +38,7 @@
     stw 0,156(1)
 
     POWERPC_USE_KERNEL_HIGH_SEGMENTS 12
-    lwz 12,252(1)
+    lwz 12,\handler_offset(1)
     mtspr 26,12
     mfmsr 12
     ori 12,12,0x2032 // FP | IR | DR | recoverable, with interrupts disabled.
@@ -62,6 +62,14 @@ powerpc_decrementer_vector_start:
     POWERPC_SAVE_AND_ENTER 275
 powerpc_decrementer_vector_end:
 
+.section .text.powerpc_external_vector, "ax"
+.p2align 2
+.globl powerpc_external_vector_start
+.globl powerpc_external_vector_end
+powerpc_external_vector_start:
+    POWERPC_SAVE_AND_ENTER 275,248
+powerpc_external_vector_end:
+
 .section .text, "ax"
 .p2align 2
 .globl powerpc_data_storage_high_handler
@@ -82,3 +90,12 @@ powerpc_decrementer_high_handler:
     addi 1,1,-32
     b powerpc_decrementer_exception_handler
 .size powerpc_decrementer_high_handler,.-powerpc_decrementer_high_handler
+
+.p2align 2
+.globl powerpc_external_high_handler
+.type powerpc_external_high_handler,@function
+powerpc_external_high_handler:
+    mr 3,1
+    addi 1,1,-32
+    b powerpc_external_exception_handler
+.size powerpc_external_high_handler,.-powerpc_external_high_handler
