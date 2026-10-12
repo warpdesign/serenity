@@ -1,9 +1,10 @@
 /*
- * Copyright (c) 2022, Gregory Bertilson <zaggy1024@gmail.com>
+ * Copyright (c) 2022-2026, Gregory Bertilson <zaggy1024@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Checked.h>
 #include <AK/NonnullOwnPtr.h>
 #include <AK/OwnPtr.h>
 #include <LibMedia/Color/ColorConverter.h>
@@ -11,6 +12,16 @@
 #include "VideoFrame.h"
 
 namespace Media {
+
+static ErrorOr<size_t> plane_data_size(Gfx::Size<u32> size, size_t component_size)
+{
+    Checked<size_t> data_size { size.width() };
+    data_size.mul(size.height());
+    data_size.mul(component_size);
+    if (data_size.has_overflow())
+        return Error::from_errno(EOVERFLOW);
+    return data_size.value();
+}
 
 ErrorOr<NonnullOwnPtr<SubsampledYUVFrame>> SubsampledYUVFrame::try_create(
     Duration timestamp,
@@ -30,8 +41,8 @@ ErrorOr<NonnullOwnPtr<SubsampledYUVFrame>> SubsampledYUVFrame::try_create(
         return reinterpret_cast<u8*>(buffer);
     };
 
-    auto y_data_size = size.to_type<size_t>().area() * component_size;
-    auto uv_data_size = subsampling.subsampled_size(size).to_type<size_t>().area() * component_size;
+    auto y_data_size = TRY(plane_data_size(size, component_size));
+    auto uv_data_size = TRY(plane_data_size(subsampling.subsampled_size(size), component_size));
     auto* y_buffer = TRY(alloc_buffer(y_data_size));
     auto* u_buffer = TRY(alloc_buffer(uv_data_size));
     auto* v_buffer = TRY(alloc_buffer(uv_data_size));
@@ -49,8 +60,8 @@ ErrorOr<NonnullOwnPtr<SubsampledYUVFrame>> SubsampledYUVFrame::try_create_from_d
     auto frame = TRY(try_create(timestamp, size, bit_depth, cicp, subsampling));
 
     size_t component_size = bit_depth > 8 ? sizeof(u16) : sizeof(u8);
-    auto y_data_size = size.to_type<size_t>().area() * component_size;
-    auto uv_data_size = subsampling.subsampled_size(size).to_type<size_t>().area() * component_size;
+    auto y_data_size = TRY(plane_data_size(size, component_size));
+    auto uv_data_size = TRY(plane_data_size(subsampling.subsampled_size(size), component_size));
 
     VERIFY(y_data.size() >= y_data_size);
     VERIFY(u_data.size() >= uv_data_size);

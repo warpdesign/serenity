@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021, Hunter Salyer <thefalsehonesty@gmail.com>
- * Copyright (c) 2022, Gregory Bertilson <zaggy1024@gmail.com>
+ * Copyright (c) 2021-2026, Hunter Salyer <thefalsehonesty@gmail.com>
+ * Copyright (c) 2022-2026, Gregory Bertilson <zaggy1024@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -158,7 +158,7 @@ DecoderErrorOr<void> Decoder::create_video_frame(Duration timestamp, FrameContex
     auto decoded_uv_width = frame_context.decoded_size(true).width();
 
     Subsampling subsampling { frame_context.color_config.subsampling_x, frame_context.color_config.subsampling_y };
-    auto output_y_size = frame_context.size().to_type<size_t>();
+    Gfx::Size<size_t> output_y_size { frame_context.size() };
     auto output_uv_size = subsampling.subsampled_size(output_y_size);
 
     auto frame = DECODER_TRY_ALLOC(SubsampledYUVFrame::try_create(
