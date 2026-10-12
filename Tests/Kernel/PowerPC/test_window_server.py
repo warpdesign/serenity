@@ -63,7 +63,11 @@ def create_root(source, build, user_loader, work, omit_fonts=False):
     return root
 
 
-def create_disk(mke2fs, root, work, size_bytes=256 * 1024 * 1024):
+def create_disk(mke2fs, root, work):
+    root_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
+    megabyte = 1024 * 1024
+    size_bytes = max(256 * megabyte, root_bytes * 5 // 4 + 64 * megabyte)
+    size_bytes = ((size_bytes + 64 * megabyte - 1) // (64 * megabyte)) * 64 * megabyte
     disk = work / "root.ext2"
     with disk.open("wb") as file:
         file.truncate(size_bytes)

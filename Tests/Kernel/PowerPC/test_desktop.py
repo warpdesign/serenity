@@ -152,11 +152,7 @@ def create_root(source, build, user_loader, work):
 
 
 def create_disk(root, work):
-    root_bytes = sum(path.stat().st_size for path in root.rglob("*") if path.is_file())
-    megabyte = 1024 * 1024
-    size_bytes = max(256 * megabyte, root_bytes * 5 // 4 + 64 * megabyte)
-    size_bytes = ((size_bytes + 64 * megabyte - 1) // (64 * megabyte)) * 64 * megabyte
-    disk = graphical_boot.create_disk(graphical_boot.find_mke2fs(), root, work, size_bytes)
+    disk = graphical_boot.create_disk(graphical_boot.find_mke2fs(), root, work)
     commands = work / "set-guest-ownership.debugfs"
     paths = ("/home/anon", "/home/anon/.config", "/home/anon/.config/Taskbar.ini", "/home/anon/Desktop", "/var/run/utmp")
     operations = [f"set_inode_field {path} {field} 100\n"
