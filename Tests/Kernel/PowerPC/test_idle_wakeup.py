@@ -84,11 +84,14 @@ def main():
         ended = b"PowerPC idle interval ended"
         woke = False
         cpu_seconds = None
+        sleep_seconds = None
+        started_at = None
         try:
             deadline = time.monotonic() + 35
             while time.monotonic() < deadline and process.poll() is None:
                 output = serial.read_bytes() if serial.exists() else b""
                 if started in output:
+                    started_at = time.monotonic()
                     break
                 if b"KERNEL PANIC" in output or b"CRASH:" in output:
                     break
@@ -103,6 +106,7 @@ def main():
                     output = serial.read_bytes() if serial.exists() else b""
                     if ended in output:
                         woke = True
+                        sleep_seconds = time.monotonic() - started_at
                         break
                     if b"KERNEL PANIC" in output or b"CRASH:" in output:
                         break
@@ -112,11 +116,12 @@ def main():
             _, errors = process.communicate(timeout=5)
 
         output = serial.read_bytes() if serial.exists() else b""
-        if not woke or cpu_seconds is None or cpu_seconds > 0.5 or b"KERNEL PANIC" in output or b"CRASH:" in output:
-            raise SystemExit(f"Pegasos 2 idle/wakeup failed (QEMU CPU time during 1s sleep: {cpu_seconds}):\n"
+        if (not woke or cpu_seconds is None or cpu_seconds > 0.5 or sleep_seconds is None
+                or not 2 <= sleep_seconds <= 5 or b"KERNEL PANIC" in output or b"CRASH:" in output):
+            raise SystemExit(f"Pegasos 2 idle/wakeup failed (QEMU CPU time during 1s sleep: {cpu_seconds}, guest 3s sleep took {sleep_seconds}s):\n"
                              + output.decode(errors="replace")[-2500:]
                              + errors.decode(errors="replace")[-1000:])
-    print(f"Pegasos 2 idle reduced QEMU CPU time to {cpu_seconds:.2f}s per sleeping second and woke on the timer")
+    print(f"Pegasos 2 idle used {cpu_seconds:.2f}s QEMU CPU per sleeping second and guest 3s sleep took {sleep_seconds:.2f}s on the host")
 
 
 if __name__ == "__main__":
