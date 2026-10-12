@@ -374,6 +374,15 @@ static T internal_erf(T x)
 
 extern "C" {
 
+void sincosf(float angle, float* sine, float* cosine) NOEXCEPT
+{
+    // Keep the calls separate: combining them into a sincosf call would recurse.
+    float (*volatile sine_function)(float) = sinf;
+    float (*volatile cosine_function)(float) = cosf;
+    *sine = sine_function(angle);
+    *cosine = cosine_function(angle);
+}
+
 float nanf(char const* s) NOEXCEPT
 {
     return __builtin_nanf(s);

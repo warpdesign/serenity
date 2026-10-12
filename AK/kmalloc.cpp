@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Daniel Bertalan <dani@danielbertalan.dev>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Daniel Bertalan <dani@danielbertalan.dev>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -58,6 +58,66 @@ void operator delete[](void* ptr) noexcept
 void operator delete[](void* ptr, size_t) noexcept
 {
     return free(ptr);
+}
+
+static void* allocate_aligned(size_t size, std::align_val_t alignment)
+{
+    void* ptr = nullptr;
+    if (posix_memalign(&ptr, static_cast<size_t>(alignment), max(size, size_t { 1 })) != 0)
+        return nullptr;
+    return ptr;
+}
+
+void* operator new(size_t size, std::align_val_t alignment)
+{
+    auto* ptr = allocate_aligned(size, alignment);
+    VERIFY(ptr);
+    return ptr;
+}
+
+void* operator new(size_t size, std::align_val_t alignment, std::nothrow_t const&) noexcept
+{
+    return allocate_aligned(size, alignment);
+}
+
+void* operator new[](size_t size, std::align_val_t alignment)
+{
+    return ::operator new(size, alignment);
+}
+
+void* operator new[](size_t size, std::align_val_t alignment, std::nothrow_t const&) noexcept
+{
+    return allocate_aligned(size, alignment);
+}
+
+void operator delete(void* ptr, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void* ptr, size_t, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete(void* ptr, std::align_val_t, std::nothrow_t const&) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void* ptr, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void* ptr, size_t, std::align_val_t) noexcept
+{
+    free(ptr);
+}
+
+void operator delete[](void* ptr, std::align_val_t, std::nothrow_t const&) noexcept
+{
+    free(ptr);
 }
 
 // This is usually provided by libstdc++ in most cases, and the kernel has its own definition in

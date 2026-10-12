@@ -244,6 +244,7 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     set(powerpc_desktop_programs_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_desktop_programs.py")
     set(powerpc_desktop_programs_arguments
         --compiler "${CMAKE_C_COMPILER}"
+        --cxx-compiler "${CMAKE_CXX_COMPILER}"
         --qemu qemu-system-ppc
         --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
         --user-loader "$<TARGET_FILE:Loader.so>"
