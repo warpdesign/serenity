@@ -151,7 +151,7 @@ A focused sound demo image at
 `Build/powerpc/PowerPCBoot/via-audio-coreaudio-demo/root.ext2` starts
 SoundPlayer with the one-second tone and omits FileManager's desktop process.
 It booted under QEMU's CoreAudio backend with the VIA driver and SoundPlayer
-running and no guest crash during a sustained check. A disposable copy was
-left running for the user to listen; the agent cannot verify sound at the
-host speakers directly. The boot serial log is at
+running. A disposable copy was left running for the user to listen; the agent
+cannot verify sound at the host speakers directly. A later Calendar process
+logged an `unveil` error, which has not been investigated. The serial log is at
 `Build/powerpc/PowerPCBoot/via-audio-coreaudio-demo/serial-live.log`.
