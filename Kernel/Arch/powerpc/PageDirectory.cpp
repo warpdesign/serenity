@@ -10,6 +10,7 @@
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
 #include <Kernel/Boot/BootInfo.h>
+#include <Kernel/Heap/kmalloc.h>
 #include <Kernel/Library/LockRefPtr.h>
 
 namespace Kernel::Memory {
@@ -87,13 +88,53 @@ LockRefPtr<PageDirectory> PageDirectory::find_current()
     });
 }
 
+bool PageDirectory::remember_mapping(PowerPCHPTWord effective_address, PowerPCHPTWord lower_word)
+{
+    VERIFY(m_lock.is_locked_by_current_processor());
+    if (effective_address >= KERNEL_MAPPING_BASE || lower_word == 0)
+        return false;
+    auto table_index = effective_address >> 22;
+    auto& table = m_shadow_tables[table_index];
+    if (!table) {
+        table = static_cast<PowerPCHPTWord*>(kcalloc(1024, sizeof(PowerPCHPTWord)));
+        if (!table)
+            return false;
+    }
+    table[(effective_address >> 12) & 1023u] = lower_word;
+    return true;
+}
+
+PowerPCHPTWord PageDirectory::shadow_mapping(PowerPCHPTWord effective_address) const
+{
+    VERIFY(m_lock.is_locked_by_current_processor());
+    if (effective_address >= KERNEL_MAPPING_BASE)
+        return 0;
+    auto* table = m_shadow_tables[effective_address >> 22];
+    if (!table)
+        return 0;
+    return table[(effective_address >> 12) & 1023u];
+}
+
+void PageDirectory::forget_mapping(PowerPCHPTWord effective_address)
+{
+    VERIFY(m_lock.is_locked_by_current_processor());
+    if (effective_address >= KERNEL_MAPPING_BASE)
+        return;
+    auto* table = m_shadow_tables[effective_address >> 22];
+    if (table)
+        table[(effective_address >> 12) & 1023u] = 0;
+}
+
 PageDirectory::~PageDirectory()
 {
-    if (!m_process)
-        return;
-    deregister_page_directory(*this);
-    SpinlockLocker locker(hpt_lock());
-    VERIFY(powerpc_page_directory_backend_purge(&m_backend) >= 0);
+    if (m_process) {
+        deregister_page_directory(*this);
+        SpinlockLocker locker(hpt_lock());
+        VERIFY(powerpc_page_directory_backend_purge(&m_backend) >= 0);
+    }
+    for (auto* table : m_shadow_tables)
+        if (table)
+            kfree_sized(table, 1024 * sizeof(PowerPCHPTWord));
 }
 
 void activate_kernel_page_directory(PageDirectory const& directory)

@@ -40,4 +40,5 @@ int powerpc_unmap_kernel_page_range(struct PowerPCHashPageTable const*, PowerPCH
 bool powerpc_page_directory_backend_apply_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const&);
 Optional<Kernel::Memory::PageMappingInfo> powerpc_page_directory_backend_query_mapping(PowerPCPageDirectoryBackend const*, PowerPCHPTWord effective_address);
 bool powerpc_apply_kernel_mapping(PowerPCHashPageTable const*, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const&);
+PowerPCHPTWord powerpc_page_mapping_lower_flags(Kernel::Memory::PageMappingRequest const&, bool user_allowed);
 #endif

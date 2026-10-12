@@ -16,6 +16,8 @@ import time
 sys.dont_write_bytecode = True
 import test_window_server as graphical_boot
 
+HPT_BYTES = 4 * 1024 * 1024
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -63,11 +65,11 @@ def main():
                 output = serial.read_bytes() if serial.exists() else b""
                 if b"VirtIOGPU: Found" not in output or b"Running first user process: /init" not in output:
                     raise RuntimeError("Pegasos 2 did not initialize VirtIO GPU and reach /init")
-                hpt_ranges = re.findall(rb"Firmware Reserved range @ P([0-9a-f]{16}) - P[0-9a-f]{16} \(size 0x100000\)", output)
+                hpt_ranges = re.findall(rb"Firmware Reserved range @ P([0-9a-f]{16}) - P[0-9a-f]{16} \(size 0x400000\)", output)
                 if len(hpt_ranges) != 1:
-                    raise RuntimeError("Could not identify the 1 MiB PowerPC hash page table")
+                    raise RuntimeError("Could not identify the 4 MiB PowerPC hash page table")
                 hpt_address = int(hpt_ranges[0], 16)
-                reply = graphical_boot.monitor_command(monitor, f'pmemsave {hpt_address:#x} 0x100000 "{snapshot}"')
+                reply = graphical_boot.monitor_command(monitor, f'pmemsave {hpt_address:#x} {HPT_BYTES:#x} "{snapshot}"')
                 if b"Error" in reply or b"invalid" in reply or not snapshot.exists():
                     raise RuntimeError("Could not capture the PowerPC hash page table")
         finally:
@@ -75,7 +77,7 @@ def main():
             _, errors = process.communicate(timeout=5)
 
         entries = snapshot.read_bytes()
-        if len(entries) != 1024 * 1024:
+        if len(entries) != HPT_BYTES:
             raise SystemExit("QEMU returned a truncated PowerPC hash page table")
         kernel_entries = sum(bool(upper & 0x80000000) and ((upper >> 7) & 0x00ffffff) < 0x100
                              for upper, _ in struct.iter_unpack(">II", entries))

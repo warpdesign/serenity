@@ -8,6 +8,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Arch/powerpc/KernelContext.h>
+#include <Kernel/Arch/powerpc/HashPageFault.h>
 #include <Kernel/Arch/powerpc/RegisterState.h>
 #include <Kernel/Library/Panic.h>
 
@@ -29,7 +30,8 @@ extern "C" [[noreturn]] void powerpc_data_storage_exception_handler(RegisterStat
     fault.set_was_smap_disabled(true);
     fault.set_access((status & 0x02000000u) ? PageFault::Access::Write : PageFault::Access::Read);
     fault.set_type((status & 0x08000000u) ? PageFault::Type::ProtectionViolation : PageFault::Type::PageNotPresent);
-    fault.handle(*registers);
+    if (!fault.is_not_present() || !Memory::try_refill_powerpc_hash_page(fault.vaddr()))
+        fault.handle(*registers);
     Processor::disable_interrupts();
     Processor::current().exit_trap(trap);
     if (previous_mode == ExecutionMode::User)

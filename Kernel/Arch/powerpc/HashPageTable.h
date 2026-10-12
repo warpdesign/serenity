@@ -39,8 +39,11 @@ struct PowerPCHashPageTable {
     PowerPCHPTWord group_count;
 };
 
+typedef int (*PowerPCHPTEvictionPredicate)(PowerPCHPTWord vsid, PowerPCHPTWord effective_address, void* context);
+
 struct PowerPCHPTEntry* powerpc_hpt_find(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address);
 int powerpc_hpt_map(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
+int powerpc_hpt_map_with_eviction(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags, PowerPCHPTEvictionPredicate, void* context);
 int powerpc_hpt_remap(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags);
 int powerpc_hpt_unmap(struct PowerPCHashPageTable const*, PowerPCHPTWord vsid, PowerPCHPTWord effective_address);
 int powerpc_hpt_purge_vsid_block(struct PowerPCHashPageTable const*, PowerPCHPTWord first_vsid, PowerPCHPTWord vsid_count);

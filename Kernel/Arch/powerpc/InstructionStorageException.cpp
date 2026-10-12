@@ -8,6 +8,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Arch/powerpc/KernelContext.h>
+#include <Kernel/Arch/powerpc/HashPageFault.h>
 #include <Kernel/Arch/powerpc/RegisterState.h>
 
 namespace Kernel {
@@ -27,7 +28,8 @@ extern "C" [[noreturn]] void powerpc_instruction_storage_exception_handler(Regis
     fault.set_instruction_fetch(true);
     // MPC750 has no supervisor-mode access prevention facility.
     fault.set_was_smap_disabled(true);
-    fault.handle(*registers);
+    if (!Memory::try_refill_powerpc_hash_page(fault.vaddr()))
+        fault.handle(*registers);
 
     Processor::disable_interrupts();
     Processor::current().exit_trap(trap);

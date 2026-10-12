@@ -92,6 +92,26 @@ target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
+    string(REGEX REPLACE "gcc$" "" powerpc_test_cross_compile "${CMAKE_C_COMPILER}")
+    set(powerpc_hpt_refill_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_hpt_refill.py")
+    set(powerpc_hpt_refill_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --cross-compile "${powerpc_test_cross_compile}"
+    )
+    add_custom_target(PowerPCHPTRefillCheckQuick
+        COMMAND python3 "${powerpc_hpt_refill_test}" ${powerpc_hpt_refill_arguments} --cpu 750
+        DEPENDS PowerPCFirmwareLoader
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCHPTRefillCheck
+        COMMAND python3 "${powerpc_hpt_refill_test}" ${powerpc_hpt_refill_arguments} --cpu 750cxe
+        DEPENDS PowerPCHPTRefillCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_idle_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_idle_wakeup.py")
     set(powerpc_idle_arguments
         --compiler "${CMAKE_C_COMPILER}" --qemu qemu-system-ppc

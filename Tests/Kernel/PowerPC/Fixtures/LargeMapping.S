@@ -15,7 +15,22 @@ _start:
     addi 3,3,.Lparameters-.Lparameters_address
     li 0,SYSCALL_MMAP
     sc
-    cmpwi 3,-12 // ENOMEM: the HPT cannot hold this many mappings.
+    cmpwi 3,-12
+    beq .Lfailed
+
+    mr 16,3
+    li 17,0x123
+    stw 17,0(16)
+    lis 18,0x3000
+    add 18,16,18
+    addi 18,18,-4096
+    li 19,0x456
+    stw 19,0(18)
+    lwz 20,0(16)
+    cmpw 20,17
+    bne .Lfailed
+    lwz 20,0(18)
+    cmpw 20,19
     bne .Lfailed
 
     bl .Lmessage_address
@@ -44,7 +59,7 @@ _start:
     .long 0 // name.characters
     .long 0 // name.length
 .Lmessage:
-    .ascii "PPC mapping failure recovered\n"
+    .ascii "PowerPC large shadow mapping passed\n"
 .Lmessage_end:
 .size _start,.-_start
 

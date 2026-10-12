@@ -84,14 +84,22 @@ static PowerPCHPTWord memory_type_flags(Kernel::Memory::MemoryType memory_type)
     __builtin_trap();
 }
 
+PowerPCHPTWord powerpc_page_mapping_lower_flags(Kernel::Memory::PageMappingRequest const& request, bool user_allowed)
+{
+    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | memory_type_flags(request.memory_type);
+    flags |= user_allowed
+        ? (request.writable ? POWERPC_HPT_READ_WRITE : POWERPC_HPT_READ_ONLY)
+        : (request.writable ? POWERPC_HPT_SUPERVISOR_ONLY : POWERPC_HPT_READ_ONLY);
+    return flags;
+}
+
 bool powerpc_page_directory_backend_apply_mapping(PowerPCPageDirectoryBackend const* directory, PowerPCHPTWord effective_address, Kernel::Memory::PageMappingRequest const& request)
 {
     auto vsid = powerpc_page_directory_backend_vsid_for(directory, effective_address);
     if (!vsid || !request.user_allowed || request.execute_disabled || request.physical_page_base > 0xfffff000u)
         return false;
 
-    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED | memory_type_flags(request.memory_type);
-    flags |= request.writable ? POWERPC_HPT_READ_WRITE : POWERPC_HPT_READ_ONLY;
+    PowerPCHPTWord flags = powerpc_page_mapping_lower_flags(request, true);
 
     if (powerpc_hpt_find(directory->table, vsid, effective_address))
         return powerpc_hpt_remap(directory->table, vsid, effective_address, static_cast<PowerPCHPTWord>(request.physical_page_base), flags);
@@ -108,9 +116,7 @@ bool powerpc_apply_kernel_mapping(PowerPCHashPageTable const* table, PowerPCHPTW
         return false;
 
     PowerPCHPTWord vsid = effective_address >> 28;
-    PowerPCHPTWord flags = POWERPC_HPT_REFERENCED | POWERPC_HPT_CHANGED
-        | memory_type_flags(request.memory_type)
-        | (request.writable ? POWERPC_HPT_SUPERVISOR_ONLY : POWERPC_HPT_READ_ONLY);
+    PowerPCHPTWord flags = powerpc_page_mapping_lower_flags(request, false);
     // PP=3 is read-only for both privilege keys. User return substitutes
     // private high VSIDs, so it cannot resolve the shared kernel entry.
     auto physical = static_cast<PowerPCHPTWord>(request.physical_page_base);

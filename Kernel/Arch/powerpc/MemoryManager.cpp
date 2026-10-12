@@ -7,6 +7,7 @@
 #include <AK/Checked.h>
 #include <Kernel/Arch/PageDirectory.h>
 #include <Kernel/Arch/Processor.h>
+#include <Kernel/Arch/powerpc/HashPageFault.h>
 #include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
 #include <Kernel/Arch/powerpc/PhysicalPageArray.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
@@ -27,6 +28,25 @@ extern u8 start_of_unmap_after_init[];
 extern u8 end_of_unmap_after_init[];
 
 namespace Kernel::Memory {
+
+static int may_evict_user_mapping(PowerPCHPTWord vsid, PowerPCHPTWord effective_address, void*)
+{
+    return vsid >= POWERPC_FIRST_USER_VSID_BASE && effective_address < KERNEL_MAPPING_BASE;
+}
+
+static bool apply_kernel_mapping_with_user_eviction(PowerPCHashPageTable const* table, PowerPCHPTWord effective_address, PageMappingRequest const& request)
+{
+    if (powerpc_apply_kernel_mapping(table, effective_address, request))
+        return true;
+    if (powerpc_hpt_find(table, effective_address >> 28, effective_address))
+        return false;
+    if (request.physical_page_base > 0xfffff000u || (request.physical_page_base & (PAGE_SIZE - 1)) != 0
+        || request.user_allowed || request.execute_disabled)
+        return false;
+    return powerpc_hpt_map_with_eviction(table, effective_address >> 28, effective_address,
+        static_cast<PowerPCHPTWord>(request.physical_page_base), powerpc_page_mapping_lower_flags(request, false),
+        may_evict_user_mapping, nullptr);
+}
 
 UNMAP_AFTER_INIT void MemoryManager::protect_kernel_image()
 {
@@ -140,21 +160,45 @@ UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& globa
 void MemoryManager::prepare_kernel_heap_range(VirtualRange const&)
 {
     VERIFY(kernel_page_directory().get_lock().is_locked_by_current_processor());
-    // The fixed hash page table needs no per-address allocation before mapping.
+    // Kernel mappings stay pinned in the shared HPT. Only user mappings are
+    // backed by software page tables and eligible for eviction.
 }
 
 bool MemoryManager::map_page(PageDirectory& directory, VirtualAddress address, PageMappingRequest const& request)
 {
     VERIFY(directory.get_lock().is_locked_by_current_processor());
-    SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
+    auto page_address = address.page_base().get();
+    if (request.physical_page_base > 0xfffff000u || (request.physical_page_base & (PAGE_SIZE - 1)) != 0
+        || request.execute_disabled)
+        return false;
     if (request.user_allowed) {
         if (!directory.process())
             return false;
-        return powerpc_page_directory_backend_apply_mapping(&directory.backend(), address.get(), request);
+        auto vsid = powerpc_page_directory_backend_vsid_for(&directory.backend(), page_address);
+        if (!vsid)
+            return false;
+        auto previous = directory.shadow_mapping(page_address);
+        auto lower = static_cast<PowerPCHPTWord>(request.physical_page_base) | powerpc_page_mapping_lower_flags(request, true);
+        if (!directory.remember_mapping(page_address, lower))
+            return false;
+        if (!previous)
+            return true;
+        SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
+        auto* entry = powerpc_hpt_find(directory.backend().table, vsid, page_address);
+        if (entry && !powerpc_hpt_remap(directory.backend().table, vsid, page_address,
+                         static_cast<PowerPCHPTWord>(request.physical_page_base), lower & 0xfffu)) {
+            if (previous)
+                VERIFY(directory.remember_mapping(page_address, previous));
+            else
+                directory.forget_mapping(page_address);
+            return false;
+        }
+        return true;
     }
     if (&directory != &kernel_page_directory())
         return false;
-    return powerpc_apply_kernel_mapping(directory.backend().table, address.get(), request);
+    SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
+    return apply_kernel_mapping_with_user_eviction(directory.backend().table, page_address, request);
 }
 
 void MemoryManager::unmap_page(PageDirectory& directory, VirtualAddress address, bool)
@@ -162,9 +206,10 @@ void MemoryManager::unmap_page(PageDirectory& directory, VirtualAddress address,
     VERIFY(directory.get_lock().is_locked_by_current_processor());
     SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
     auto page_address = address.page_base().get();
-    if (page_address < KERNEL_MAPPING_BASE)
+    if (page_address < KERNEL_MAPPING_BASE) {
+        directory.forget_mapping(page_address);
         (void)powerpc_page_directory_backend_unmap(&directory.backend(), page_address);
-    else {
+    } else {
         VERIFY(&directory == &kernel_page_directory());
         (void)powerpc_hpt_unmap(directory.backend().table, page_address >> 28, page_address);
     }
@@ -173,11 +218,21 @@ void MemoryManager::unmap_page(PageDirectory& directory, VirtualAddress address,
 Optional<PageMappingInfo> MemoryManager::query_page(PageDirectory& directory, VirtualAddress address)
 {
     VERIFY(directory.get_lock().is_locked_by_current_processor());
-    SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
     auto page_address = address.page_base().get();
-    if (page_address < KERNEL_MAPPING_BASE)
-        return powerpc_page_directory_backend_query_mapping(&directory.backend(), page_address);
+    if (page_address < KERNEL_MAPPING_BASE) {
+        auto lower = directory.shadow_mapping(page_address);
+        if (!lower)
+            return {};
+        return PageMappingInfo {
+            .physical_page_base = lower & 0xfffff000u,
+            .present = true,
+            .writable = (lower & 3u) == POWERPC_HPT_READ_WRITE,
+            .user_allowed = true,
+            .execute_disabled = false,
+        };
+    }
 
+    SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
     auto* entry = powerpc_hpt_find(directory.backend().table, page_address >> 28, page_address);
     if (!entry)
         return {};
@@ -190,6 +245,30 @@ Optional<PageMappingInfo> MemoryManager::query_page(PageDirectory& directory, Vi
         .user_allowed = false,
         .execute_disabled = false,
     };
+}
+
+bool try_refill_powerpc_hash_page(VirtualAddress address)
+{
+    auto page_address = address.page_base().get();
+    if (page_address >= KERNEL_MAPPING_BASE)
+        return false;
+
+    auto directory = PageDirectory::find_current();
+    if (!directory)
+        return false;
+    SpinlockLocker directory_locker(directory->get_lock());
+    auto lower = directory->shadow_mapping(page_address);
+    if (!lower)
+        return false;
+    auto vsid = powerpc_page_directory_backend_vsid_for(&directory->backend(), page_address);
+    if (!vsid)
+        return false;
+
+    SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
+    if (powerpc_hpt_find(directory->backend().table, vsid, page_address))
+        return false;
+    return powerpc_hpt_map_with_eviction(directory->backend().table, vsid, page_address,
+        lower & 0xfffff000u, lower & 0xfffu, may_evict_user_mapping, nullptr);
 }
 
 void MemoryManager::set_page_writable_direct(VirtualAddress address, bool writable)
@@ -217,7 +296,7 @@ u8* MemoryManager::quickmap_page(PhysicalAddress physical_address, MemoryType me
     };
     {
         SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
-        VERIFY(powerpc_apply_kernel_mapping(kernel_page_directory().backend().table, address.get(), request));
+        VERIFY(apply_kernel_mapping_with_user_eviction(kernel_page_directory().backend().table, address.get(), request));
     }
     if (memory_type != MemoryType::Normal) {
         // quickmap_page only maps physical RAM. Clean and invalidate any old
@@ -225,7 +304,7 @@ u8* MemoryManager::quickmap_page(PhysicalAddress physical_address, MemoryType me
         Processor::flush_data_cache(address, PAGE_SIZE);
         request.memory_type = memory_type;
         SpinlockLocker hpt_locker(PageDirectory::hpt_lock());
-        VERIFY(powerpc_apply_kernel_mapping(kernel_page_directory().backend().table, address.get(), request));
+        VERIFY(apply_kernel_mapping_with_user_eviction(kernel_page_directory().backend().table, address.get(), request));
     }
     return address.as_ptr();
 }

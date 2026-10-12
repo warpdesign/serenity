@@ -73,6 +73,52 @@ int powerpc_hpt_map(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsi
     return 0;
 }
 
+int powerpc_hpt_map_with_eviction(struct PowerPCHashPageTable const* table, PowerPCHPTWord vsid, PowerPCHPTWord effective_address, PowerPCHPTWord physical_address, PowerPCHPTWord lower_flags, PowerPCHPTEvictionPredicate may_evict, void* context)
+{
+    if (!valid_table(table, vsid, effective_address) || (physical_address & (POWERPC_HPT_PAGE_SIZE - 1)) != 0
+        || (lower_flags & ~0xfffu) != 0 || powerpc_hpt_find(table, vsid, effective_address))
+        return 0;
+
+    if (powerpc_hpt_map(table, vsid, effective_address, physical_address, lower_flags))
+        return 1;
+    if (!may_evict)
+        return 0;
+
+    // The HPT is a cache of the software mappings. When both hash groups are
+    // full, replace a mapping that the fault handlers can reconstruct.
+    static PowerPCHPTWord next_victim;
+    PowerPCHPTWord hash = primary_hash(vsid, effective_address);
+    for (PowerPCHPTWord attempt = 0; attempt < 2 * POWERPC_HPT_ENTRIES_PER_GROUP; ++attempt) {
+        PowerPCHPTWord candidate = (next_victim + attempt) % (2 * POWERPC_HPT_ENTRIES_PER_GROUP);
+        PowerPCHPTWord secondary = candidate / POWERPC_HPT_ENTRIES_PER_GROUP;
+        auto* group = group_for(table, secondary ? ~hash : hash);
+        auto* entry = &group[candidate % POWERPC_HPT_ENTRIES_PER_GROUP];
+        auto upper = entry->upper;
+        if (!(upper & POWERPC_HPT_VALID))
+            continue;
+
+        auto victim_vsid = (upper >> 7) & 0x00ffffffu;
+        auto group_index = (secondary ? ~hash : hash) & (table->group_count - 1);
+        auto victim_primary_hash = (upper & POWERPC_HPT_SECONDARY_HASH) ? ~group_index : group_index;
+        auto victim_page_index = ((upper & 0x3fu) << 10) | ((victim_primary_hash ^ victim_vsid) & 0x3ffu);
+        auto victim_address = ((victim_vsid & 0xfu) << 28) | (victim_page_index << 12);
+        if (!may_evict(victim_vsid, victim_address, context))
+            continue;
+
+        next_victim = (candidate + 1) % (2 * POWERPC_HPT_ENTRIES_PER_GROUP);
+        entry->upper = 0;
+        // A victim may belong to another address space, so invalidate every
+        // TLB set rather than relying on the current segment registers.
+        powerpc_flush_entire_tlb();
+        entry->lower = physical_address | lower_flags;
+        __asm__ volatile("eieio" : : : "memory");
+        entry->upper = upper_word(vsid, effective_address, secondary);
+        __asm__ volatile("sync" : : : "memory");
+        return 1;
+    }
+    return 0;
+}
+
 static void invalidate_entry(PowerPCHPTWord effective_address, struct PowerPCHPTEntry* entry)
 {
     entry->upper = 0;
