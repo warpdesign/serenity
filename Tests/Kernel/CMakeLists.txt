@@ -275,7 +275,7 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     add_custom_target(PowerPCBrowserCheckQuick
         COMMAND python3 "${powerpc_browser_test}" ${powerpc_browser_arguments} --cpu 750
         DEPENDS PowerPCDesktopProgramsCheckQuick ComponentBrowser ComponentSQLServer ComponentFileSystemAccessServer
-            ComponentWebWorker ComponentAudioServer ComponentLookupServer
+            ComponentWebWorker ComponentAudioServer ComponentLookupServer ComponentNetworkServer ComponentDHCPClient
         USES_TERMINAL
         VERBATIM
     )

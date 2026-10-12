@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Maciej <sppmacd@pm.me>
+ * Copyright (c) 2022-2026, Maciej <sppmacd@pm.me>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -58,7 +58,8 @@ ErrorOr<int> serenity_main(Main::Arguments)
         InterfaceConfig config;
         if (!groups.contains_slow(ifname)) {
             dbgln("Config for interface {} doesn't exist, enabling DHCP for it", ifname);
-            interfaces_with_dhcp_enabled.append(ifname);
+            config.enabled = true;
+            config.dhcp_enabled = true;
         } else {
             config.enabled = config_file->read_bool_entry(ifname, "Enabled"sv, true);
             config.dhcp_enabled = config_file->read_bool_entry(ifname, "DHCP"sv, false);
