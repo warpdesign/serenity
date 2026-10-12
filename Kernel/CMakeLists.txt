@@ -688,6 +688,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Pegasos2/PCIInitializer.cpp
         Arch/powerpc/Pegasos2/RTASCall.S
         Arch/powerpc/Pegasos2/RTC.cpp
+        Arch/powerpc/Pegasos2/VIAAC97.cpp
         Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.cpp
         Arch/powerpc/PhysicalPageArray.cpp
         Arch/powerpc/Processor.cpp

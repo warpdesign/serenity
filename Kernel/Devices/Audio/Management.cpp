@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2021-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -32,10 +32,12 @@ UNMAP_AFTER_INIT AudioManagement::AudioManagement()
 {
 }
 
-struct PCIAudioDriverInitializer {
-    ErrorOr<bool> (*probe)(PCI::DeviceIdentifier const&) = nullptr;
-    ErrorOr<NonnullRefPtr<AudioController>> (*create)(PCI::DeviceIdentifier const&) = nullptr;
-};
+UNMAP_AFTER_INIT ErrorOr<void> AudioManagement::register_pci_driver(PCIAudioDriverInitializer initializer)
+{
+    VERIFY(initializer.probe && initializer.create);
+    TRY(m_platform_initializers.try_append(initializer));
+    return {};
+}
 
 static constexpr PCIAudioDriverInitializer s_initializers[] = {
     { AC97::probe, AC97::create },
@@ -44,6 +46,19 @@ static constexpr PCIAudioDriverInitializer s_initializers[] = {
 
 UNMAP_AFTER_INIT ErrorOr<NonnullRefPtr<AudioController>> AudioManagement::determine_audio_device(PCI::DeviceIdentifier const& device_identifier) const
 {
+    for (auto const& initializer : m_platform_initializers) {
+        auto match_or_error = initializer.probe(device_identifier);
+        if (match_or_error.is_error()) {
+            dmesgln("AudioManagement: Failed to probe device {}, due to {}", device_identifier.address(), match_or_error.error());
+            continue;
+        }
+        if (match_or_error.release_value()) {
+            auto device = TRY(initializer.create(device_identifier));
+            TRY(device->initialize({}));
+            return device;
+        }
+    }
+
     for (auto& initializer : s_initializers) {
         auto initializer_probe_found_driver_match_or_error = initializer.probe(device_identifier);
         if (initializer_probe_found_driver_match_or_error.is_error()) {

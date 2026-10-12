@@ -9,11 +9,13 @@
 #include <Kernel/Arch/powerpc/InterruptManagement.h>
 #include <Kernel/Arch/powerpc/Pegasos2/PCIHostController.h>
 #include <Kernel/Arch/powerpc/Pegasos2/InterruptController.h>
+#include <Kernel/Arch/powerpc/Pegasos2/VIAAC97.h>
 #include <Kernel/Boot/BootInfo.h>
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/Access.h>
 #include <Kernel/Bus/PCI/Initializer.h>
+#include <Kernel/Devices/Audio/Management.h>
 #include <Kernel/FileSystem/SysFS/Subsystems/Bus/PCI/BusDirectory.h>
 #include <Kernel/Sections.h>
 
@@ -78,6 +80,7 @@ UNMAP_AFTER_INIT void initialize()
     auto& access = Access::the();
     access.add_host_controller(move(south_controller));
     access.add_host_controller(move(agp_controller));
+    MUST(AudioManagement::the().register_pci_driver({ PowerPC::Pegasos2::VIAAC97::probe, PowerPC::Pegasos2::VIAAC97::create }));
     access.rescan_hardware();
     PCIBusSysFSDirectory::initialize();
     MUST(PCI::enumerate([](DeviceIdentifier const& identifier) {

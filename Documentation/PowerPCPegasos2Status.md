@@ -21,6 +21,8 @@ probe and is historical.
   and saves a valid 510×356 project through FileSystemAccessServer.
 - ImageViewer, VideoPlayer, and SoundPlayer build for PowerPC and open small
   image, video, and audio samples in QEMU.
+- The Pegasos 2 VIA AC'97 output driver creates `/dev/audio/0`; QEMU captures
+  nonzero PCM when SoundPlayer plays a WAV tone.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
@@ -37,6 +39,7 @@ cmake --build Build/powerpc --target PowerPCKmallocHPTCheck
 cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCBrowserCheck
 cmake --build Build/powerpc --target PowerPCPixelPaintCheck
+cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 ```
 
 Each target has a `Quick` variant for a shorter run. The Browser target
@@ -105,9 +108,34 @@ VideoPlayer displaying a decoded WebM frame, and SoundPlayer opening the
 minimal WAV without an error dialog. Screenshots and serial logs are under
 `Build/powerpc/PowerPCBoot/media-ready-20261012/{ImageViewer,VideoPlayer,SoundPlayer}/`.
 
-The kernel currently has no working driver for the Pegasos 2 audio device:
-its boot log reports the PCI audio function as unsupported and initializes no
-audio controller. AudioServer cannot use `/dev/audio/0`. SoundPlayer loads
-the minimal WAV and shows its player window, but this QEMU guest produces no
-audible output. An FFmpeg-generated WAV with a `LIST/INFO` metadata chunk was
-rejected with an offset error; the minimal PCM WAV above loads.
+An FFmpeg-generated WAV with a `LIST/INFO` metadata chunk was rejected with
+an offset error; the minimal PCM WAV above loads.
+
+## VIA AC'97 audio driver
+
+The Pegasos 2 PCI audio function is VIA `1106:3058`. The existing generic
+AC'97 driver expects Intel-style native audio bus registers, so its probe
+rejects this device. QEMU's [VIA AC'97 implementation](https://gitlab.com/qemu-project/qemu/-/raw/v11.0.2/hw/audio/via-ac97.c)
+models a separate scatter/gather playback engine in BAR0 and an AC'97 codec
+command register at BAR0 offset `0x80`. The [Linux VIA82xx driver](https://github.com/torvalds/linux/blob/master/sound/pci/via82xx.c)
+also identifies `1106:3058` and documents the VIA register layout.
+
+The driver is under `Kernel/Arch/powerpc/Pegasos2/` and is registered through
+an architecture-neutral audio-driver registration API before
+`AudioManagement` enumerates PCI devices. It programs the AC'97 codec at
+44.1 kHz, writes little-endian VIA DMA descriptors, and polls for playback
+completion. The initial version uses one DMA buffer and serialized writes.
+
+The `PowerPCVIAAudioCheckQuick` (750) and `PowerPCVIAAudioCheck` (750cxe)
+targets boot SoundPlayer with a one-second tone and capture QEMU's audio
+output. Before the driver, QEMU captured zero frames. Both targets now pass
+with 76,800 nonzero samples and peak amplitude 8,495. A separate check using
+the `media-ready-20261012` desktop image also captured nonzero SoundPlayer
+output. QEMU's WAV audio backend leaves its RIFF length fields at zero, so
+the regression checks the captured PCM payload directly.
+
+For audible host output on macOS, boot the media image with
+`-M pegasos2,audiodev=audio0 -audiodev coreaudio,id=audio0`; the QEMU tests
+instead use a WAV capture backend. Physical Pegasos 2 audio hardware has not
+been tested. The older running Cocoa guest must be rebooted with the rebuilt
+loader to use the driver.
