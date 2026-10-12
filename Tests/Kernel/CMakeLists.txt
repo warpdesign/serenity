@@ -263,4 +263,26 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         USES_TERMINAL
         VERBATIM
     )
+
+    set(powerpc_browser_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_browser.py")
+    set(powerpc_browser_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --build-dir "${CMAKE_BINARY_DIR}"
+        --timeout 120
+    )
+    add_custom_target(PowerPCBrowserCheckQuick
+        COMMAND python3 "${powerpc_browser_test}" ${powerpc_browser_arguments} --cpu 750
+        DEPENDS PowerPCDesktopProgramsCheckQuick ComponentBrowser ComponentSQLServer ComponentFileSystemAccessServer
+            ComponentWebWorker ComponentAudioServer ComponentLookupServer
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCBrowserCheck
+        COMMAND python3 "${powerpc_browser_test}" ${powerpc_browser_arguments} --cpu 750cxe
+        DEPENDS PowerPCBrowserCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
 endif()
