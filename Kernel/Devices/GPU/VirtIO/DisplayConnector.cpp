@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Sahan Fernando <sahan.h.fernando@gmail.com>
+ * Copyright (c) 2021-2026, Sahan Fernando <sahan.h.fernando@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -20,10 +20,10 @@ ErrorOr<NonnullRefPtr<VirtIODisplayConnector>> VirtIODisplayConnector::create(Vi
     return TRY(Device::try_create_device<VirtIODisplayConnector>(graphics_adapter, scanout_id));
 }
 
-static_assert((MAX_VIRTIOGPU_RESOLUTION_WIDTH * MAX_VIRTIOGPU_RESOLUTION_HEIGHT * sizeof(u32) * 2) % PAGE_SIZE == 0);
+static_assert((MAX_VIRTIOGPU_RESOLUTION_WIDTH * MAX_VIRTIOGPU_RESOLUTION_HEIGHT * sizeof(u32)) % PAGE_SIZE == 0);
 
 VirtIODisplayConnector::VirtIODisplayConnector(VirtIOGraphicsAdapter& graphics_adapter, Graphics::VirtIOGPU::ScanoutID scanout_id)
-    : DisplayConnector((MAX_VIRTIOGPU_RESOLUTION_WIDTH * MAX_VIRTIOGPU_RESOLUTION_HEIGHT * sizeof(u32) * 2), Memory::MemoryType::NonCacheable)
+    : DisplayConnector((MAX_VIRTIOGPU_RESOLUTION_WIDTH * MAX_VIRTIOGPU_RESOLUTION_HEIGHT * sizeof(u32)), Memory::MemoryType::NonCacheable)
     , m_graphics_adapter(graphics_adapter)
     , m_scanout_id(scanout_id)
 {

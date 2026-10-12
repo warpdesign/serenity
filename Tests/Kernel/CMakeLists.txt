@@ -145,4 +145,28 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         USES_TERMINAL
         VERBATIM
     )
+
+    add_custom_target(PowerPCVirtIOGPUFootprintCheckQuick
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_virtio_gpu_footprint.py"
+            --qemu qemu-system-ppc
+            --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+            --user-loader "$<TARGET_FILE:Loader.so>"
+            --build-dir "${CMAKE_BINARY_DIR}"
+            --cpu 750
+        DEPENDS PowerPCFirmwareLoader init mount DeviceMapper SystemServer WindowServer keymap Loader.so
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCVirtIOGPUFootprintCheck
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_virtio_gpu_footprint.py"
+            --qemu qemu-system-ppc
+            --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+            --user-loader "$<TARGET_FILE:Loader.so>"
+            --build-dir "${CMAKE_BINARY_DIR}"
+            --cpu 750cxe
+        DEPENDS PowerPCVirtIOGPUFootprintCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
 endif()
