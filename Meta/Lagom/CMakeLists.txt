@@ -798,6 +798,13 @@ if (BUILD_LAGOM)
             SKIP_RETURN_CODE 1
             ENVIRONMENT SERENITY_SOURCE_DIR=${SERENITY_PROJECT_ROOT}
         )
+        lagom_test(../../Tests/LibWasm/TestWasmReference.cpp LibWasm LIBS LibWasm)
+        add_custom_target(LibWasmCheckQuick
+            COMMAND "$<TARGET_FILE:TestWasmReference>"
+            DEPENDS TestWasmReference
+            USES_TERMINAL
+        )
+        add_custom_target(LibWasmCheck DEPENDS LibWasmCheckQuick)
 
         # Tests that are not LibTest based
         # Shell
