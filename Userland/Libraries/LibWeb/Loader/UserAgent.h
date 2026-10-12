@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2024, Tim Flynn <trflynn89@serenityos.org>
- * Copyright (c) 2024, Jamie Mansfield <jmansfield@cadixdev.org>
+ * Copyright (c) 2024-2026, Tim Flynn <trflynn89@serenityos.org>
+ * Copyright (c) 2024-2026, Jamie Mansfield <jmansfield@cadixdev.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,16 +12,18 @@
 
 namespace Web {
 
-#if ARCH(X86_64)
-#    define CPU_STRING "x86_64"
-#elif ARCH(AARCH64)
-#    define CPU_STRING "AArch64"
-#elif ARCH(I386)
-#    define CPU_STRING "x86"
-#elif ARCH(RISCV64)
-#    define CPU_STRING "RISC-V 64"
-#else
-#    error Unknown architecture
+#ifndef CPU_STRING
+#    if ARCH(X86_64)
+#        define CPU_STRING "x86_64"
+#    elif ARCH(AARCH64)
+#        define CPU_STRING "AArch64"
+#    elif ARCH(I386)
+#        define CPU_STRING "x86"
+#    elif ARCH(RISCV64)
+#        define CPU_STRING "RISC-V 64"
+#    else
+#        error Unknown architecture
+#    endif
 #endif
 
 #if defined(AK_OS_SERENITY)

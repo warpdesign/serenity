@@ -836,6 +836,9 @@ set(GENERATED_SOURCES
 )
 
 serenity_lib(LibWeb web)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/arch/${SERENITY_ARCH}/CMakeLists.txt")
+    include("${CMAKE_CURRENT_SOURCE_DIR}/arch/${SERENITY_ARCH}/CMakeLists.txt")
+endif()
 
 # NOTE: We link with LibSoftGPU here instead of lazy loading it via dlopen() so that we do not have to unveil the library and pledge prot_exec.
 target_link_libraries(LibWeb PRIVATE LibCore LibCrypto LibJS LibMarkdown LibHTTP LibGemini LibGfx LibIPC LibLocale LibRegex LibSoftGPU LibSyntax LibTextCodec LibUnicode LibAudio LibMedia LibWasm LibXML LibIDL LibURL LibTLS)
