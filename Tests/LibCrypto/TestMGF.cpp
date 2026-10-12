@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, stelar7  <dudedbz@gmail.com>
+ * Copyright (c) 2024-2026, stelar7  <dudedbz@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -60,4 +60,14 @@ TEST_CASE(test_mgf1_long_sha256)
     ByteBuffer result = MUST(Crypto::Hash::MGF::mgf1<Crypto::Hash::SHA256>(seed, length));
 
     EXPECT_EQ(expected, result);
+}
+
+TEST_CASE(test_mgf1_rejects_mask_longer_than_counter_range)
+{
+    if constexpr (sizeof(size_t) > 4) {
+        ByteBuffer seed = { "bar"_b };
+        auto length = (static_cast<u64>(Crypto::Hash::SHA1::digest_size()) << 32) + 1;
+        auto result = Crypto::Hash::MGF::mgf1<Crypto::Hash::SHA1>(seed, length);
+        EXPECT(result.is_error());
+    }
 }

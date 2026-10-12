@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, stelar7 <dudedbz@gmail.com>
+ * Copyright (c) 2024-2026, stelar7 <dudedbz@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -24,8 +24,8 @@ public:
         size_t h_len = hash.digest_size();
 
         // 1. If length > 2^32(hLen), output "mask too long" and stop.
-        if constexpr (sizeof(size_t) > 32) {
-            if (length > (h_len << 32))
+        if constexpr (sizeof(size_t) > 4) {
+            if (length > (static_cast<u64>(h_len) << 32))
                 return Error::from_string_literal("mask too long");
         }
 

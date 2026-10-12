@@ -21,3 +21,16 @@ set(TEST_SOURCES
 foreach(source IN LISTS TEST_SOURCES)
     serenity_test("${source}" LibCrypto LIBS LibCrypto)
 endforeach()
+
+if (NOT CMAKE_CROSSCOMPILING)
+    add_custom_target(LibCryptoCheckQuick
+        COMMAND "$<TARGET_FILE:TestMGF>"
+        DEPENDS TestMGF
+        USES_TERMINAL
+    )
+    add_custom_target(LibCryptoCheck
+        COMMAND "$<TARGET_FILE:TestOAEP>"
+        DEPENDS LibCryptoCheckQuick TestOAEP
+        USES_TERMINAL
+    )
+endif()
