@@ -137,5 +137,21 @@ the regression checks the captured PCM payload directly.
 For audible host output on macOS, boot the media image with
 `-M pegasos2,audiodev=audio0 -audiodev coreaudio,id=audio0`; the QEMU tests
 instead use a WAV capture backend. Physical Pegasos 2 audio hardware has not
-been tested. The older running Cocoa guest must be rebooted with the rebuilt
-loader to use the driver.
+been tested. Any guest booted before this change needs a restart with the
+rebuilt loader to use the driver.
+
+An optional Cocoa/CoreAudio boot with the media desktop image initialized the
+VIA driver and AudioServer, but FileManager's desktop process faulted at
+`SRR0=0x080c79fc` while writing `0x01330004`, before SoundPlayer was started.
+The cause is unclassified; this run does not prove host speaker playback.
+Its serial log is `Build/powerpc/PowerPCBoot/via-audio-coreaudio-gui.log`.
+The separate headless QEMU WAV-capture tests verify nonzero device output.
+
+A focused sound demo image at
+`Build/powerpc/PowerPCBoot/via-audio-coreaudio-demo/root.ext2` starts
+SoundPlayer with the one-second tone and omits FileManager's desktop process.
+It booted under QEMU's CoreAudio backend with the VIA driver and SoundPlayer
+running and no guest crash during a sustained check. A disposable copy was
+left running for the user to listen; the agent cannot verify sound at the
+host speakers directly. The boot serial log is at
+`Build/powerpc/PowerPCBoot/via-audio-coreaudio-demo/serial-live.log`.
