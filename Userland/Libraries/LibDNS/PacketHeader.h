@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,51 +13,39 @@ namespace DNS {
 
 class [[gnu::packed]] PacketHeader {
 public:
-    PacketHeader()
-        : m_recursion_desired(false)
-        , m_truncated(false)
-        , m_authoritative_answer(false)
-        , m_opcode(0)
-        , m_query_or_response(false)
-        , m_response_code(0)
-        , m_checking_disabled(false)
-        , m_authenticated_data(false)
-        , m_zero(false)
-        , m_recursion_available(false)
-    {
-    }
+    PacketHeader() = default;
 
     u16 id() const { return m_id; }
     void set_id(u16 w) { m_id = w; }
 
-    bool recursion_desired() const { return m_recursion_desired; }
-    void set_recursion_desired(bool b) { m_recursion_desired = b; }
+    bool recursion_desired() const { return m_flags1 & 0x01; }
+    void set_recursion_desired(bool b) { set_flag(m_flags1, 0x01, b); }
 
-    bool is_truncated() const { return m_truncated; }
-    void set_truncated(bool b) { m_truncated = b; }
+    bool is_truncated() const { return m_flags1 & 0x02; }
+    void set_truncated(bool b) { set_flag(m_flags1, 0x02, b); }
 
-    bool is_authoritative_answer() const { return m_authoritative_answer; }
-    void set_authoritative_answer(bool b) { m_authoritative_answer = b; }
+    bool is_authoritative_answer() const { return m_flags1 & 0x04; }
+    void set_authoritative_answer(bool b) { set_flag(m_flags1, 0x04, b); }
 
-    u8 opcode() const { return m_opcode; }
-    void set_opcode(u8 b) { m_opcode = b; }
+    u8 opcode() const { return (m_flags1 >> 3) & 0x0f; }
+    void set_opcode(u8 b) { m_flags1 = (m_flags1 & 0x87) | ((b & 0x0f) << 3); }
 
-    bool is_query() const { return !m_query_or_response; }
-    bool is_response() const { return m_query_or_response; }
-    void set_is_query() { m_query_or_response = false; }
-    void set_is_response() { m_query_or_response = true; }
+    bool is_query() const { return !(m_flags1 & 0x80); }
+    bool is_response() const { return m_flags1 & 0x80; }
+    void set_is_query() { m_flags1 &= ~0x80; }
+    void set_is_response() { m_flags1 |= 0x80; }
 
-    u8 response_code() const { return m_response_code; }
-    void set_response_code(u8 b) { m_response_code = b; }
+    u8 response_code() const { return m_flags2 & 0x0f; }
+    void set_response_code(u8 b) { m_flags2 = (m_flags2 & 0xf0) | (b & 0x0f); }
 
-    bool checking_disabled() const { return m_checking_disabled; }
-    void set_checking_disabled(bool b) { m_checking_disabled = b; }
+    bool checking_disabled() const { return m_flags2 & 0x10; }
+    void set_checking_disabled(bool b) { set_flag(m_flags2, 0x10, b); }
 
-    bool is_authenticated_data() const { return m_authenticated_data; }
-    void set_authenticated_data(bool b) { m_authenticated_data = b; }
+    bool is_authenticated_data() const { return m_flags2 & 0x20; }
+    void set_authenticated_data(bool b) { set_flag(m_flags2, 0x20, b); }
 
-    bool is_recursion_available() const { return m_recursion_available; }
-    void set_recursion_available(bool b) { m_recursion_available = b; }
+    bool is_recursion_available() const { return m_flags2 & 0x80; }
+    void set_recursion_available(bool b) { set_flag(m_flags2, 0x80, b); }
 
     u16 question_count() const { return m_question_count; }
     void set_question_count(u16 w) { m_question_count = w; }
@@ -75,18 +63,18 @@ public:
     void const* payload() const { return this + 1; }
 
 private:
-    NetworkOrdered<u16> m_id;
+    static void set_flag(u8& flags, u8 mask, bool enabled)
+    {
+        if (enabled)
+            flags |= mask;
+        else
+            flags &= ~mask;
+    }
 
-    bool m_recursion_desired : 1;
-    bool m_truncated : 1;
-    bool m_authoritative_answer : 1;
-    u8 m_opcode : 4;
-    bool m_query_or_response : 1;
-    u8 m_response_code : 4;
-    bool m_checking_disabled : 1;
-    bool m_authenticated_data : 1;
-    bool m_zero : 1;
-    bool m_recursion_available : 1;
+    NetworkOrdered<u16> m_id;
+    // DNS flag bits are defined by wire position, independent of host bitfield layout.
+    u8 m_flags1 { 0 }; // QR, opcode, AA, TC, RD
+    u8 m_flags2 { 0 }; // RA, Z, AD, CD, response code
 
     NetworkOrdered<u16> m_question_count;
     NetworkOrdered<u16> m_answer_count;

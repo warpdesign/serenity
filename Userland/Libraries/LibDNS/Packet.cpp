@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Sergey Bugaev <bugaevc@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Sergey Bugaev <bugaevc@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -44,7 +44,7 @@ ErrorOr<ByteBuffer> Packet::to_byte_buffer() const
     header.set_truncated(false); // hopefully...
     header.set_recursion_desired(m_recursion_desired);
     // FIXME: what should the be for requests?
-    header.set_recursion_available(m_recursion_available);
+    header.set_recursion_available(is_response() && m_recursion_available);
     header.set_question_count(m_questions.size());
     header.set_answer_count(m_answers.size());
 

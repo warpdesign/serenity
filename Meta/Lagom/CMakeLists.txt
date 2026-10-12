@@ -691,6 +691,7 @@ if (BUILD_LAGOM)
             Kernel/POSIX
             LibCompress
             LibCrypto
+            LibDNS
             LibDisassembly
             LibGL
             LibGfx
