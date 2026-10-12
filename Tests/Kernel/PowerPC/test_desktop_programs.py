@@ -30,6 +30,14 @@ def prepare_root(args, source, build, user_loader, work, quick):
         str(source / "Tests/Kernel/PowerPC/Fixtures/InttypesFormat.c"),
         "-lc", "-lsystem", "-lgcc", "-o", str(inttypes_probe),
     ], check=True)
+    atomic_probe = root / "bin/Atomic64Probe"
+    subprocess.run([
+        args.compiler, "-m32", "-msecure-plt", "-fPIC", "-fno-stack-protector", "-O2",
+        "-nostartfiles", "-nodefaultlibs", "-Wl,-e,_start", "-Wl,--dynamic-linker=/usr/lib/Loader.so",
+        "-L" + str(args.libc.resolve().parent), "-L" + str(args.libsystem.resolve().parent),
+        str(source / "Tests/Kernel/PowerPC/Fixtures/Atomic64.c"),
+        "-lc", "-lsystem", "-lgcc", "-o", str(atomic_probe),
+    ], check=True)
     elf_ident = b"\x7fELF" + bytes((2, 1, 1, 0, 0)) + bytes(7)
     (root / "home/anon/little-endian-elf").write_bytes(
         elf_ident + struct.pack("<HHIQQQIHHHHHH", 1, 62, 1, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0)
@@ -57,6 +65,7 @@ def prepare_root(args, source, build, user_loader, work, quick):
         "native_elf": "/bin/file /bin/About",
         "foreign_elf": "/bin/file /home/anon/little-endian-elf",
         "inttypes": "/bin/InttypesProbe",
+        "atomic64": "/bin/Atomic64Probe",
         "ps": "/bin/ps",
     }
     if not quick:
@@ -211,7 +220,7 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     for name in behavior_commands:
         if f"COMMAND_RESULT_{name}_0" not in audit:
             missing.append(name)
-    for text in ("PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB", "u64=18446744073709551615"):
+    for text in ("PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB", "u64=18446744073709551615", "atomic64=ok"):
         if text not in audit:
             missing.append(text)
     if args.cpu == "750cxe" and "PowerPC 750CXe v3.1b" not in audit:

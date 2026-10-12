@@ -88,7 +88,10 @@ if (SERENITY_ARCH STREQUAL "x86_64")
 endif()
 
 if (SERENITY_ARCH STREQUAL "powerpc")
-    list(APPEND SOURCES arch/powerpc/stack_chk_fail_local.cpp)
+    list(APPEND SOURCES
+        arch/powerpc/Atomic64.cpp
+        arch/powerpc/stack_chk_fail_local.cpp
+    )
 endif()
 
 # ===== LibC headers =====

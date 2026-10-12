@@ -63,10 +63,10 @@ def create_root(source, build, user_loader, work, omit_fonts=False):
     return root
 
 
-def create_disk(mke2fs, root, work):
+def create_disk(mke2fs, root, work, size_bytes=256 * 1024 * 1024):
     disk = work / "root.ext2"
     with disk.open("wb") as file:
-        file.truncate(256 * 1024 * 1024)
+        file.truncate(size_bytes)
     subprocess.run([mke2fs, "-q", "-F", "-t", "ext2", "-O", "none", "-b", "4096", "-d", str(root), str(disk)], check=True)
     with disk.open("r+b") as file:
         file.seek(510)
