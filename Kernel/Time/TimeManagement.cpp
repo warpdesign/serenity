@@ -26,7 +26,7 @@
 #    include <Kernel/Arch/riscv64/Timer.h>
 #    include <Kernel/Devices/Time/GoldfishRTC.h>
 #elif ARCH(POWERPC32)
-    // The PowerPC timer implementation lives in Arch/powerpc/Time.
+#    include <Kernel/Arch/powerpc/Pegasos2/RTC.h>
 #else
 #    error Unknown architecture
 #endif
@@ -254,7 +254,7 @@ UnixDateTime TimeManagement::boot_time()
         return UnixDateTime::epoch();
     return rtc->boot_time();
 #elif ARCH(POWERPC32)
-    return UnixDateTime::epoch();
+    return PowerPC::Pegasos2::RTC::boot_time();
 #else
 #    error Unknown architecture
 #endif
@@ -301,6 +301,8 @@ UNMAP_AFTER_INIT TimeManagement::TimeManagement()
         m_epoch_time += boot_time().offset_to_epoch();
     probe_and_set_riscv64_hardware_timers();
 #elif ARCH(POWERPC32)
+    PowerPC::Pegasos2::RTC::initialize();
+    m_epoch_time += boot_time().offset_to_epoch();
     probe_and_set_powerpc_hardware_timers();
 #else
 #    error Unknown architecture

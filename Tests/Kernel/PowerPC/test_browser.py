@@ -48,8 +48,8 @@ def prepare_root(source, build, user_loader, work):
     else:
         (root / "etc/cacert.pem").touch()
     (root / "etc/cacert.pem").chmod(0o644)
-    for name in ("hosts", "LookupServer.ini"):
-        shutil.copy2(source / "Base/etc" / name, root / "etc" / name)
+    shutil.copy2(source / "Base/etc/hosts", root / "etc/hosts")
+    (root / "etc/LookupServer.ini").write_text("[DNS]\nNameservers=10.0.2.3\nEnableServer=false\n")
     shutil.copy2(source / "Base/etc/Network.ini", root / "etc/Network.ini")
     (root / "home/anon/Downloads").mkdir()
     (root / "home/anon/browser-smoke.html").write_text(
@@ -62,6 +62,8 @@ def prepare_root(source, build, user_loader, work):
         "/bin/ifconfig > /home/anon/network-autoconfig.log 2>&1\n"
         "/bin/route >> /home/anon/network-autoconfig.log 2>&1\n"
         "/bin/ping -c 1 -W 2 10.0.2.2 >> /home/anon/network-autoconfig.log 2>&1\n"
+        "/bin/host google.com >> /home/anon/network-autoconfig.log 2>&1\n"
+        "/bin/date -u >> /home/anon/network-autoconfig.log 2>&1\n"
     )
     with (root / "etc/SystemServer.ini").open("a") as config:
         config.write(
@@ -161,14 +163,17 @@ def boot_and_check(args, disk, work):
     network_log = network_log_path.read_text(errors="replace") if network_log_path.exists() else ""
     ethernet_section = network_log.split("\nloop:", 1)[0]
     address = re.search(r"(?m)^\tipv4: ([0-9.]+)$", ethernet_section)
+    guest_timestamp = re.search(r"(?m)^([0-9]{10,})$", network_log)
+    clock_ready = guest_timestamp is not None and abs(int(guest_timestamp.group(1)) - int(time.time())) < 120
     network_ready = (address is not None and address.group(1) not in ("0.0.0.0", "127.0.0.1")
-                     and "Pong from 10.0.2.2" in network_log and "Kernel IP routing table" in network_log)
+                     and "Pong from 10.0.2.2" in network_log and "Kernel IP routing table" in network_log
+                     and "google.com is " in network_log and clock_ready)
     if (not browser_visible or b"WebContent(" not in output or not network_audit_complete or not network_ready
             or b"Exiting with runtime error" in output or b"KERNEL PANIC" in output):
         raise SystemExit(
             f"Pegasos 2 Browser smoke failed: red samples={red_sample_count(screenshot)}, "
             f"WebContent started={b'WebContent(' in output}, network ready={network_ready}, "
-            f"network audit complete={network_audit_complete}, screenshot={screenshot}\n"
+            f"network audit complete={network_audit_complete}, clock ready={clock_ready}, screenshot={screenshot}\n"
             + network_log[-1500:] + "\n"
             + output.decode(errors="replace")[-4500:] + errors.decode(errors="replace")[-500:]
         )
