@@ -1,6 +1,10 @@
 # PowerPC Pegasos 2 bring-up
 
-The current PowerPC code is a **firmware boot probe**, not a SerenityOS kernel
+This document records early bring-up milestones. See
+[PowerPCPegasos2Status.md](PowerPCPegasos2Status.md) for the current QEMU port
+status and verification targets.
+
+The initial PowerPC code was a **firmware boot probe**, not a SerenityOS kernel
 port. It boots a freestanding 32-bit big-endian ELF on QEMU's `pegasos2`
 machine, enters through Open Firmware, reads the root `model` and memory
 properties, and writes diagnostics to the firmware console and QEMU's Pegasos 2

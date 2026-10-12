@@ -173,6 +173,7 @@ float hypotf(float, float) NOEXCEPT;
 long double sinl(long double) NOEXCEPT;
 double sin(double) NOEXCEPT;
 float sinf(float) NOEXCEPT;
+void sincos(double, double*, double*) NOEXCEPT;
 void sincosf(float, float*, float*) NOEXCEPT;
 long double cosl(long double) NOEXCEPT;
 double cos(double) NOEXCEPT;

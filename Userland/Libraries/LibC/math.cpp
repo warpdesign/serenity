@@ -374,6 +374,15 @@ static T internal_erf(T x)
 
 extern "C" {
 
+void sincos(double angle, double* sine, double* cosine) NOEXCEPT
+{
+    // Keep the calls separate: combining them into a sincos call would recurse.
+    double (*volatile sine_function)(double) = sin;
+    double (*volatile cosine_function)(double) = cos;
+    *sine = sine_function(angle);
+    *cosine = cosine_function(angle);
+}
+
 void sincosf(float angle, float* sine, float* cosine) NOEXCEPT
 {
     // Keep the calls separate: combining them into a sincosf call would recurse.

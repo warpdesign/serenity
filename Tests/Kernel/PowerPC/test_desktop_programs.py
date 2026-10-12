@@ -260,7 +260,11 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     for name in behavior_commands:
         if f"COMMAND_RESULT_{name}_0" not in audit:
             missing.append(name)
-    for text in ("PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB", "u64=18446744073709551615", "atomic64=ok", "aligned-new=ok", "sincosf=ok", "js-value-tag=ok", "p256=ok"):
+    for text in (
+        "PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB",
+        "u64=18446744073709551615", "atomic64=ok", "aligned-new=ok", "sincosf=ok", "sincos=ok",
+        "js-value-tag=ok", "p256=ok",
+    ):
         if text not in audit:
             missing.append(text)
     if args.cpu == "750cxe" and "PowerPC 750CXe v3.1b" not in audit:

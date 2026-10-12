@@ -30,8 +30,10 @@ function(embed_as_string_view name source_file output source_variable_name)
     if (EMBED_STRING_VIEW_NAMESPACE)
         set(namespace_arg "-s ${EMBED_STRING_VIEW_NAMESPACE}")
     endif()
+    get_filename_component(output_directory "${output}" DIRECTORY)
     add_custom_command(
         OUTPUT "${output}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/${output_directory}"
         COMMAND "${Python3_EXECUTABLE}" "${SerenityOS_SOURCE_DIR}/Meta/embed_as_string.py" --type=string-view "${source_file}" -o "${output}.tmp" -n "${source_variable_name}" ${namespace_arg}
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${output}.tmp" "${output}"
         COMMAND "${CMAKE_COMMAND}" -E remove "${output}.tmp"

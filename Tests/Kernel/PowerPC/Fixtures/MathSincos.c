@@ -17,5 +17,13 @@ void _start(void)
     if (sine < 0.247f || sine > 0.248f || cosine < 0.968f || cosine > 0.970f)
         exit(1);
     puts("sincosf=ok");
+
+    volatile double double_angle = 0.25;
+    double double_sine = 0;
+    double double_cosine = 0;
+    sincos(double_angle, &double_sine, &double_cosine);
+    if (double_sine < 0.2474 || double_sine > 0.2475 || double_cosine < 0.9689 || double_cosine > 0.9690)
+        exit(1);
+    puts("sincos=ok");
     exit(0);
 }

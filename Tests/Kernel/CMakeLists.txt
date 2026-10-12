@@ -260,6 +260,26 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    set(powerpc_pixel_paint_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_pixel_paint.py")
+    set(powerpc_pixel_paint_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --build-dir "${CMAKE_BINARY_DIR}"
+    )
+    add_custom_target(PowerPCPixelPaintCheckQuick
+        COMMAND python3 "${powerpc_pixel_paint_test}" ${powerpc_pixel_paint_arguments} --cpu 750
+        DEPENDS PowerPCDesktopCheckQuick PixelPaint FileSystemAccessServer
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCPixelPaintCheck
+        COMMAND python3 "${powerpc_pixel_paint_test}" ${powerpc_pixel_paint_arguments} --cpu 750cxe
+        DEPENDS PowerPCPixelPaintCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_desktop_programs_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_desktop_programs.py")
     set(powerpc_desktop_programs_arguments
         --compiler "${CMAKE_C_COMPILER}"
