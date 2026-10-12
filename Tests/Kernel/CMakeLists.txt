@@ -93,6 +93,25 @@ add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
     string(REGEX REPLACE "gcc$" "" powerpc_test_cross_compile "${CMAKE_C_COMPILER}")
+    set(powerpc_kmalloc_hpt_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_kernel_entry.py")
+    set(powerpc_kmalloc_hpt_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --check-heap-hpt-alias
+    )
+    add_custom_target(PowerPCKmallocHPTCheckQuick
+        COMMAND python3 "${powerpc_kmalloc_hpt_test}" ${powerpc_kmalloc_hpt_arguments} --cpu 750
+        DEPENDS PowerPCFirmwareLoader
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCKmallocHPTCheck
+        COMMAND python3 "${powerpc_kmalloc_hpt_test}" ${powerpc_kmalloc_hpt_arguments} --cpu 750cxe
+        DEPENDS PowerPCKmallocHPTCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_hpt_refill_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_hpt_refill.py")
     set(powerpc_hpt_refill_arguments
         --qemu qemu-system-ppc

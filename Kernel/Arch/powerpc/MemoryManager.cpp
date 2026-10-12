@@ -8,6 +8,7 @@
 #include <Kernel/Arch/PageDirectory.h>
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/HashPageFault.h>
+#include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/PageDirectoryBackend.h>
 #include <Kernel/Arch/powerpc/PhysicalPageArray.h>
 #include <Kernel/Arch/powerpc/SegmentRegisters.h>
@@ -28,6 +29,13 @@ extern u8 start_of_unmap_after_init[];
 extern u8 end_of_unmap_after_init[];
 
 namespace Kernel::Memory {
+
+static VirtualRange boot_hpt_alias_range()
+{
+    auto const& arch = g_boot_info.arch_specific;
+    return { VirtualAddress { arch.hpt_virtual_address },
+        arch.hpt_group_count * POWERPC_HPT_ENTRIES_PER_GROUP * sizeof(PowerPCHPTEntry) };
+}
 
 static int may_evict_user_mapping(PowerPCHPTWord vsid, PowerPCHPTWord effective_address, void*)
 {
@@ -139,6 +147,9 @@ UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& globa
     MUST(global_data.region_tree.place_specifically(*MUST(Region::create_unbacked()).leak_ptr(),
         VirtualRange { VirtualAddress(kernel_image_start), kernel_image_end - kernel_image_start }));
 
+    auto& hpt_alias_region = *MUST(Region::create_unbacked()).leak_ptr();
+    MUST(global_data.region_tree.place_specifically(hpt_alias_region, boot_hpt_alias_range()));
+
     auto& metadata_region = *MUST(Region::create_unbacked()).leak_ptr();
     MUST(global_data.region_tree.place_anywhere(metadata_region, RandomizeVirtualAddress::No, metadata_page_count * PAGE_SIZE));
     auto virtual_base = metadata_region.vaddr().get();
@@ -157,9 +168,13 @@ UNMAP_AFTER_INIT void MemoryManager::initialize_physical_pages(GlobalData& globa
     dmesgln("MM: PowerPC physical-page entries: {}", metadata_region.range());
 }
 
-void MemoryManager::prepare_kernel_heap_range(VirtualRange const&)
+void MemoryManager::prepare_kernel_heap_range(VirtualRange const& range)
 {
     VERIFY(kernel_page_directory().get_lock().is_locked_by_current_processor());
+    auto hpt_alias = boot_hpt_alias_range();
+    VERIFY(!range.intersects(hpt_alias));
+    dmesgln("MM: PowerPC HPT alias: {}", hpt_alias);
+    dmesgln("MM: PowerPC kmalloc expansion range: {}", range);
     // Kernel mappings stay pinned in the shared HPT. Only user mappings are
     // backed by software page tables and eligible for eviction.
 }

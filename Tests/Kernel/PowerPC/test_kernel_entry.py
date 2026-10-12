@@ -5,6 +5,7 @@
 
 import argparse
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import time
@@ -16,6 +17,7 @@ def main():
     parser.add_argument("--loader", required=True)
     parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--cpu")
+    parser.add_argument("--check-heap-hpt-alias", action="store_true")
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-kernel-entry-") as directory:
@@ -69,6 +71,19 @@ def main():
         )
         missing = [marker for marker in expected_serial if marker not in serial_output]
         missing += [marker for marker in expected_firmware if marker not in trace_output]
+        if args.check_heap_hpt_alias:
+            ranges = {}
+            for name in (b"HPT alias", b"kmalloc expansion range"):
+                match = re.search(rb"MM: PowerPC " + name + rb": (0x[0-9a-f]+) - (0x[0-9a-f]+)", serial_output)
+                if match is None:
+                    missing.append(name + b" range")
+                else:
+                    ranges[name] = (int(match.group(1), 16), int(match.group(2), 16))
+            if len(ranges) == 2:
+                hpt_start, hpt_end = ranges[b"HPT alias"]
+                heap_start, heap_end = ranges[b"kmalloc expansion range"]
+                if heap_start <= hpt_end and hpt_start <= heap_end:
+                    missing.append(b"kernel heap expansion range must exclude HPT alias")
         if b"DECR (10)" not in trace_output:
             missing.append(b"decrementer interrupt")
         if b"KERNEL PANIC" in serial_output.split(b"VFS SyncTask is running", 1)[0]:
@@ -80,7 +95,10 @@ def main():
                 + trace_output.decode(errors="replace")[-2500:]
                 + errors.decode(errors="replace")
             )
-    print("Pegasos 2 Serenity kernel entry passed")
+    if args.check_heap_hpt_alias:
+        print(f"Pegasos 2 kernel heap {heap_start:#x}-{heap_end:#x} excludes HPT alias {hpt_start:#x}-{hpt_end:#x}")
+    else:
+        print("Pegasos 2 Serenity kernel entry passed")
 
 
 if __name__ == "__main__":
