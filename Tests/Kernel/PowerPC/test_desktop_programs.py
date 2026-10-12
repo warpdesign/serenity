@@ -78,6 +78,9 @@ def prepare_root(args, source, build, user_loader, work, quick):
     (root / "home/anon/little-endian-elf").write_bytes(
         elf_ident + struct.pack("<HHIQQQIHHHHHH", 1, 62, 1, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0)
     )
+    editor_fixture = root / "home/anon/editor.txt"
+    editor_fixture.write_text("Editor test\n")
+    editor_fixture.chmod(0o666)
 
     log = "/home/anon/program-check.log"
     script = [f"echo PROGRAM_CHECK_START > {log}"]
@@ -189,6 +192,11 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     before = work / "before.ppm"
     about = work / "about.ppm"
     settings = work / "settings.ppm"
+    calendar = work / "calendar.ppm"
+    editor = work / "text-editor.ppm"
+    edited = work / "text-editor-typed.ppm"
+    save_permission = work / "text-editor-save-permission.ppm"
+    saved = work / "text-editor-saved.ppm"
     with tempfile.TemporaryDirectory(prefix="powerpc-programs-monitor-", dir="/tmp") as monitor_directory:
         monitor_path = Path(monitor_directory) / "monitor.sock"
         command = [
@@ -203,11 +211,13 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
             "-monitor", f"unix:{monitor_path},server=on,wait=off", "-no-reboot",
         ]
         process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
-        deadline = time.monotonic() + (40 if args.quick else 95)
+        deadline = time.monotonic() + (65 if args.quick else 120)
         desktop_ready = False
         audit_complete = False
         about_visible = False
         settings_visible = False
+        calendar_visible = False
+        editor_visible = False
         try:
             while not monitor_path.exists() and time.monotonic() < deadline and process.poll() is None:
                 time.sleep(0.05)
@@ -234,6 +244,29 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
                         time.sleep(0.3)
                         send_keys(monitor, ["shift-s", "e", "t", "t", "i", "n", "g", "s", "ret"])
                         settings_visible = wait_for_window(monitor, before, settings)
+                        send_keys(monitor, ["alt-f4"])
+                        time.sleep(0.3)
+                        send_keys(monitor, ["shift-c", "a", "l", "e", "n", "d", "a", "r", "ret"])
+                        calendar_visible = wait_for_window(monitor, before, calendar)
+                        time.sleep(3)
+                        test_window_server.monitor_command(monitor, f"screendump {calendar}")
+                        send_keys(monitor, ["alt-f4"])
+                        time.sleep(0.3)
+                        send_keys(monitor, ["shift-t", "e", "x", "t", "shift-e", "d", "i", "t", "o", "r",
+                                            "spc", "slash", "h", "o", "m", "e", "slash", "a", "n", "o", "n",
+                                            "slash", "e", "d", "i", "t", "o", "r", "dot", "t", "x", "t", "ret"])
+                        editor_visible = wait_for_window(monitor, before, editor)
+                        time.sleep(5)
+                        test_window_server.monitor_command(monitor, f"screendump {editor}")
+                        send_keys(monitor, ["o", "k"])
+                        time.sleep(1)
+                        test_window_server.monitor_command(monitor, f"screendump {edited}")
+                        send_keys(monitor, ["ctrl-s"])
+                        time.sleep(2)
+                        test_window_server.monitor_command(monitor, f"screendump {save_permission}")
+                        send_keys(monitor, ["ret"])
+                        time.sleep(3)
+                        test_window_server.monitor_command(monitor, f"screendump {saved}")
                         break
                     time.sleep(0.25)
         finally:
@@ -253,6 +286,12 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
         capture_output=True, text=True,
     )
     network_audit = network_log_path.read_text(errors="replace") if network_log_path.exists() else ""
+    editor_file = work / "editor.txt"
+    subprocess.run(
+        [test_desktop.find_debugfs(), "-R", f"dump /home/anon/editor.txt {editor_file}", str(disk)],
+        capture_output=True, text=True,
+    )
+    editor_saved = editor_file.exists() and editor_file.read_text(errors="replace") == "okEditor test\n"
     missing = []
     for name in help_commands:
         if f"HELP_RESULT_{name}_0" not in audit:
@@ -280,17 +319,20 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     if received is None or not (0 < int(received.group(1)) <= 8 and 0 < int(received.group(2)) < 2048):
         missing.append("virtio-net received frame length")
     if (not audit_complete or not desktop_ready or b"About(" not in output or b"Settings(" not in output
+            or b"Calendar(" not in output or b"TextEditor(" not in output
             or b"Exiting with runtime error" in output or b"KERNEL PANIC" in output
-            or b"VERIFICATION FAILED" in output or not about_visible or not settings_visible or missing):
+            or b"VERIFICATION FAILED" in output or not about_visible or not settings_visible
+            or not calendar_visible or not editor_visible or not editor_saved or missing):
         raise SystemExit(
             f"Pegasos 2 desktop program check failed: missing {missing}, audit={audit_complete}, "
             f"desktop={desktop_ready}, about={about_visible}, settings={settings_visible}, "
+            f"calendar={calendar_visible}, editor={editor_visible}, editor saved={editor_saved}, "
             f"debugfs={debugfs.returncode}, network_debugfs={network_dump.returncode}\n"
             + audit[-3000:] + "\n" + output.decode(errors="replace")[-2500:]
             + "\nNetwork audit:\n" + network_audit[-1000:]
             + errors.decode(errors="replace")[-500:]
         )
-    print(f"Pegasos 2 desktop ran {len(help_commands)} command help checks and {len(behavior_commands)} commands; About and Settings opened; virtio-net ping passed")
+    print(f"Pegasos 2 desktop ran {len(help_commands)} command help checks and {len(behavior_commands)} commands; About, Settings, Calendar, and TextEditor opened; editor save and virtio-net ping passed")
 
 
 def main():

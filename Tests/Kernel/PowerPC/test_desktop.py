@@ -41,6 +41,7 @@ def create_root(source, build, user_loader, work):
     executables = {
         "bin/About": "Userland/Applications/About/About",
         "bin/Calendar": "Userland/Applications/Calendar/Calendar",
+        "bin/CalendarSettings": "Userland/Applications/CalendarSettings/CalendarSettings",
         "bin/Clipboard": "Userland/Services/Clipboard/Clipboard",
         "bin/ClockSettings": "Userland/Applications/ClockSettings/ClockSettings",
         "bin/ConfigServer": "Userland/Services/ConfigServer/ConfigServer",
@@ -50,7 +51,11 @@ def create_root(source, build, user_loader, work):
         "bin/Settings": "Userland/Applications/Settings/Settings",
         "bin/Taskbar": "Userland/Services/Taskbar/Taskbar",
         "bin/FileManager": "Userland/Applications/FileManager/FileManager",
+        "bin/FileSystemAccessServer": "Userland/Services/FileSystemAccessServer/FileSystemAccessServer",
         "bin/ImageDecoder": "Userland/Services/ImageDecoder/ImageDecoder",
+        "bin/RequestServer": "Userland/Services/RequestServer/RequestServer",
+        "bin/TextEditor": "Userland/Applications/TextEditor/TextEditor",
+        "bin/WebContent": "Userland/Services/WebContent/WebContent",
         "bin/Terminal": "Userland/Applications/Terminal/Terminal",
         "bin/TerminalSettings": "Userland/Applications/TerminalSettings/TerminalSettings",
         "bin/Shell": "Userland/Shell/Shell",
@@ -70,7 +75,7 @@ def create_root(source, build, user_loader, work):
         shutil.copy2(executable, root / "bin" / name)
 
     (root / "res/apps").mkdir()
-    for name in ("Calendar", "ClockSettings", "FileManager", "Terminal", "TerminalSettings"):
+    for name in ("Calendar", "CalendarSettings", "ClockSettings", "FileManager", "Terminal", "TerminalSettings", "TextEditor"):
         shutil.copy2(source / "Base/res/apps" / f"{name}.af", root / "res/apps" / f"{name}.af")
     (root / "res/graphics").mkdir()
     shutil.copy2(source / "Base/res/graphics/brand-banner.png", root / "res/graphics/brand-banner.png")
@@ -129,6 +134,24 @@ def create_root(source, build, user_loader, work):
         "SocketPermissions=600\n"
         "Lazy=true\n"
         "SystemModes=graphical\n"
+        "MultiInstance=true\n"
+        "AcceptSocketConnections=true\n"
+        "\n[RequestServer]\n"
+        "Socket=/tmp/session/%sid/portal/request\n"
+        "SocketPermissions=600\n"
+        "Lazy=true\n"
+        "MultiInstance=true\n"
+        "AcceptSocketConnections=true\n"
+        "\n[WebContent]\n"
+        "Socket=/tmp/session/%sid/portal/webcontent\n"
+        "SocketPermissions=600\n"
+        "Lazy=true\n"
+        "MultiInstance=true\n"
+        "AcceptSocketConnections=true\n"
+        "\n[FileSystemAccessServer]\n"
+        "Socket=/tmp/session/%sid/portal/filesystemaccess\n"
+        "SocketPermissions=660\n"
+        "Lazy=true\n"
         "MultiInstance=true\n"
         "AcceptSocketConnections=true\n"
         "\n[LaunchServer]\n"

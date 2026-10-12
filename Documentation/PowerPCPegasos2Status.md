@@ -21,6 +21,11 @@ probe and is historical.
   and saves a valid 510×356 project through FileSystemAccessServer.
 - ImageViewer, VideoPlayer, and SoundPlayer build for PowerPC and open small
   image, video, and audio samples in QEMU.
+- Calendar renders its month grid, and TextEditor opens and saves a text file
+  in the PowerPC desktop check. The earlier sound demo image omitted
+  `/bin/CalendarSettings`, so Calendar exited during `unveil` before its
+  window appeared. The desktop image recipe now includes that executable,
+  TextEditor, and their required portal services.
 - The Pegasos 2 VIA AC'97 output driver creates `/dev/audio/0`; QEMU captures
   nonzero PCM when SoundPlayer plays a WAV tone.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
@@ -40,6 +45,7 @@ cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCBrowserCheck
 cmake --build Build/powerpc --target PowerPCPixelPaintCheck
 cmake --build Build/powerpc --target PowerPCVIAAudioCheck
+cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 ```
 
 Each target has a `Quick` variant for a shorter run. The Browser target
@@ -153,5 +159,27 @@ SoundPlayer with the one-second tone and omits FileManager's desktop process.
 It booted under QEMU's CoreAudio backend with the VIA driver and SoundPlayer
 running. A disposable copy was left running for the user to listen; the agent
 cannot verify sound at the host speakers directly. A later Calendar process
-logged an `unveil` error, which has not been investigated. The serial log is at
+logged an `unveil` error because that image lacked `/bin/CalendarSettings`.
+The serial log is at
 `Build/powerpc/PowerPCBoot/via-audio-coreaudio-demo/serial-live.log`.
+
+## Calendar and TextEditor image
+
+The `PowerPCDesktopProgramsCheckQuick` regression now launches Calendar,
+checks its window, opens `/home/anon/editor.txt` in TextEditor, inserts text,
+approves its write permission prompt, and verifies the saved file. The quick
+750 CPU and normal 750CXe runs both passed. A reusable guest image is at
+`Build/powerpc/PowerPCBoot/calendar-text-editor-ready-20261012/root.ext2`.
+It booted to the desktop under QEMU and contains Calendar, CalendarSettings,
+TextEditor, and their portal services. Copy the disk before booting, using
+the PixelPaint QEMU command above with this image path. Launch the apps from
+the Serenity menu or Terminal. The older sound demo image predates these
+changes and still reproduces Calendar's `unveil` failure.
+
+A Cocoa QEMU session was started from a disposable copy at
+`/tmp/serenity-calendar-editor-ui.cV63gY/root.ext2` (PID 36664 at the time
+of this update). Its serial log is
+`/tmp/serenity-calendar-editor-ui.cV63gY/serial.log`; WindowServer entered
+its main loop without a crash. This session has no host audio backend. If it
+has exited, make another copy of the reusable disk and launch it with the
+PixelPaint command above, substituting the Calendar/TextEditor image path.

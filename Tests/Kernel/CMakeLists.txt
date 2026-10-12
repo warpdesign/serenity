@@ -246,8 +246,9 @@ if (SERENITY_ARCH STREQUAL "powerpc")
 
     add_custom_target(PowerPCDesktopCheckQuick
         DEPENDS PowerPCWindowServerCheckQuick Clipboard ConfigServer ImageDecoder LaunchServer LoginServer Taskbar FileManager
-            ComponentAbout ComponentCalendar ComponentClockSettings ComponentRun ComponentSettings Componentls Componentlscpu Componenttimezone Componentuname
-            Terminal TerminalSettings Shell FileOperation utmpupdate
+            FileSystemAccessServer RequestServer WebContent
+            ComponentAbout ComponentCalendar ComponentCalendarSettings ComponentClockSettings ComponentRun ComponentSettings ComponentTextEditor
+            Componentls Componentlscpu Componenttimezone Componentuname Terminal TerminalSettings Shell FileOperation utmpupdate
     )
     add_custom_target(PowerPCDesktopCheck
         COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_desktop.py"

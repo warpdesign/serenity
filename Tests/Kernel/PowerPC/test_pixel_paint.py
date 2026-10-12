@@ -22,15 +22,10 @@ import test_window_server
 def prepare_root(source, build, user_loader, work):
     root = test_desktop.create_root(source, build, user_loader, work)
     shutil.copy2(build / "Userland/Applications/PixelPaint/PixelPaint", root / "bin/PixelPaint")
-    shutil.copy2(build / "Userland/Services/FileSystemAccessServer/FileSystemAccessServer",
-                 root / "bin/FileSystemAccessServer")
     shutil.copy2(source / "Base/res/apps/PixelPaint.af", root / "res/apps/PixelPaint.af")
     shutil.copytree(source / "Base/res/color-palettes", root / "res/color-palettes")
     with (root / "etc/SystemServerUser.ini").open("a") as config:
         config.write(
-            "\n[FileSystemAccessServer]\n"
-            "Socket=/tmp/session/%sid/portal/filesystemaccess\n"
-            "SocketPermissions=660\nLazy=true\nMultiInstance=true\nAcceptSocketConnections=true\n"
             "\n[PixelPaintSmoke]\n"
             "Executable=/bin/PixelPaint\nKeepAlive=false\nEnvironment=HOME=/home/anon\n"
         )

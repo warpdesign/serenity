@@ -24,15 +24,12 @@ def prepare_root(source, build, user_loader, work):
     programs = {
         "Browser": "Userland/Applications/Browser/Browser",
         "BrowserSettings": "Userland/Applications/BrowserSettings/BrowserSettings",
-        "RequestServer": "Userland/Services/RequestServer/RequestServer",
-        "WebContent": "Userland/Services/WebContent/WebContent",
         "WebWorker": "Userland/Services/WebWorker/WebWorker",
         "AudioServer": "Userland/Services/AudioServer/AudioServer",
         "LookupServer": "Userland/Services/LookupServer/LookupServer",
         "NetworkServer": "Userland/Services/NetworkServer/NetworkServer",
         "DHCPClient": "Userland/Services/DHCPClient/DHCPClient",
         "SQLServer": "Userland/Services/SQLServer/SQLServer",
-        "FileSystemAccessServer": "Userland/Services/FileSystemAccessServer/FileSystemAccessServer",
     }
     for name, location in programs.items():
         shutil.copy2(build / location, root / "bin" / name)
@@ -74,11 +71,8 @@ def prepare_root(source, build, user_loader, work):
         config.write(
             "\n[AudioServer]\nSocket=/tmp/session/%sid/portal/audio,/tmp/session/%sid/portal/audiomanager\n"
             "SocketPermissions=600\nKeepAlive=false\n"
-            "\n[RequestServer]\nSocket=/tmp/session/%sid/portal/request\nSocketPermissions=600\nLazy=true\nMultiInstance=true\nAcceptSocketConnections=true\n"
-            "\n[WebContent]\nSocket=/tmp/session/%sid/portal/webcontent\nSocketPermissions=600\nLazy=true\nMultiInstance=true\nAcceptSocketConnections=true\n"
             "\n[WebWorker]\nSocket=/tmp/session/%sid/portal/webworker\nSocketPermissions=600\nLazy=true\nMultiInstance=true\nAcceptSocketConnections=true\n"
             "\n[SQLServer]\nSocket=/tmp/session/%sid/portal/sql\nSocketPermissions=600\nLazy=true\nKeepAlive=true\n"
-            "\n[FileSystemAccessServer]\nSocket=/tmp/session/%sid/portal/filesystemaccess\nSocketPermissions=660\nLazy=true\nMultiInstance=true\nAcceptSocketConnections=true\n"
             "\n[BrowserSmoke]\nExecutable=/bin/Browser\nArguments=file:///home/anon/browser-smoke.html\nKeepAlive=false\nEnvironment=HOME=/home/anon\n"
             "\n[NetworkAudit]\nExecutable=/bin/Shell\nArguments=/home/anon/network-audit.sh\nKeepAlive=false\nEnvironment=HOME=/home/anon\n"
         )
