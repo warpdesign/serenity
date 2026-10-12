@@ -18,7 +18,8 @@ namespace Kernel {
 AK_MAKE_ARBITRARY_SIZED_ENUM(CPUFeature, u32,
     FPU = CPUFeature(1u) << 0u,
     HashedMMU = CPUFeature(1u) << 1u,
-    AltiVec = CPUFeature(1u) << 2u)
+    AltiVec = CPUFeature(1u) << 2u,
+    Doze = CPUFeature(1u) << 3u)
 
 namespace PowerPC {
 

@@ -7,6 +7,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Arch/powerpc/KernelContext.h>
+#include <Kernel/Arch/powerpc/CPU.h>
 #include <Kernel/Arch/powerpc/RegisterState.h>
 #include <Kernel/Arch/powerpc/Time/Timer.h>
 
@@ -17,6 +18,7 @@ extern "C" [[noreturn]] void powerpc_decrementer_exception_handler(RegisterState
 extern "C" [[noreturn]] void powerpc_decrementer_exception_handler(RegisterState* registers)
 {
     VERIFY(registers);
+    registers->srr1 &= ~PowerPC::MSR_POW;
     auto previous_mode = registers->previous_mode();
     TrapFrame trap { registers };
     Processor::current().enter_trap(trap, true);

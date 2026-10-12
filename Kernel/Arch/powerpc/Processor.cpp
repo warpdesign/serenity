@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/CPUID.h>
+#include <Kernel/Arch/powerpc/CPU.h>
 #include <Kernel/Arch/powerpc/ExceptionSetup.h>
 #include <Kernel/Arch/powerpc/TLB.h>
 #include <Kernel/Interrupts/InterruptDisabler.h>
@@ -46,6 +47,11 @@ void ProcessorBase::initialize(u32 cpu)
     VERIFY(cpu == m_cpu);
     VERIFY((PowerPC::read_msr() & 0x2000u) != 0);
     PowerPC::initialize_exception_vectors();
+    if (has_feature(CPUFeature::Doze)) {
+        auto hid0 = PowerPC::read_hid0();
+        hid0 = (hid0 & ~(PowerPC::HID0_NAP | PowerPC::HID0_SLEEP)) | PowerPC::HID0_DOZE;
+        PowerPC::write_hid0(hid0);
+    }
     m_deferred_call_pool.init();
     g_total_processors.store(1, AK::MemoryOrder::memory_order_release);
     store_fpu_state(s_clean_fpu_state);
@@ -93,10 +99,15 @@ void ProcessorBase::idle() const
 {
     VERIFY_INTERRUPTS_DISABLED();
     idle_begin();
-    // The 750 has no architecture-neutral WFI. Let pending interrupts run,
-    // then return to the scheduler with interrupts disabled as it expects.
-    enable_interrupts();
-    pause();
+    if (has_feature(CPUFeature::Doze)) {
+        // The 750 wakes from doze on an external or decrementer interrupt.
+        // The exception handler clears POW in the saved MSR before returning.
+        asm volatile("sync" : : : "memory");
+        PowerPC::write_msr(PowerPC::read_msr() | PowerPC::MSR_EE | PowerPC::MSR_POW);
+    } else {
+        enable_interrupts();
+        pause();
+    }
     disable_interrupts();
     idle_end();
 }

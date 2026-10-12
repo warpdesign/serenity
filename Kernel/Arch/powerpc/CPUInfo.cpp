@@ -30,6 +30,8 @@ ErrorOr<void> try_generate_cpu_info(KBufferBuilder& builder)
         TRY(features.add("hashed_mmu"sv));
     if (processor.has_feature(CPUFeature::AltiVec))
         TRY(features.add("altivec"sv));
+    if (processor.has_feature(CPUFeature::Doze))
+        TRY(features.add("doze"sv));
     TRY(features.finish());
 
     TRY(object.finish());

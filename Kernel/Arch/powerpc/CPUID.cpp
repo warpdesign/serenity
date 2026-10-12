@@ -42,7 +42,7 @@ CPUFeature::Type detect_cpu_features(u32 pvr)
     switch (version) {
     case 0x0008: // 750, including IBM 750CX/CXe/CXr revisions.
     case 0x7000: // IBM 750FX.
-        return baseline;
+        return baseline | CPUFeature::Doze;
     case 0x000c: // 7400.
     case 0x8000: // 7450.
     case 0x8001: // 7455.

@@ -10,6 +10,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/TrapFrame.h>
 #include <Kernel/Arch/powerpc/InterruptManagement.h>
+#include <Kernel/Arch/powerpc/CPU.h>
 #include <Kernel/Arch/powerpc/KernelContext.h>
 #include <Kernel/Interrupts/GenericInterruptHandler.h>
 #include <Kernel/Interrupts/SharedIRQHandler.h>
@@ -24,6 +25,7 @@ extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState*);
 extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState* registers)
 {
     VERIFY(registers);
+    registers->srr1 &= ~PowerPC::MSR_POW;
     auto previous_mode = registers->previous_mode();
     TrapFrame trap { registers };
     Processor::current().enter_trap(trap, true);
