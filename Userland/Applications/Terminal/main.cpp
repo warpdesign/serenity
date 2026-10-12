@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -38,6 +38,7 @@
 #include <LibMain/Main.h>
 #include <LibURL/URL.h>
 #include <LibVT/TerminalWidget.h>
+#include <errno.h>
 #include <pty.h>
 
 class TerminalChangeListener : public Config::Listener {
@@ -441,7 +442,8 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     TRY(Core::System::unveil("/bin/utmpupdate", "x"));
     TRY(Core::System::unveil("/etc/FileIconProvider.ini", "r"));
     TRY(Core::System::unveil("/tmp/session/%sid/portal/launch", "rw"));
-    TRY(Core::System::unveil("/dev/beep", "rw"));
+    if (auto result = Core::System::unveil("/dev/beep", "rw"); result.is_error() && result.error().code() != ENOENT)
+        return result.release_error();
     TRY(Core::System::unveil(nullptr, nullptr));
 
     auto modified_state_check_timer = Core::Timer::create_repeating(500, [&] {

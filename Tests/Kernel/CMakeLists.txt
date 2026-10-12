@@ -178,4 +178,18 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    add_custom_target(PowerPCDesktopCheckQuick
+        DEPENDS PowerPCWindowServerCheckQuick Clipboard ConfigServer LaunchServer Taskbar FileManager
+            Terminal TerminalSettings Shell FileOperation utmpupdate
+    )
+    add_custom_target(PowerPCDesktopCheck
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_desktop.py"
+            --qemu qemu-system-ppc
+            --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+            --user-loader "$<TARGET_FILE:Loader.so>"
+            --build-dir "${CMAKE_BINARY_DIR}"
+        DEPENDS PowerPCDesktopCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
 endif()
