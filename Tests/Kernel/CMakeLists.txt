@@ -253,7 +253,7 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     )
     add_custom_target(PowerPCDesktopProgramsCheckQuick
         COMMAND python3 "${powerpc_desktop_programs_test}" ${powerpc_desktop_programs_arguments} --cpu 750 --quick
-        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names}
+        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names} LibCrypto
         USES_TERMINAL
         VERBATIM
     )

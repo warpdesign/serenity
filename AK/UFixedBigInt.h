@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021, Leon Albrecht <leon2002.la@gmail.com>
- * Copyright (c) 2023, Dan Klishch <danilklishch@gmail.com>
+ * Copyright (c) 2021-2026, Leon Albrecht <leon2002.la@gmail.com>
+ * Copyright (c) 2023-2026, Dan Klishch <danilklishch@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -515,18 +515,11 @@ class LittleEndian<UFixedBigInt<N>> {
     template<size_t M>
     constexpr static auto byte_swap_if_not_little_endian(UFixedBigInt<M> value)
     {
-        if constexpr (HostIsLittleEndian) {
-            return value;
-        } else {
-            auto words = value.span();
-            auto front_it = words.begin();
-            auto ending_half_words = words.slice(ceil_div(words.size(), static_cast<size_t>(2)));
-            for (size_t i = 0; i < ending_half_words.size(); ++i, ++front_it)
-                *front_it = convert_between_host_and_little_endian(exchange(ending_half_words[ending_half_words.size() - i - 1], convert_between_host_and_little_endian(*front_it)));
-            if (words.size() % 2)
-                words[words.size() / 2] = convert_between_host_and_little_endian(*front_it);
-            return value;
-        }
+        // UFixedBigInt already stores its words from least to most significant.
+        // Little-endian wire order only needs each word's bytes converted.
+        for (auto& word : value.span())
+            word = convert_between_host_and_little_endian(word);
+        return value;
     }
 
 public:
@@ -548,18 +541,14 @@ class BigEndian<UFixedBigInt<N>> {
     template<size_t M>
     constexpr static auto byte_swap_if_not_big_endian(UFixedBigInt<M> value)
     {
-        if constexpr (!HostIsLittleEndian) {
-            return value;
-        } else {
-            auto words = value.span();
-            auto front_it = words.begin();
-            auto ending_half_words = words.slice(ceil_div(words.size(), static_cast<size_t>(2)));
-            for (size_t i = 0; i < ending_half_words.size(); ++i, ++front_it)
-                *front_it = convert_between_host_and_big_endian(exchange(ending_half_words[ending_half_words.size() - i - 1], convert_between_host_and_big_endian(*front_it)));
-            if (words.size() % 2)
-                words[words.size() / 2] = convert_between_host_and_big_endian(*front_it);
-            return value;
-        }
+        auto words = value.span();
+        auto front_it = words.begin();
+        auto ending_half_words = words.slice(ceil_div(words.size(), static_cast<size_t>(2)));
+        for (size_t i = 0; i < ending_half_words.size(); ++i, ++front_it)
+            *front_it = convert_between_host_and_big_endian(exchange(ending_half_words[ending_half_words.size() - i - 1], convert_between_host_and_big_endian(*front_it)));
+        if (words.size() % 2)
+            words[words.size() / 2] = convert_between_host_and_big_endian(*front_it);
+        return value;
     }
 
 public:

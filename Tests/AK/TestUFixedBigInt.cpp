@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, the SerenityOS developers.
+ * Copyright (c) 2021-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -189,11 +189,17 @@ TEST_CASE(mod_hardcoded)
 TEST_CASE(endian_swap)
 {
     constexpr u128 const a { 0x1234567890abcdefULL, 0xfedcba0987654321ULL };
-    constexpr u128 const a_swapped { 0x2143658709badcfeull, 0xefcdab9078563412ull };
+    static_assert(static_cast<u128>(BigEndian { a }) == a);
+    static_assert(static_cast<u128>(LittleEndian { a }) == a);
 
-    static_assert(!AK::HostIsLittleEndian || bit_cast<u128>(BigEndian { a }) == a_swapped);
-    static_assert(AK::HostIsLittleEndian || bit_cast<u128>(LittleEndian { a }) == a_swapped);
-
-    static_assert(!AK::HostIsLittleEndian || bit_cast<u128>(LittleEndian { a }) == a);
-    static_assert(AK::HostIsLittleEndian || bit_cast<u128>(BigEndian { a }) == a);
+    BigEndian big_endian { a };
+    LittleEndian little_endian { a };
+    u8 const big_endian_bytes[] { 0xfe, 0xdc, 0xba, 0x09, 0x87, 0x65, 0x43, 0x21, 0x12, 0x34, 0x56, 0x78, 0x90, 0xab, 0xcd, 0xef };
+    u8 const little_endian_bytes[] { 0xef, 0xcd, 0xab, 0x90, 0x78, 0x56, 0x34, 0x12, 0x21, 0x43, 0x65, 0x87, 0x09, 0xba, 0xdc, 0xfe };
+    auto const* big_bytes = reinterpret_cast<u8 const*>(&big_endian);
+    auto const* little_bytes = reinterpret_cast<u8 const*>(&little_endian);
+    for (size_t i = 0; i < sizeof(big_endian_bytes); ++i) {
+        EXPECT_EQ(big_bytes[i], big_endian_bytes[i]);
+        EXPECT_EQ(little_bytes[i], little_endian_bytes[i]);
+    }
 }

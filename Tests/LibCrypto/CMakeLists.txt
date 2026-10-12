@@ -25,7 +25,8 @@ endforeach()
 if (NOT CMAKE_CROSSCOMPILING)
     add_custom_target(LibCryptoCheckQuick
         COMMAND "$<TARGET_FILE:TestMGF>"
-        DEPENDS TestMGF
+        COMMAND "$<TARGET_FILE:TestCurves>" --tests test_secp256r1
+        DEPENDS TestMGF TestCurves
         USES_TERMINAL
     )
     add_custom_target(LibCryptoCheck

@@ -115,7 +115,8 @@ if (NOT CMAKE_CROSSCOMPILING)
         COMMAND "$<TARGET_FILE:TestAKMath>" --tests sqrt_runtime
         COMMAND "$<TARGET_FILE:TestPowerPCSqrt>" --tests
         COMMAND "$<TARGET_FILE:TestIPv4Address>"
-        DEPENDS TestBitStream TestAKMath TestPowerPCSqrt TestIPv4Address
+        COMMAND "$<TARGET_FILE:TestUFixedBigInt>" --tests endian_swap
+        DEPENDS TestBitStream TestAKMath TestPowerPCSqrt TestIPv4Address TestUFixedBigInt
         USES_TERMINAL
     )
     add_custom_target(AKCheck
