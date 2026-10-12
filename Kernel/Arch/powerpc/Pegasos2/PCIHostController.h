@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Array.h>
 #include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
 #include <Kernel/Bus/PCI/Controller/HostController.h>
 #include <Kernel/Memory/TypedMapping.h>
@@ -16,6 +17,7 @@ class PCIHostController final : public PCI::HostController {
 public:
     static ErrorOr<NonnullOwnPtr<PCIHostController>> create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const&);
     ErrorOr<void> assign_unconfigured_resources(PowerPCPCIHostBridgeInfo const&);
+    size_t assign_unconfigured_interrupt_lines(PowerPCPCIHostBridgeInfo const&, Array<u8, 4> const& pirq_lines);
 
 private:
     PCIHostController(PCI::Domain const&, Memory::TypedMapping<volatile u32[]>, u16 address_offset);

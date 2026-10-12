@@ -1,11 +1,12 @@
 /*
- * Copyright (c) 2021, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2021-2026, Jesse Buhagiar <jooster669@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #pragma once
 
+#include <AK/Endian.h>
 #include <AK/OwnPtr.h>
 #include <AK/Ptr32.h>
 #include <AK/Types.h>
@@ -86,107 +87,107 @@ struct alignas(16) TransferDescriptor final {
 
     u32 link_ptr() const { return m_link_ptr; }
     u32 paddr() const { return m_bookkeeping->paddr; }
-    u32 status() const { return m_control_status; }
+    u32 status() const { return AK::convert_between_host_and_little_endian(m_control_status); }
     u32 token() const { return m_token; }
     u32 buffer_ptr() const { return m_buffer_ptr; }
-    u16 actual_packet_length() const { return (m_control_status + 1) & 0x7ff; }
+    u16 actual_packet_length() const { return (status() + 1) & 0x7ff; }
 
     bool in_use() const { return m_bookkeeping->in_use; }
-    bool stalled() const { return m_control_status & StatusBits::Stalled; }
-    bool last_in_chain() const { return m_link_ptr & LinkPointerBits::Terminate; }
-    bool active() const { return m_control_status & StatusBits::Active; }
+    bool stalled() const { return status() & StatusBits::Stalled; }
+    bool last_in_chain() const { return link_ptr() & LinkPointerBits::Terminate; }
+    bool active() const { return status() & StatusBits::Active; }
 
     void set_active()
     {
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= StatusBits::Active;
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
     void set_isochronous()
     {
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= ControlBits::IsochronousSelect;
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
     void set_interrupt_on_complete()
     {
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= ControlBits::InterruptOnComplete;
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
     void set_lowspeed()
     {
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= ControlBits::LowSpeedDevice;
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
     void set_error_retry_counter(u8 num_retries)
     {
         VERIFY(num_retries <= 3);
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= (num_retries << 27);
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
     void set_short_packet_detect()
     {
-        u32 ctrl = m_control_status;
+        u32 ctrl = status();
         ctrl |= ControlBits::ShortPacketDetect;
-        m_control_status = ctrl;
+        set_control_status(ctrl);
     }
 
-    void set_control_status(u32 control_status) { m_control_status = control_status; }
+    void set_control_status(u32 control_status) { m_control_status = AK::convert_between_host_and_little_endian(control_status); }
     void set_in_use(bool in_use) { m_bookkeeping->in_use = in_use; }
     void set_max_len(u16 max_len)
     {
         VERIFY(max_len < 0x500 || max_len == 0x7ff);
-        m_token |= (max_len << 21);
+        m_token = token() | (max_len << 21);
     }
 
     void set_device_endpoint(u8 endpoint)
     {
         VERIFY(endpoint <= 0xf);
-        m_token |= (endpoint << 18);
+        m_token = token() | (endpoint << 18);
     }
 
     void set_device_address(u8 address)
     {
         VERIFY(address <= 0x7f);
-        m_token |= (address << 8);
+        m_token = token() | (address << 8);
     }
 
     void set_data_toggle(bool toggle)
     {
-        m_token |= ((toggle ? (1 << 19) : 0));
+        m_token = token() | ((toggle ? (1 << 19) : 0));
     }
 
-    void set_packet_id(PacketID pid) { m_token |= static_cast<u32>(pid); }
+    void set_packet_id(PacketID pid) { m_token = token() | static_cast<u32>(pid); }
     void link_queue_head(u32 qh_paddr)
     {
         m_link_ptr = qh_paddr;
-        m_link_ptr |= LinkPointerBits::QHSelect;
+        m_link_ptr = link_ptr() | LinkPointerBits::QHSelect;
     }
 
     void print()
     {
-        dbgln("UHCI: TD({:#04x}) @ {:#04x}: link_ptr={:#04x}, status={:#04x}, token={:#04x}, buffer_ptr={:#04x}", this, m_bookkeeping->paddr, m_link_ptr, (u32)m_control_status, m_token, m_buffer_ptr);
+        dbgln("UHCI: TD({:#04x}) @ {:#04x}: link_ptr={:#04x}, status={:#04x}, token={:#04x}, buffer_ptr={:#04x}", this, m_bookkeeping->paddr, link_ptr(), status(), token(), buffer_ptr());
 
         // Now let's print the flags!
         dbgln("UHCI: TD({:#04x}) @ {:#04x}: link_ptr={}{}{}, status={}{}{}{}{}{}{}",
             this,
             m_bookkeeping->paddr,
             (last_in_chain()) ? "T " : "",
-            (m_link_ptr & static_cast<u32>(LinkPointerBits::QHSelect)) ? "QH " : "",
-            (m_link_ptr & static_cast<u32>(LinkPointerBits::DepthFlag)) ? "Vf " : "",
-            (m_control_status & static_cast<u32>(StatusBits::BitStuffError)) ? "BITSTUFF " : "",
-            (m_control_status & static_cast<u32>(StatusBits::CRCTimeoutError)) ? "CRCTIMEOUT " : "",
-            (m_control_status & static_cast<u32>(StatusBits::NAKReceived)) ? "NAK " : "",
-            (m_control_status & static_cast<u32>(StatusBits::BabbleDetected)) ? "BABBLE " : "",
-            (m_control_status & static_cast<u32>(StatusBits::DataBufferError)) ? "DATAERR " : "",
+            (link_ptr() & static_cast<u32>(LinkPointerBits::QHSelect)) ? "QH " : "",
+            (link_ptr() & static_cast<u32>(LinkPointerBits::DepthFlag)) ? "Vf " : "",
+            (status() & static_cast<u32>(StatusBits::BitStuffError)) ? "BITSTUFF " : "",
+            (status() & static_cast<u32>(StatusBits::CRCTimeoutError)) ? "CRCTIMEOUT " : "",
+            (status() & static_cast<u32>(StatusBits::NAKReceived)) ? "NAK " : "",
+            (status() & static_cast<u32>(StatusBits::BabbleDetected)) ? "BABBLE " : "",
+            (status() & static_cast<u32>(StatusBits::DataBufferError)) ? "DATAERR " : "",
             (stalled()) ? "STALL " : "",
             (active()) ? "ACTIVE " : "");
     }
@@ -207,10 +208,10 @@ struct alignas(16) TransferDescriptor final {
         set_next_td(td);
 
         // Let's set some bits for the link ptr
-        m_link_ptr |= static_cast<u32>(LinkPointerBits::DepthFlag);
+        m_link_ptr = link_ptr() | static_cast<u32>(LinkPointerBits::DepthFlag);
     }
 
-    void terminate() { m_link_ptr |= static_cast<u32>(LinkPointerBits::Terminate); }
+    void terminate() { m_link_ptr = link_ptr() | static_cast<u32>(LinkPointerBits::Terminate); }
 
     void set_buffer_address(Ptr32<u8> buffer)
     {
@@ -226,7 +227,7 @@ struct alignas(16) TransferDescriptor final {
 
     void set_status(u32 status)
     {
-        m_control_status = status;
+        set_control_status(status);
     }
 
     void free()
@@ -240,10 +241,10 @@ struct alignas(16) TransferDescriptor final {
     }
 
 private:
-    u32 m_link_ptr;                // Points to another Queue Head or Transfer Descriptor
-    u32 volatile m_control_status; // Control and status field
-    u32 m_token;                   // Contains all information required to fill in a USB Start Token
-    u32 m_buffer_ptr;              // Points to a data buffer for this transaction (i.e what we want to send or recv)
+    LittleEndian<u32> m_link_ptr;   // Points to another Queue Head or Transfer Descriptor
+    u32 volatile m_control_status; // Control and status field, in little-endian byte order
+    LittleEndian<u32> m_token;      // Contains all information required to fill in a USB Start Token
+    LittleEndian<u32> m_buffer_ptr; // Points to a data buffer for this transaction (i.e what we want to send or recv)
 
     // This structure pointer will be ignored by the controller, but we can use it for configuration and bookkeeping
     TransferDescriptorBookkeeping* m_bookkeeping { nullptr };
@@ -285,7 +286,7 @@ struct alignas(16) QueueHead {
     ~QueueHead() = delete; // Prevent anything except placement new on this object
 
     u32 link_ptr() const { return m_link_ptr; }
-    u32 element_link_ptr() const { return m_element_link_ptr; }
+    u32 element_link_ptr() const { return AK::convert_between_host_and_little_endian(m_element_link_ptr); }
 
     u32 paddr() const { return m_bookkeeping->paddr; }
     bool in_use() const { return m_bookkeeping->in_use; }
@@ -300,22 +301,21 @@ struct alignas(16) QueueHead {
     void link_next_queue_head(QueueHead* qh)
     {
         m_link_ptr = qh->paddr();
-        m_link_ptr |= static_cast<u32>(LinkPointerBits::QHSelect);
+        m_link_ptr = link_ptr() | static_cast<u32>(LinkPointerBits::QHSelect);
         m_bookkeeping->next_qh = qh;
         qh->m_bookkeeping->prev_qh = this;
     }
 
     void attach_transfer_queue(QueueHead& qh)
     {
-        m_element_link_ptr = qh.paddr();
-        m_element_link_ptr = m_element_link_ptr | static_cast<u32>(LinkPointerBits::QHSelect);
+        m_element_link_ptr = AK::convert_between_host_and_little_endian(qh.paddr() | static_cast<u32>(LinkPointerBits::QHSelect));
     }
 
     // TODO: Should we pass in an array or vector of TDs instead????
     void attach_transfer_descriptor_chain(TransferDescriptor* td)
     {
         m_bookkeeping->first_td = td;
-        m_element_link_ptr = td->paddr();
+        m_element_link_ptr = AK::convert_between_host_and_little_endian(td->paddr());
     }
 
     TransferDescriptor* get_first_td()
@@ -323,11 +323,11 @@ struct alignas(16) QueueHead {
         return m_bookkeeping->first_td;
     }
 
-    void terminate() { m_link_ptr |= static_cast<u32>(LinkPointerBits::Terminate); }
+    void terminate() { m_link_ptr = link_ptr() | static_cast<u32>(LinkPointerBits::Terminate); }
 
     void terminate_element_link_ptr()
     {
-        m_element_link_ptr = static_cast<u32>(LinkPointerBits::Terminate);
+        m_element_link_ptr = AK::convert_between_host_and_little_endian(static_cast<u32>(LinkPointerBits::Terminate));
     }
 
     void set_transfer(Transfer* transfer)
@@ -342,7 +342,7 @@ struct alignas(16) QueueHead {
 
     void print()
     {
-        dbgln("UHCI: QH({:#04x}) @ {:#04x}: link_ptr={:#04x}, element_link_ptr={:#04x}", this, m_bookkeeping->paddr, m_link_ptr, (FlatPtr)m_element_link_ptr);
+        dbgln("UHCI: QH({:#04x}) @ {:#04x}: link_ptr={:#04x}, element_link_ptr={:#04x}", this, m_bookkeeping->paddr, link_ptr(), element_link_ptr());
     }
 
     void free()
@@ -366,8 +366,8 @@ struct alignas(16) QueueHead {
     }
 
 private:
-    u32 m_link_ptr { 0 };                  // Pointer to the next horizontal object that the controller will execute after this one
-    u32 volatile m_element_link_ptr { 0 }; // Pointer to the first data object in the queue (can be modified by hw)
+    LittleEndian<u32> m_link_ptr { 0 };     // Pointer to the next horizontal object that the controller will execute after this one
+    u32 volatile m_element_link_ptr { 0 }; // Pointer to the first data object in the queue (can be modified by hw), in little-endian byte order
 
     // This structure pointer will be ignored by the controller, but we can use it for configuration and bookkeeping
     QueueHeadBookkeeping* m_bookkeeping { nullptr };

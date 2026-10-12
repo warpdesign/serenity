@@ -132,6 +132,26 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    set(powerpc_block_latency_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_virtio_block_latency.py")
+    set(powerpc_block_latency_arguments
+        --compiler "${CMAKE_C_COMPILER}" --qemu qemu-system-ppc
+        --kernel-loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --libc "$<TARGET_FILE:LibC>" --libsystem "$<TARGET_FILE:LibSystem>"
+    )
+    add_custom_target(PowerPCVirtIOBlockLatencyCheckQuick
+        COMMAND python3 "${powerpc_block_latency_test}" ${powerpc_block_latency_arguments} --cpu 750
+        DEPENDS PowerPCFirmwareLoader Loader.so LibC LibSystem
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCVirtIOBlockLatencyCheck
+        COMMAND python3 "${powerpc_block_latency_test}" ${powerpc_block_latency_arguments} --cpu 750cxe
+        DEPENDS PowerPCVirtIOBlockLatencyCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_signal_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_signal_stack_alignment.py")
     set(powerpc_signal_arguments
         --compiler "${CMAKE_C_COMPILER}" --qemu qemu-system-ppc

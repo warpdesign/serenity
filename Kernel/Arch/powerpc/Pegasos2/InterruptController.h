@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Array.h>
 #include <Kernel/Arch/powerpc/IRQController.h>
 #include <Kernel/Arch/powerpc/Pegasos2/LegacyPIC.h>
 #include <Kernel/Locking/Spinlock.h>
@@ -24,6 +25,7 @@ public:
     virtual void eoi(GenericInterruptHandler const&) override;
     virtual Optional<InterruptNumber> pending_interrupt() const override;
     virtual StringView model() const override { return "Pegasos 2 legacy 8259"sv; }
+    bool configure_pci_interrupts(Array<u8, 4> const& pirq_lines);
 
 private:
     InterruptController(Memory::TypedMapping<volatile u8[]> io_ports, Memory::TypedMapping<volatile u8> intack);

@@ -160,6 +160,35 @@ ErrorOr<void> PCIHostController::assign_unconfigured_resources(PowerPCPCIHostBri
     return {};
 }
 
+size_t PCIHostController::assign_unconfigured_interrupt_lines(PowerPCPCIHostBridgeInfo const& info, Array<u8, 4> const& pirq_lines)
+{
+    // The MV64361 root buses rotate INTA-D by the device slot before sending
+    // them to the VT8231 PIRQ inputs. PCI devices behind a bridge need another
+    // swizzle and are not covered here.
+    size_t assigned = 0;
+    auto bus = info.start_bus;
+    for (u32 device = 0; device < 32; ++device) {
+        if (read16_field(bus, device, 0, 0) == 0xffffu)
+            continue;
+        u32 function_count = (read8_field(bus, device, 0, 0x0e) & 0x80u) ? 8 : 1;
+        for (u32 function = 0; function < function_count; ++function) {
+            u16 vendor = read16_field(bus, device, function, 0);
+            if (vendor == 0 || vendor == 0xffffu)
+                continue;
+            u8 line = read8_field(bus, device, function, 0x3c);
+            u8 pin = read8_field(bus, device, function, 0x3d);
+            if ((line != 0 && line != 0xff) || pin < 1 || pin > 4)
+                continue;
+            u8 routed_line = pirq_lines[(device + pin - 1) % pirq_lines.size()];
+            if (routed_line == 0 || routed_line == 2 || routed_line >= 16)
+                continue;
+            write8_field(bus, device, function, 0x3c, routed_line);
+            ++assigned;
+        }
+    }
+    return assigned;
+}
+
 u8 PCIHostController::read8_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field)
 {
     VERIFY(m_access_lock.is_locked());

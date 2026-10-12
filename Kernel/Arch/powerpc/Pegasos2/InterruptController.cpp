@@ -25,6 +25,20 @@ ErrorOr<NonnullLockRefPtr<InterruptController>> InterruptController::create()
     return TRY(adopt_nonnull_lock_ref_or_enomem(new (nothrow) InterruptController(move(io_ports), move(intack))));
 }
 
+bool InterruptController::configure_pci_interrupts(Array<u8, 4> const& pirq_lines)
+{
+    u16 level_triggered_irqs = 0;
+    for (auto line : pirq_lines) {
+        if (line == 0 || line == 0xff)
+            continue;
+        if (line >= 16)
+            return false;
+        level_triggered_irqs |= static_cast<u16>(1u << line);
+    }
+    SpinlockLocker locker(m_lock);
+    return m_pic.set_level_triggered(level_triggered_irqs);
+}
+
 void InterruptController::enable(GenericInterruptHandler const& handler)
 {
     SpinlockLocker locker(m_lock);

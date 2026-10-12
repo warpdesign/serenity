@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2020, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2020-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Jesse Buhagiar <jooster669@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -81,6 +81,10 @@ ErrorOr<void> UHCIController::initialize()
     dmesgln_pci(*this, "Controller found {} @ {}", PCI::get_hardware_id(device_identifier()), device_identifier().address());
     dmesgln_pci(*this, "I/O base {}", m_registers_io_window);
     dmesgln_pci(*this, "Interrupt line: {}", interrupt_number());
+
+    // This controller uses a polling task and does not register an IRQ
+    // handler. Keep its PCI INTx output disabled while sharing the line.
+    disable_pin_based_interrupts();
 
     TRY(spawn_async_poll_process());
 
@@ -223,7 +227,7 @@ UNMAP_AFTER_INIT void UHCIController::setup_schedule()
     m_bulk_qh_anchor->link_next_queue_head(m_fs_control_qh_anchor);
     m_bulk_qh_anchor->attach_transfer_descriptor_chain(piix4_td_hack);
 
-    u32* framelist = reinterpret_cast<u32*>(m_framelist->vaddr().as_ptr());
+    LittleEndian<u32>* framelist = reinterpret_cast<LittleEndian<u32>*>(m_framelist->vaddr().as_ptr());
     for (int frame_num = 0; frame_num < UHCI_NUMBER_OF_FRAMES; frame_num++) {
         auto& frame_iso_td = m_iso_td_list.at(frame_num % UHCI_NUMBER_OF_ISOCHRONOUS_TDS);
         frame_iso_td->link_queue_head(m_schedule_begin_anchor->paddr());

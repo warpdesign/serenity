@@ -68,6 +68,20 @@ public:
         m_level_triggered = read_port(0x4d0) | (static_cast<u16>(read_port(0x4d1)) << 8);
     }
 
+    bool set_level_triggered(u16 irqs)
+    {
+        // Only these 8259 inputs support level triggering; the others are
+        // reserved for fixed ISA functions such as the timer and RTC.
+        constexpr u16 configurable_irqs = 0xdef8;
+        if (irqs & ~configurable_irqs)
+            return false;
+        auto requested = static_cast<u16>(m_level_triggered | irqs);
+        write_port(0x4d0, requested & 0xff);
+        write_port(0x4d1, requested >> 8);
+        m_level_triggered = read_port(0x4d0) | (static_cast<u16>(read_port(0x4d1)) << 8);
+        return (m_level_triggered & irqs) == irqs;
+    }
+
     bool enable(u8 irq)
     {
         if (irq >= 16 || irq == 2)
