@@ -19,7 +19,10 @@ function(serenity_set_implicit_links target_name)
         target_link_libraries(${target_name} PRIVATE gcc)
         # GCC emits a hidden local call for stack protector failures in each
         # shared object, so the thunk must be linked into every target.
-        target_sources(${target_name} PRIVATE "${SerenityOS_SOURCE_DIR}/Userland/Libraries/LibC/arch/powerpc/stack_chk_fail_local.cpp")
+        get_target_property(target_type ${target_name} TYPE)
+        if (NOT target_type STREQUAL "OBJECT_LIBRARY")
+            target_sources(${target_name} PRIVATE "${SerenityOS_SOURCE_DIR}/Userland/Libraries/LibC/arch/powerpc/stack_chk_fail_local.cpp")
+        endif()
     endif()
 endfunction()
 

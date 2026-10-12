@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, Kirill Nikolaev <cyril7@gmail.com>
+ * Copyright (c) 2023-2026, Kirill Nikolaev <cyril7@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -88,7 +88,7 @@ static constexpr u16 RECEIVEQ = 0;
 static constexpr u16 TRANSMITQ = 1;
 
 static constexpr size_t MAX_RX_FRAME_SIZE = 1514; // Non-jumbo Ethernet frame limit.
-static constexpr size_t RX_BUFFER_SIZE = sizeof(VirtIONetHdr) * MAX_RX_FRAME_SIZE;
+static constexpr size_t RX_BUFFER_SIZE = sizeof(VirtIONetHdr) + MAX_RX_FRAME_SIZE;
 static constexpr u16 MAX_INFLIGHT_PACKETS = 128;
 
 UNMAP_AFTER_INIT ErrorOr<bool> VirtIONetworkAdapter::probe(PCI::DeviceIdentifier const& pci_device_identifier)
@@ -209,7 +209,10 @@ void VirtIONetworkAdapter::handle_queue_update(u16 queue_index)
             popped_chain.for_each([&](PhysicalAddress addr, size_t length) {
                 size_t offset = addr.as_ptr() - m_rx_buffers->start_of_region().as_ptr();
                 auto* message = reinterpret_cast<VirtIONetHdr*>(m_rx_buffers->vaddr().offset(offset).as_ptr());
-                did_receive({ message->frame, length - sizeof(VirtIONetHdr) });
+                if (used >= sizeof(VirtIONetHdr) && used <= length)
+                    did_receive({ message->frame, used - sizeof(VirtIONetHdr) });
+                else
+                    dmesgln("VirtIONetworkAdapter: invalid received frame length {} for buffer of size {}", used, length);
             });
 
             supply_chain_and_notify(RECEIVEQ, popped_chain);

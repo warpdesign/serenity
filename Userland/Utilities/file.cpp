@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Valtteri Koskivuori <vkoskiv@gmail.com>
+ * Copyright (c) 2021-2026, Valtteri Koskivuori <vkoskiv@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -16,7 +16,6 @@
 #include <LibCore/MimeData.h>
 #include <LibCore/System.h>
 #include <LibELF/Image.h>
-#include <LibELF/Validation.h>
 #include <LibGfx/ImageFormats/ImageDecoder.h>
 #include <LibMain/Main.h>
 #include <stdio.h>
@@ -120,27 +119,75 @@ static ErrorOr<Optional<String>> zip_details(StringView description, StringView 
         AK::human_readable_size(statistics.total_uncompressed_bytes())));
 }
 
+static Optional<u64> read_elf_integer(ReadonlyBytes bytes, size_t offset, size_t size, bool little_endian)
+{
+    if (offset > bytes.size() || size > bytes.size() - offset)
+        return {};
+    u64 value = 0;
+    for (size_t index = 0; index < size; ++index) {
+        auto byte = bytes[offset + (little_endian ? size - index - 1 : index)];
+        value = (value << 8) | byte;
+    }
+    return value;
+}
+
 static ErrorOr<Optional<String>> elf_details(StringView description, StringView path)
 {
     auto mapped_file = TRY(Core::MappedFile::map(path));
     auto elf_data = mapped_file->bytes();
-    ELF::Image elf_image(elf_data);
-    if (!elf_image.is_valid())
+    if (elf_data.size() < EI_NIDENT || elf_data[EI_MAG0] != ELFMAG0 || elf_data[EI_MAG1] != ELFMAG1
+        || elf_data[EI_MAG2] != ELFMAG2 || elf_data[EI_MAG3] != ELFMAG3)
         return OptionalNone {};
 
-    Optional<Elf_Phdr> interpreter_path_program_header {};
-    if (!ELF::validate_program_headers(*bit_cast<Elf_Ehdr const*>(elf_data.data()), elf_data.size(), elf_data, interpreter_path_program_header))
+    bool is_64_bit = elf_data[EI_CLASS] == ELFCLASS64;
+    if (!is_64_bit && elf_data[EI_CLASS] != ELFCLASS32)
+        return OptionalNone {};
+    bool little_endian = elf_data[EI_DATA] == ELFDATA2LSB;
+    if (!little_endian && elf_data[EI_DATA] != ELFDATA2MSB)
         return OptionalNone {};
 
-    StringBuilder interpreter_path_builder;
-    if (interpreter_path_program_header.has_value())
-        TRY(interpreter_path_builder.try_append({ elf_data.offset(interpreter_path_program_header.value().p_offset), static_cast<size_t>(interpreter_path_program_header.value().p_filesz) - 1 }));
-    auto interpreter_path = interpreter_path_builder.string_view();
+    size_t header_size = is_64_bit ? 64 : 52;
+    size_t program_header_size = is_64_bit ? 56 : 32;
+    if (elf_data.size() < header_size || elf_data[EI_VERSION] != EV_CURRENT)
+        return OptionalNone {};
 
-    auto& header = *reinterpret_cast<Elf_Ehdr const*>(elf_data.data());
+    auto read = [&](size_t offset, size_t size) { return read_elf_integer(elf_data, offset, size, little_endian); };
+    auto type = read(16, 2);
+    auto machine = read(18, 2);
+    auto version = read(20, 4);
+    auto program_header_offset = read(is_64_bit ? 32 : 28, is_64_bit ? 8 : 4);
+    auto declared_header_size = read(is_64_bit ? 52 : 40, 2);
+    auto declared_program_header_size = read(is_64_bit ? 54 : 42, 2);
+    auto program_header_count = read(is_64_bit ? 56 : 44, 2);
+    if (!type.has_value() || !machine.has_value() || version != static_cast<u64>(EV_CURRENT)
+        || !program_header_offset.has_value() || !declared_header_size.has_value()
+        || !declared_program_header_size.has_value() || !program_header_count.has_value()
+        || *declared_header_size < header_size)
+        return OptionalNone {};
 
-    auto bitness = header.e_ident[EI_CLASS] == ELFCLASS64 ? "64" : "32";
-    auto byteorder = header.e_ident[EI_DATA] == ELFDATA2LSB ? "LSB" : "MSB";
+    StringView interpreter_path;
+    if (*program_header_count != 0) {
+        if (*declared_program_header_size < program_header_size
+            || *program_header_offset > elf_data.size()
+            || *program_header_count > (elf_data.size() - *program_header_offset) / *declared_program_header_size)
+            return OptionalNone {};
+        for (size_t index = 0; index < *program_header_count; ++index) {
+            size_t offset = *program_header_offset + index * *declared_program_header_size;
+            if (read(offset, 4) != static_cast<u64>(PT_INTERP))
+                continue;
+            auto string_offset = read(offset + (is_64_bit ? 8 : 4), is_64_bit ? 8 : 4);
+            auto string_size = read(offset + (is_64_bit ? 32 : 16), is_64_bit ? 8 : 4);
+            if (!string_offset.has_value() || !string_size.has_value() || *string_size == 0
+                || *string_offset > elf_data.size() || *string_size > elf_data.size() - *string_offset
+                || elf_data[*string_offset + *string_size - 1] != '\0')
+                return OptionalNone {};
+            interpreter_path = { reinterpret_cast<char const*>(elf_data.data() + *string_offset), static_cast<size_t>(*string_size - 1) };
+            break;
+        }
+    }
+
+    auto bitness = is_64_bit ? "64" : "32";
+    auto byteorder = little_endian ? "LSB" : "MSB";
 
     bool is_dynamically_linked = !interpreter_path.is_empty();
     auto dynamic_section = TRY(String::formatted(", dynamically linked, interpreter {}", interpreter_path));
@@ -149,10 +196,10 @@ static ErrorOr<Optional<String>> elf_details(StringView description, StringView 
         description,
         bitness,
         byteorder,
-        ELF::Image::object_file_type_to_string(header.e_type).value_or("(?)"sv),
-        ELF::Image::object_machine_type_to_string(header.e_machine).value_or("(?)"sv),
-        header.e_ident[EI_ABIVERSION],
-        ELF::Image::object_abi_type_to_string(header.e_ident[EI_OSABI]).value_or("(?)"sv),
+        ELF::Image::object_file_type_to_string(*type).value_or("(?)"sv),
+        ELF::Image::object_machine_type_to_string(*machine).value_or("(?)"sv),
+        elf_data[EI_ABIVERSION],
+        ELF::Image::object_abi_type_to_string(elf_data[EI_OSABI]).value_or("(?)"sv),
         is_dynamically_linked ? dynamic_section : String {}));
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -378,7 +378,7 @@ static bool print_filesystem_object(ByteString const& path, ByteString const& na
     else
         printf("%c", st.st_mode & S_IXOTH ? 'x' : '-');
 
-    printf(" %3lu", st.st_nlink);
+    printf(" %3" PRIu64, static_cast<uint64_t>(st.st_nlink));
 
     if (!flag_hide_owner) {
         auto username = users.get(st.st_uid);

@@ -10,6 +10,27 @@ namespace Kernel {
 
 StringView PowerPC::processor_model_name(u32 pvr)
 {
+    switch (pvr) {
+    case 0x00082211:
+        return "PowerPC 750CXe v2.1"sv;
+    case 0x00082212:
+        return "PowerPC 750CXe v2.2"sv;
+    case 0x00082213:
+        return "PowerPC 750CXe v2.3"sv;
+    case 0x00082214:
+        return "PowerPC 750CXe v2.4"sv;
+    case 0x00083214:
+        return "PowerPC 750CXe v2.4b"sv;
+    case 0x00082310:
+        return "PowerPC 750CXe v3.0"sv;
+    case 0x00082311:
+        return "PowerPC 750CXe v3.1"sv;
+    case 0x00083311:
+        return "PowerPC 750CXe v3.1b"sv;
+    default:
+        break;
+    }
+
     switch (pvr >> 16) {
     case 0x0008:
         return "PowerPC 750"sv;

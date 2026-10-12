@@ -30,7 +30,8 @@ extern "C" int powerpc_cpu_features_test()
         && g3_features.has_flag(Kernel::CPUFeature::Doze)
         && g4_features.has_flag(Kernel::CPUFeature::AltiVec)
         && !g4_features.has_flag(Kernel::CPUFeature::Doze)
-        && Kernel::PowerPC::processor_model_name(0x00082212u) == "PowerPC 750"sv
+        && Kernel::PowerPC::processor_model_name(0x00082212u) == "PowerPC 750CXe v2.2"sv
+        && Kernel::PowerPC::processor_model_name(0x00083311u) == "PowerPC 750CXe v3.1b"sv
         && Kernel::PowerPC::processor_model_name(0x80030100u) == "PowerPC 7447A"sv
         && Kernel::PowerPC::processor_model_name(0xffff0000u) == "Unknown PowerPC"sv;
 }

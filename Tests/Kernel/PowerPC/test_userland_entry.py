@@ -82,6 +82,7 @@ def main():
             "-append", "root=lun3:0:0",
             "-drive", f"if=none,format=raw,id=virtio_disk,file={disk}",
             "-device", "virtio-blk-pci,drive=virtio_disk",
+            "-device", "virtio-keyboard-pci",
             "-object", "rng-random,id=rng0,filename=/dev/urandom",
             "-device", "virtio-rng-pci,rng=rng0",
             "-display", "none", "-serial", f"file:{serial}",
@@ -112,6 +113,7 @@ def main():
                             observed_user_loop += 1
                             if observed_user_loop == 2:
                                 break
+                            read_monitor(monitor, "sendkey a")
                             time.sleep(0.5)
                             continue
                     if serial.exists() and b"KERNEL PANIC" in serial.read_bytes():

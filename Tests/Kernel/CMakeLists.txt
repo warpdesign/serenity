@@ -218,8 +218,16 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    get_directory_property(powerpc_desktop_utility_names
+        DIRECTORY "${CMAKE_SOURCE_DIR}/Userland/Utilities" DEFINITION REQUIRED_TARGETS)
+    if(NOT powerpc_desktop_utility_names)
+        message(FATAL_ERROR "PowerPC desktop test cannot find required utility components")
+    endif()
+    list(TRANSFORM powerpc_desktop_utility_names PREPEND "Component")
+
     add_custom_target(PowerPCDesktopCheckQuick
-        DEPENDS PowerPCWindowServerCheckQuick Clipboard ConfigServer LaunchServer Taskbar FileManager
+        DEPENDS PowerPCWindowServerCheckQuick Clipboard ConfigServer ImageDecoder LaunchServer LoginServer Taskbar FileManager
+            ComponentAbout ComponentCalendar ComponentClockSettings ComponentRun ComponentSettings Componentls Componentlscpu Componenttimezone Componentuname
             Terminal TerminalSettings Shell FileOperation utmpupdate
     )
     add_custom_target(PowerPCDesktopCheck
@@ -228,7 +236,29 @@ if (SERENITY_ARCH STREQUAL "powerpc")
             --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
             --user-loader "$<TARGET_FILE:Loader.so>"
             --build-dir "${CMAKE_BINARY_DIR}"
-        DEPENDS PowerPCDesktopCheckQuick
+        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names}
+        USES_TERMINAL
+        VERBATIM
+    )
+
+    set(powerpc_desktop_programs_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_desktop_programs.py")
+    set(powerpc_desktop_programs_arguments
+        --compiler "${CMAKE_C_COMPILER}"
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --libc "$<TARGET_FILE:LibC>" --libsystem "$<TARGET_FILE:LibSystem>"
+        --build-dir "${CMAKE_BINARY_DIR}"
+    )
+    add_custom_target(PowerPCDesktopProgramsCheckQuick
+        COMMAND python3 "${powerpc_desktop_programs_test}" ${powerpc_desktop_programs_arguments} --cpu 750 --quick
+        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names}
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCDesktopProgramsCheck
+        COMMAND python3 "${powerpc_desktop_programs_test}" ${powerpc_desktop_programs_arguments} --cpu 750cxe
+        DEPENDS PowerPCDesktopProgramsCheckQuick
         USES_TERMINAL
         VERBATIM
     )

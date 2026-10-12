@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, Tim Ledbetter <timledbetter@gmail.com>
+ * Copyright (c) 2020-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, Tim Ledbetter <timledbetter@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -89,7 +89,7 @@ ErrorOr<int> serenity_main(Main::Arguments args)
         StringBuilder builder;
         String idle_string = "n/a"_string;
         String what = "n/a"_string;
-        StringView tty_display_name = tty;
+        String tty_display_name = TRY(String::from_byte_string(tty));
         auto maybe_stat = Core::System::stat(tty);
         if (!maybe_stat.is_error()) {
             auto stat = maybe_stat.release_value();
@@ -99,10 +99,9 @@ ErrorOr<int> serenity_main(Main::Arguments args)
                 idle_string = TRY(builder.to_string());
             }
 
-            auto tty_pseudo_name = TRY(tty_stat_to_pseudo_name(stat));
-            tty_display_name = tty_pseudo_name;
+            tty_display_name = TRY(tty_stat_to_pseudo_name(stat));
             for (auto& process : process_statistics.processes) {
-                if (tty_pseudo_name == process.tty.view() && process.pid == process.pgid) {
+                if (tty_display_name == process.tty.view() && process.pid == process.pgid) {
                     what = TRY(String::from_byte_string(process.name));
                     break;
                 }

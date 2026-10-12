@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, the SerenityOS developers.
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,7 +13,11 @@
 
 __BEGIN_DECLS
 
-#define __PRI64_PREFIX "l"
+#if __SIZEOF_LONG__ == 8
+#    define __PRI64_PREFIX "l"
+#else
+#    define __PRI64_PREFIX "ll"
+#endif
 #define __PRIPTR_PREFIX "l"
 
 #define PRId8 "d"
