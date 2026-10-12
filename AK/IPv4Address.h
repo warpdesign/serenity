@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -38,12 +38,12 @@ public:
 
     constexpr IPv4Address(u32 a, u32 b, u32 c, u32 d)
     {
-        m_data = (d << 24) | (c << 16) | (b << 8) | a;
+        m_data = (a << 24) | (b << 16) | (c << 8) | d;
     }
 
     constexpr IPv4Address(u8 const data[4])
     {
-        m_data = (u32(data[3]) << 24) | (u32(data[2]) << 16) | (u32(data[1]) << 8) | u32(data[0]);
+        m_data = (u32(data[0]) << 24) | (u32(data[1]) << 16) | (u32(data[2]) << 8) | u32(data[3]);
     }
 
     constexpr IPv4Address(NetworkOrdered<u32> address)
@@ -137,26 +137,27 @@ public:
         return IPv4Address((value & 0xff000000) >> 24, (value & 0xff0000) >> 16, (value & 0xff00) >> 8, (value & 0xff));
     }
 
-    constexpr in_addr_t to_in_addr_t() const { return m_data; }
-    constexpr u32 to_u32() const { return m_data; }
+    constexpr in_addr_t to_in_addr_t() const { return convert_between_host_and_big_endian(static_cast<u32>(m_data)); }
+    constexpr u32 to_u32() const { return __builtin_bswap32(static_cast<u32>(m_data)); }
 
     constexpr bool operator==(IPv4Address const& other) const = default;
     constexpr bool operator!=(IPv4Address const& other) const = default;
 
     constexpr bool is_zero() const
     {
-        return m_data == 0u;
+        return static_cast<u32>(m_data) == 0u;
     }
 
 private:
     constexpr u32 octet(SubnetClass const subnet) const
     {
         constexpr auto bits_per_byte = 8;
-        auto const bits_to_shift = bits_per_byte * int(subnet);
-        return (m_data >> bits_to_shift) & 0x0000'00FF;
+        auto const bits_to_shift = bits_per_byte * (3 - int(subnet));
+        return (static_cast<u32>(m_data) >> bits_to_shift) & 0x0000'00FF;
     }
 
-    u32 m_data {};
+    // The object appears directly in IPv4 packet headers, so its bytes are in network order.
+    NetworkOrdered<u32> m_data {};
 };
 
 static_assert(sizeof(IPv4Address) == 4);

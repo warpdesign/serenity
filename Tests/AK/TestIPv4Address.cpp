@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, the SerenityOS developers.
+ * Copyright (c) 2020-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -33,13 +33,18 @@ TEST_CASE(should_construct_from_c_array)
 TEST_CASE(should_construct_from_u32)
 {
     constexpr auto addr = [] {
-        NetworkOrdered<u32> const a = 0x11'22'33'44;
+        NetworkOrdered<u32> const a = 0x01'02'03'04;
         return IPv4Address(a);
     }();
 
     static_assert(!addr.is_zero());
+    static_assert(addr[0] == 1 && addr[1] == 2 && addr[2] == 3 && addr[3] == 4);
 
     EXPECT(!addr.is_zero());
+    EXPECT_EQ(1, addr[0]);
+    EXPECT_EQ(2, addr[1]);
+    EXPECT_EQ(3, addr[2]);
+    EXPECT_EQ(4, addr[3]);
 }
 
 TEST_CASE(should_get_octets_by_byte_offset)
@@ -126,16 +131,31 @@ TEST_CASE(should_convert_to_in_addr_t)
 {
     constexpr IPv4Address addr(1, 2, 3, 4);
 
-    static_assert(0x04'03'02'01u == addr.to_in_addr_t());
+    static_assert((AK::HostIsLittleEndian ? 0x04'03'02'01u : 0x01'02'03'04u) == addr.to_in_addr_t());
 
-    EXPECT_EQ(0x04'03'02'01u, addr.to_in_addr_t());
+    auto address = addr.to_in_addr_t();
+    auto const* bytes = reinterpret_cast<u8 const*>(&address);
+    EXPECT_EQ(1, bytes[0]);
+    EXPECT_EQ(2, bytes[1]);
+    EXPECT_EQ(3, bytes[2]);
+    EXPECT_EQ(4, bytes[3]);
+}
+
+TEST_CASE(should_store_ipv4_packet_address_in_network_order)
+{
+    constexpr IPv4Address addr(1, 2, 3, 4);
+    auto const* bytes = reinterpret_cast<u8 const*>(&addr);
+    EXPECT_EQ(1, bytes[0]);
+    EXPECT_EQ(2, bytes[1]);
+    EXPECT_EQ(3, bytes[2]);
+    EXPECT_EQ(4, bytes[3]);
 }
 
 TEST_CASE(should_convert_to_u32)
 {
     constexpr IPv4Address addr(1, 2, 3, 4);
 
-    static_assert(0x04'03'02'01u == addr.to_in_addr_t());
+    static_assert(0x04'03'02'01u == addr.to_u32());
 
     EXPECT_EQ(0x04'03'02'01u, addr.to_u32());
 }
