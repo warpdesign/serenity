@@ -1,5 +1,7 @@
 # SerenityOS on PowerPC Pegasos 2: current status
 
+Status checked on 2026-10-12.
+
 The goal is to port SerenityOS to the Pegasos 2, a 32-bit PowerPC G3/G4
 machine. The port currently boots and runs a graphical SerenityOS desktop on
 QEMU's `pegasos2` machine. The work is on the
@@ -17,6 +19,8 @@ probe and is historical.
 - DHCP, DNS resolution, and the Pegasos 2 RTC pass the Browser smoke check.
 - PixelPaint opens with its default palette and canvas, draws a brush stroke,
   and saves a valid 510×356 project through FileSystemAccessServer.
+- ImageViewer, VideoPlayer, and SoundPlayer build for PowerPC and open small
+  image, video, and audio samples in QEMU.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
@@ -78,3 +82,32 @@ qemu-system-ppc -M pegasos2 -cpu 750cxe -m 512 \
 The `browser-ready-20261012/root.ext2` snapshot under the same build tree
 predates the PixelPaint test image and should not be used to verify the
 current PixelPaint build.
+
+## Media application image
+
+`Build/powerpc/PowerPCBoot/media-ready-20261012/root.ext2` is a separate
+local guest image with PixelPaint, ImageViewer, VideoPlayer, SoundPlayer,
+their services and app entries, and three test files on the Desktop:
+
+| File | Format | Size |
+| --- | --- | ---: |
+| `test-picture.png` | 96×64 PNG test pattern | 549 bytes |
+| `test-video.webm` | 96×64 VP8, 5 frames/s, 2 seconds | 6 KiB |
+| `test-sound.wav` | 22,050 Hz mono PCM16, 1 second | 44 KiB |
+
+The image and samples live under `Build/` and are not tracked by Git. Use a
+copy of the image for QEMU, as in the command above, substituting this image
+path. The older PixelPaint QEMU session uses a different disk and cannot see
+these new files until a new guest is booted.
+
+Headless QEMU checks from this image showed ImageViewer rendering the PNG,
+VideoPlayer displaying a decoded WebM frame, and SoundPlayer opening the
+minimal WAV without an error dialog. Screenshots and serial logs are under
+`Build/powerpc/PowerPCBoot/media-ready-20261012/{ImageViewer,VideoPlayer,SoundPlayer}/`.
+
+The kernel currently has no working driver for the Pegasos 2 audio device:
+its boot log reports the PCI audio function as unsupported and initializes no
+audio controller. AudioServer cannot use `/dev/audio/0`. SoundPlayer loads
+the minimal WAV and shows its player window, but this QEMU guest produces no
+audible output. An FFmpeg-generated WAV with a `LIST/INFO` metadata chunk was
+rejected with an offset error; the minimal PCM WAV above loads.
