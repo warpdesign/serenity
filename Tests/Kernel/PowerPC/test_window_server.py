@@ -24,7 +24,7 @@ def find_mke2fs():
     raise SystemExit("mke2fs is required for the PowerPC graphical boot test")
 
 
-def create_root(source, build, user_loader, work):
+def create_root(source, build, user_loader, work, omit_fonts=False):
     root = work / "root"
     for directory in ("bin", "usr/lib", "etc", "res", "proc", "sys", "dev", "tmp", "root", "home", "var"):
         (root / directory).mkdir(parents=True, exist_ok=True)
@@ -45,6 +45,8 @@ def create_root(source, build, user_loader, work):
             shutil.copy2(library, root / "usr/lib" / library.name)
 
     for directory in ("fonts", "themes", "icons", "cursor-themes", "color-schemes", "wallpapers", "keymaps"):
+        if directory == "fonts" and omit_fonts:
+            continue
         shutil.copytree(source / "Base/res" / directory, root / "res" / directory)
     for filename in ("WindowServer.ini", "Keyboard.ini", "DeviceMapper.ini", "passwd", "group"):
         shutil.copy2(source / "Base/etc" / filename, root / "etc" / filename)
@@ -111,7 +113,7 @@ def boot_and_check(args, disk, work):
         "-append", "root=lun3:0:0", "-drive", f"if=none,format=raw,id=virtio_disk,file={disk}",
         "-device", "virtio-blk-pci,drive=virtio_disk", "-object", "rng-random,id=rng0,filename=/dev/urandom",
         "-device", "virtio-rng-pci,rng=rng0", "-display", "none", "-serial", f"file:{serial}",
-        "-monitor", f"unix:{monitor_path},server=on,wait=off", "-no-reboot", "-icount", "shift=auto",
+        "-monitor", f"unix:{monitor_path},server=on,wait=off", "-no-reboot",
     ]
     process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     passed = False
@@ -162,6 +164,7 @@ def main():
     parser.add_argument("--build-dir", type=Path, required=True)
     parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--cpu", default="750cxe")
+    parser.add_argument("--omit-fonts", action="store_true")
     parser.add_argument("--output-dir", type=Path)
     args = parser.parse_args()
 
@@ -173,7 +176,7 @@ def main():
         directory_context = tempfile.TemporaryDirectory(prefix="powerpc-window-server-", dir="/tmp")
     with directory_context as directory:
         work = Path(directory)
-        root = create_root(source, args.build_dir, args.user_loader, work)
+        root = create_root(source, args.build_dir, args.user_loader, work, args.omit_fonts)
         disk = create_disk(find_mke2fs(), root, work)
         boot_and_check(args, disk, work)
 

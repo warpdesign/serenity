@@ -133,7 +133,16 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     )
 
     add_custom_target(PowerPCWindowServerCheckQuick
+        COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_window_server.py"
+            --qemu qemu-system-ppc
+            --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+            --user-loader "$<TARGET_FILE:Loader.so>"
+            --build-dir "${CMAKE_BINARY_DIR}"
+            --cpu 750
+            --omit-fonts
         DEPENDS PowerPCFirmwareLoaderCheckQuick init mount DeviceMapper SystemServer WindowServer keymap Loader.so
+        USES_TERMINAL
+        VERBATIM
     )
     add_custom_target(PowerPCWindowServerCheck
         COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_window_server.py"

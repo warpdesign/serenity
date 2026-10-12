@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -1057,6 +1057,8 @@ bool CompositorScreenData::restore_cursor_back(Screen& screen, Gfx::IntRect& las
 
 void Compositor::update_fonts()
 {
+    if (!showing_screen_numbers())
+        return;
     ScreenNumberOverlay::pick_font();
 }
 
