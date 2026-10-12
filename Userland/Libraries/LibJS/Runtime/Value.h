@@ -1,7 +1,7 @@
 /*
- * Copyright (c) 2020-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2020-2023, Linus Groh <linusg@serenityos.org>
- * Copyright (c) 2022, David Tuin <davidot@serenityos.org>
+ * Copyright (c) 2020-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Linus Groh <linusg@serenityos.org>
+ * Copyright (c) 2022-2026, David Tuin <davidot@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -133,20 +133,20 @@ public:
         Number,
     };
 
-    [[nodiscard]] u16 tag() const { return m_value.tag; }
+    [[nodiscard]] u16 tag() const { return static_cast<u16>(m_value.encoded >> TAG_SHIFT); }
 
-    bool is_empty() const { return m_value.tag == EMPTY_TAG; }
-    bool is_undefined() const { return m_value.tag == UNDEFINED_TAG; }
-    bool is_null() const { return m_value.tag == NULL_TAG; }
+    bool is_empty() const { return tag() == EMPTY_TAG; }
+    bool is_undefined() const { return tag() == UNDEFINED_TAG; }
+    bool is_null() const { return tag() == NULL_TAG; }
     bool is_number() const { return is_double() || is_int32(); }
-    bool is_string() const { return m_value.tag == STRING_TAG; }
-    bool is_object() const { return m_value.tag == OBJECT_TAG; }
-    bool is_boolean() const { return m_value.tag == BOOLEAN_TAG; }
-    bool is_symbol() const { return m_value.tag == SYMBOL_TAG; }
-    bool is_accessor() const { return m_value.tag == ACCESSOR_TAG; }
-    bool is_bigint() const { return m_value.tag == BIGINT_TAG; }
-    bool is_nullish() const { return (m_value.tag & IS_NULLISH_EXTRACT_PATTERN) == IS_NULLISH_PATTERN; }
-    bool is_cell() const { return (m_value.tag & IS_CELL_PATTERN) == IS_CELL_PATTERN; }
+    bool is_string() const { return tag() == STRING_TAG; }
+    bool is_object() const { return tag() == OBJECT_TAG; }
+    bool is_boolean() const { return tag() == BOOLEAN_TAG; }
+    bool is_symbol() const { return tag() == SYMBOL_TAG; }
+    bool is_accessor() const { return tag() == ACCESSOR_TAG; }
+    bool is_bigint() const { return tag() == BIGINT_TAG; }
+    bool is_nullish() const { return (tag() & IS_NULLISH_EXTRACT_PATTERN) == IS_NULLISH_PATTERN; }
+    bool is_cell() const { return (tag() & IS_CELL_PATTERN) == IS_CELL_PATTERN; }
     ThrowCompletionOr<bool> is_array(VM&) const;
     bool is_function() const;
     bool is_constructor() const;
@@ -449,7 +449,7 @@ public:
     // A double is any Value which does not have the full exponent and top mantissa bit set or has
     // exactly only those bits set.
     bool is_double() const { return (m_value.encoded & CANON_NAN_BITS) != CANON_NAN_BITS || (m_value.encoded == CANON_NAN_BITS); }
-    bool is_int32() const { return m_value.tag == INT32_TAG; }
+    bool is_int32() const { return tag() == INT32_TAG; }
 
     i32 as_i32() const
     {
@@ -475,7 +475,7 @@ private:
     {
         if (!ptr) {
             // Make sure all nullptrs are null
-            m_value.tag = NULL_TAG;
+            m_value.encoded = NULL_TAG << TAG_SHIFT;
             return;
         }
 
@@ -507,10 +507,6 @@ private:
 
     union {
         double as_double;
-        struct {
-            u64 payload : 48;
-            u64 tag : 16;
-        };
         u64 encoded;
     } m_value { .encoded = 0 };
 

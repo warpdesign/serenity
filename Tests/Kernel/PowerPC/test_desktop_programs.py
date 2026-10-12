@@ -38,6 +38,15 @@ def prepare_root(args, source, build, user_loader, work, quick):
         str(source / "Tests/Kernel/PowerPC/Fixtures/Atomic64.c"),
         "-lc", "-lsystem", "-lgcc", "-o", str(atomic_probe),
     ], check=True)
+    js_value_probe = root / "bin/JSValueTagProbe"
+    subprocess.run([
+        args.cxx_compiler, "-m32", "-msecure-plt", "-fPIC", "-fno-stack-protector", "-fno-exceptions", "-O2",
+        "-nostartfiles", "-nodefaultlibs", "-Wl,-e,_start", "-Wl,--dynamic-linker=/usr/lib/Loader.so",
+        "-I" + str(source), "-I" + str(source / "Userland/Libraries"),
+        "-L" + str(args.libc.resolve().parent), "-L" + str(args.libsystem.resolve().parent),
+        str(source / "Tests/Kernel/PowerPC/Fixtures/ValueTag.cpp"),
+        "-lc", "-lsystem", "-lgcc", "-o", str(js_value_probe),
+    ], check=True)
     aligned_new_probe = root / "bin/AlignedNewProbe"
     subprocess.run([
         args.cxx_compiler, "-m32", "-msecure-plt", "-fPIC", "-fno-stack-protector", "-fno-exceptions", "-O2",
@@ -85,6 +94,7 @@ def prepare_root(args, source, build, user_loader, work, quick):
         "atomic64": "/bin/Atomic64Probe",
         "aligned_new": "/bin/AlignedNewProbe",
         "sincosf": "/bin/MathSincosProbe",
+        "js_value_tag": "/bin/JSValueTagProbe",
         "ps": "/bin/ps",
     }
     if not quick:
@@ -239,7 +249,7 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     for name in behavior_commands:
         if f"COMMAND_RESULT_{name}_0" not in audit:
             missing.append(name)
-    for text in ("PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB", "u64=18446744073709551615", "atomic64=ok", "aligned-new=ok", "sincosf=ok"):
+    for text in ("PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB", "u64=18446744073709551615", "atomic64=ok", "aligned-new=ok", "sincosf=ok", "js-value-tag=ok"):
         if text not in audit:
             missing.append(text)
     if args.cpu == "750cxe" and "PowerPC 750CXe v3.1b" not in audit:

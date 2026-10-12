@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, David Tuin <davidot@serenityos.org>
+ * Copyright (c) 2022-2026, David Tuin <davidot@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -9,6 +9,24 @@
 #include <LibTest/TestCase.h>
 
 using namespace JS;
+
+TEST_CASE(value_tag_uses_most_significant_bits)
+{
+    auto undefined = js_undefined();
+    EXPECT_EQ(undefined.tag(), UNDEFINED_TAG);
+    EXPECT(undefined.is_undefined());
+
+    Value number { i32 { 42 } };
+    EXPECT_EQ(number.tag(), INT32_TAG);
+    EXPECT(number.is_number());
+    EXPECT_EQ(number.as_i32(), 42);
+
+    auto* pointer = reinterpret_cast<Object*>(FlatPtr { 0x1000 });
+    Value object { pointer };
+    EXPECT_EQ(object.tag(), OBJECT_TAG);
+    EXPECT(object.is_object());
+    EXPECT_EQ(Value::extract_pointer_bits(object.encoded()), FlatPtr { 0x1000 });
+}
 
 template<typename Type>
 static void test_nullptr_input()

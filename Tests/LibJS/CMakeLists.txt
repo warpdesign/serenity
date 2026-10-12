@@ -6,6 +6,15 @@ serenity_test(test-invalid-unicode-js.cpp LibJS LIBS LibJS LibLocale)
 
 serenity_test(test-value-js.cpp LibJS LIBS LibJS LibLocale)
 
+if (NOT CMAKE_CROSSCOMPILING)
+    add_custom_target(LibJSCheckQuick
+        COMMAND "$<TARGET_FILE:test-value-js>"
+        DEPENDS test-value-js
+        USES_TERMINAL
+    )
+    add_custom_target(LibJSCheck DEPENDS LibJSCheckQuick)
+endif()
+
 serenity_component(
     test262-runner
     TARGETS test262-runner

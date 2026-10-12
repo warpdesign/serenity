@@ -773,6 +773,12 @@ if (BUILD_LAGOM)
         # Extra tests from Tests/LibJS
         lagom_test(../../Tests/LibJS/test-invalid-unicode-js.cpp LIBS LibJS)
         lagom_test(../../Tests/LibJS/test-value-js.cpp LIBS LibJS)
+        add_custom_target(LibJSCheckQuick
+            COMMAND "$<TARGET_FILE:test-value-js>"
+            DEPENDS test-value-js
+            USES_TERMINAL
+        )
+        add_custom_target(LibJSCheck DEPENDS LibJSCheckQuick)
 
         # Spreadsheet
         add_executable(test-spreadsheet
