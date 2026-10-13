@@ -49,7 +49,9 @@ private:
     virtual ErrorOr<void> unblank() override;
 
     // Note: VirtIO hardware requires a constant refresh to keep the screen in sync to the user.
-    virtual bool flush_support() const override { return true; }
+    // Big-endian hosts convert every flushed pixel on the CPU, and WindowServer prefers whole-screen
+    // flushes when offered, so only partial flushes are advertised there.
+    virtual bool flush_support() const override { return AK::HostIsLittleEndian; }
     // Note: Paravirtualized hardware doesn't require a defined refresh rate for modesetting.
     virtual bool refresh_rate_support() const override { return false; }
 

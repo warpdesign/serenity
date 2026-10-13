@@ -105,16 +105,13 @@ ErrorOr<void> VirtIOGraphicsAdapter::transfer_framebuffer_data_to_host(Badge<Vir
     if constexpr (!AK::HostIsLittleEndian) {
         auto const framebuffer_width = connector.display_information({}).rect.width;
         auto const* source = reinterpret_cast<u32 const*>(connector.framebuffer_region().vaddr().offset(buffer.framebuffer_offset).as_ptr());
-        auto* destination = reinterpret_cast<u8*>(buffer.host_framebuffer_region->vaddr().as_ptr());
+        // Storing ARGB as a little-endian word yields the B, G, R, X byte order of B8G8R8X8.
+        auto* destination = reinterpret_cast<LittleEndian<u32>*>(buffer.host_framebuffer_region->vaddr().as_ptr());
         for (size_t y = rect.y; y < rect.y + rect.height; ++y) {
-            for (size_t x = rect.x; x < rect.x + rect.width; ++x) {
-                auto pixel_index = y * framebuffer_width + x;
-                u32 argb = source[pixel_index];
-                destination[pixel_index * 4 + 0] = argb & 0xff;
-                destination[pixel_index * 4 + 1] = (argb >> 8) & 0xff;
-                destination[pixel_index * 4 + 2] = (argb >> 16) & 0xff;
-                destination[pixel_index * 4 + 3] = 0xff;
-            }
+            auto const* source_row = source + y * framebuffer_width;
+            auto* destination_row = destination + y * framebuffer_width;
+            for (size_t x = rect.x; x < rect.x + rect.width; ++x)
+                destination_row[x] = source_row[x] | 0xff000000;
         }
     }
     TRY(transfer_framebuffer_data_to_host(connector.scanout_id(), buffer.resource_id, rect));
