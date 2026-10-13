@@ -6,8 +6,12 @@
 
 #include <AK/Platform.h>
 #include <AK/Singleton.h>
-#if ARCH(X86_64)
-#    include <Kernel/Arch/x86_64/ISABus/I8042Controller.h>
+#if ARCH(X86_64) || ARCH(POWERPC32)
+#    include <Kernel/Bus/SerialIO/I8042Controller.h>
+#endif
+#if ARCH(POWERPC32)
+#    include <Kernel/Bus/PCI/API.h>
+#    include <Kernel/Bus/PCI/Access.h>
 #endif
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Devices/Input/Device.h>
@@ -128,9 +132,30 @@ void InputManagement::attach_standalone_input_device(InputDevice& device)
     });
 }
 
-#if ARCH(X86_64)
+#if ARCH(POWERPC32)
+// The Pegasos 2 keyboard controller is part of its VT8231 south bridge.
+UNMAP_AFTER_INIT static bool has_vt8231_south_bridge()
+{
+    if (PCI::Access::is_disabled())
+        return false;
+    bool found = false;
+    MUST(PCI::enumerate([&](PCI::DeviceIdentifier const& identifier) {
+        if (identifier.hardware_id() == PCI::HardwareID { 0x1106, 0x8231 })
+            found = true;
+    }));
+    return found;
+}
+#endif
+
+#if ARCH(X86_64) || ARCH(POWERPC32)
 UNMAP_AFTER_INIT ErrorOr<void> InputManagement::initialize_i8042_controller()
 {
+#    if ARCH(POWERPC32)
+    if (!has_vt8231_south_bridge()) {
+        dbgln("I8042: No VT8231 south bridge found");
+        return {};
+    }
+#    endif
     // FIXME: When we have USB HID support, we should ensure that we disable
     // emulation of the PS/2 controller if it was set by the BIOS.
     // If ACPI indicates we have an i8042 controller and the USB controller was

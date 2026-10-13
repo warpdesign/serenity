@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/Types.h>
+#include <Kernel/Arch/I8042IO.h>
 #include <Kernel/Bus/SerialIO/Controller.h>
 #include <Kernel/Bus/SerialIO/Device.h>
 #include <Kernel/Bus/SerialIO/PS2Definitions.h>
@@ -121,7 +122,10 @@ public:
     bool handle_irq(Badge<I8042ControllerIRQHandler>, InterruptNumber irq_number);
 
 private:
-    I8042Controller();
+    explicit I8042Controller(I8042IO);
+
+    u8 read_port(u8 port) { return m_io.read(port); }
+    void write_port(u8 port, u8 data) { m_io.write(port, data); }
 
     bool irq_process_input_buffer(PortIndex);
 
@@ -147,6 +151,7 @@ private:
     void do_write(u8 port, u8 data);
     u8 do_read(u8 port);
 
+    I8042IO m_io;
     Spinlock<LockRank::None> m_lock {};
     bool m_first_port_available { false };
     bool m_second_port_available { false };

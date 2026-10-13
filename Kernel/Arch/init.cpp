@@ -351,6 +351,8 @@ void init_stage2(void*)
 
 #if ARCH(X86_64)
     VMWareBackdoor::the(); // don't wait until first mouse packet
+#endif
+#if ARCH(X86_64) || ARCH(POWERPC32)
     MUST(InputManagement::the().initialize_i8042_controller());
 #endif
 

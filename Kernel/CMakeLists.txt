@@ -443,7 +443,7 @@ if ("${SERENITY_ARCH}" STREQUAL "x86_64")
         Arch/x86_64/Time/RTC.cpp
         Arch/x86_64/PCSpeaker.cpp
 
-        Arch/x86_64/ISABus/I8042Controller.cpp
+        Bus/SerialIO/I8042Controller.cpp
         Arch/x86_64/ISABus/Input/VMWareMouseDevice.cpp
         Arch/x86_64/ISABus/Serial16550.cpp
         Arch/x86_64/PCI/Controller/PIIX4HostBridge.cpp
@@ -701,6 +701,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Time/TimeManagement.cpp
         Arch/powerpc/Time/Timer.cpp
         Arch/powerpc/VSIDAllocator.cpp
+        Bus/SerialIO/I8042Controller.cpp
     )
 endif()
 

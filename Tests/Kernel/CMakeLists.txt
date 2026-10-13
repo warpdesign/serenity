@@ -261,6 +261,26 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    set(powerpc_ps2_input_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_ps2_input.py")
+    set(powerpc_ps2_input_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --build-dir "${CMAKE_BINARY_DIR}"
+    )
+    add_custom_target(PowerPCPS2InputCheckQuick
+        COMMAND python3 "${powerpc_ps2_input_test}" ${powerpc_ps2_input_arguments} --cpu 750
+        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names}
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCPS2InputCheck
+        COMMAND python3 "${powerpc_ps2_input_test}" ${powerpc_ps2_input_arguments} --cpu 750cxe
+        DEPENDS PowerPCPS2InputCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_pixel_paint_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_pixel_paint.py")
     set(powerpc_pixel_paint_arguments
         --qemu qemu-system-ppc

@@ -37,7 +37,7 @@ public:
     InputManagement();
     static InputManagement& the();
 
-#if ARCH(X86_64)
+#if ARCH(X86_64) || ARCH(POWERPC32)
     ErrorOr<void> initialize_i8042_controller();
 #endif
 

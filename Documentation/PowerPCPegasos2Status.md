@@ -28,6 +28,9 @@ probe and is historical.
   TextEditor, and their required portal services.
 - The Pegasos 2 VIA AC'97 output driver creates `/dev/audio/0`; QEMU captures
   nonzero PCM when SoundPlayer plays a WAV tone.
+- The shared i8042 driver detects the VT8231's PS/2 keyboard controller,
+  reached through the PCI I/O window. Booted without VirtIO input devices,
+  the PS/2 mouse moves the cursor and the PS/2 keyboard types into Terminal.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
@@ -46,6 +49,7 @@ cmake --build Build/powerpc --target PowerPCBrowserCheck
 cmake --build Build/powerpc --target PowerPCPixelPaintCheck
 cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
+cmake --build Build/powerpc --target PowerPCPS2InputCheck
 ```
 
 Each target has a `Quick` variant for a shorter run. The Browser target
