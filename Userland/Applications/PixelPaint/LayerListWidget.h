@@ -8,6 +8,7 @@
 #pragma once
 
 #include "Image.h"
+#include <LibCore/Timer.h>
 #include <LibGUI/AbstractScrollableWidget.h>
 
 namespace PixelPaint {
@@ -77,6 +78,9 @@ private:
     Gfx::IntPoint m_automatic_scroll_delta;
 
     size_t m_selected_gadget_index { 0 };
+
+    Gfx::IntRect m_pending_thumbnail_update_rect;
+    RefPtr<Core::Timer> m_thumbnail_update_timer;
 };
 
 }

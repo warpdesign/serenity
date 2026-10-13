@@ -399,9 +399,20 @@ void LayerListWidget::image_did_modify_layer_bitmap(size_t layer_index)
     auto is_masked = m_image->layer(layer_index).is_masked();
 
     get_gadget_rects(m_gadgets[to_gadget_index(layer_index)], is_masked, adjusted_rect, outer_thumbnail_rect, inner_thumbnail_rect, outer_mask_thumbnail_rect, inner_mask_thumbnail_rect, text_rect);
-    update(outer_thumbnail_rect);
+    m_pending_thumbnail_update_rect = m_pending_thumbnail_update_rect.united(outer_thumbnail_rect);
     if (is_masked)
-        update(outer_mask_thumbnail_rect);
+        m_pending_thumbnail_update_rect = m_pending_thumbnail_update_rect.united(outer_mask_thumbnail_rect);
+
+    // Box-sampling the whole layer into its thumbnail is expensive, so coalesce the repaints
+    // caused by a stream of brush strokes instead of redrawing on every mouse move.
+    if (!m_thumbnail_update_timer) {
+        m_thumbnail_update_timer = Core::Timer::create_single_shot(100, [this] {
+            update(m_pending_thumbnail_update_rect);
+            m_pending_thumbnail_update_rect = {};
+        });
+    }
+    if (!m_thumbnail_update_timer->is_active())
+        m_thumbnail_update_timer->start();
 }
 
 void LayerListWidget::image_did_modify_layer_stack()
