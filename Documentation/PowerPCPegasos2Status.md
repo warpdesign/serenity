@@ -31,6 +31,10 @@ probe and is historical.
 - The shared i8042 driver detects the VT8231's PS/2 keyboard controller,
   reached through the PCI I/O window. Booted without VirtIO input devices,
   the PS/2 mouse moves the cursor and the PS/2 keyboard types into Terminal.
+- The VT8231 IDE controller (`1106:0571`) runs in PCI native mode with polled
+  PIO and LBA48. The desktop boots with its root filesystem as the only disk,
+  attached to the IDE primary master, and writes leave a clean ext2 image.
+  Interrupt-driven completion and bus-master DMA are not implemented yet.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
@@ -50,6 +54,7 @@ cmake --build Build/powerpc --target PowerPCPixelPaintCheck
 cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCPS2InputCheck
+cmake --build Build/powerpc --target PowerPCIDEBootCheck
 ```
 
 Each target has a `Quick` variant for a shorter run. The Browser target

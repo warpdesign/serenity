@@ -120,6 +120,9 @@ set(KERNEL_SOURCES
     Devices/Storage/AHCI/Controller.cpp
     Devices/Storage/AHCI/InterruptHandler.cpp
     Devices/Storage/AHCI/Port.cpp
+    Devices/Storage/IDE/IDEChannel.cpp
+    Devices/Storage/IDE/IDEController.cpp
+    Devices/Storage/IDE/IDEDevice.cpp
     Devices/Storage/NVMe/NVMeController.cpp
     Devices/Storage/NVMe/NVMeNameSpace.cpp
     Devices/Storage/NVMe/NVMeInterruptQueue.cpp

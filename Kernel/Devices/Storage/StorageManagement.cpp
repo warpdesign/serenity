@@ -17,6 +17,7 @@
 #include <Kernel/Devices/BlockDevice.h>
 #include <Kernel/Devices/Device.h>
 #include <Kernel/Devices/Storage/AHCI/Controller.h>
+#include <Kernel/Devices/Storage/IDE/IDEController.h>
 #include <Kernel/Devices/Storage/NVMe/NVMeController.h>
 #include <Kernel/Devices/Storage/SD/PCISDHostController.h>
 #include <Kernel/Devices/Storage/SD/SDHostController.h>
@@ -121,6 +122,12 @@ UNMAP_AFTER_INIT void StorageManagement::enumerate_pci_controllers(bool nvme_pol
                     m_controllers.try_append(ahci_controller_or_error.value()).release_value_but_fixme_should_propagate_errors();
                 else
                     dmesgln("Unable to initialize AHCI controller: {}", ahci_controller_or_error.error());
+            }
+            if (subclass_code == SubclassID::IDEController) {
+                if (auto ide_controller_or_error = IDEController::initialize(device_identifier); !ide_controller_or_error.is_error())
+                    m_controllers.try_append(ide_controller_or_error.release_value()).release_value_but_fixme_should_propagate_errors();
+                else
+                    dmesgln("Unable to initialize IDE controller: {}", ide_controller_or_error.error());
             }
             if (subclass_code == SubclassID::NVMeController) {
                 auto controller = NVMeController::try_initialize(device_identifier, nvme_poll);
