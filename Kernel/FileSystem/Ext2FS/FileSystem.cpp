@@ -107,12 +107,18 @@ ErrorOr<void> Ext2FS::flush_super_block()
 
     auto is_sparse = has_flag(get_features_readonly(), FeaturesReadOnly::SparseSuperblock);
 
-    for (auto group = 1u; group < m_block_group_count; ++group) {
+    // Backup copies start a block, so pad the superblock to a whole block instead of writing whatever follows it in memory.
+    auto backup_block = TRY(ByteBuffer::create_zeroed(logical_block_size()));
+    memcpy(backup_block.data(), &m_super_block, sizeof(ext2_super_block));
+    auto backup_block_buffer = UserOrKernelBuffer::for_kernel_buffer(backup_block.data());
+
+    // Group indices are 1-based and group 1 holds the primary superblock, so backups live in groups 2 and up.
+    for (auto group = 2u; group <= m_block_group_count; ++group) {
         auto first_block_in_group = first_block_of_group(group);
         // Superblock copies with sparse layout are in group number 2 and powers of 3, 5, and 7.
         if (!is_sparse || group == 2 || AK::is_power_of<3>(group - 1) || AK::is_power_of<5>(group - 1) || AK::is_power_of<7>(group - 1)) {
             dbgln_if(EXT2_DEBUG, "Writing superblock backup to block group {} (block {})", group, first_block_in_group);
-            TRY(write_blocks(first_block_in_group, 1, super_block_buffer));
+            TRY(write_blocks(first_block_in_group, 1, backup_block_buffer));
         }
     }
 
@@ -743,7 +749,7 @@ void Ext2FS::flush_block_group_descriptor_table()
 
     auto is_sparse = has_flag(get_features_readonly(), FeaturesReadOnly::SparseSuperblock);
 
-    for (auto group = 1u; group < m_block_group_count; ++group) {
+    for (auto group = 2u; group <= m_block_group_count; ++group) {
         // First block is occupied by the super block
         BlockIndex second_block_in_group = first_block_of_group(group).value() + 1;
         // BGDT copies with sparse layout are in group number 2 and powers of 3, 5, and 7.
