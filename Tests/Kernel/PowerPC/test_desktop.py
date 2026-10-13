@@ -60,6 +60,15 @@ def create_root(source, build, user_loader, work):
         "bin/TerminalSettings": "Userland/Applications/TerminalSettings/TerminalSettings",
         "bin/Shell": "Userland/Shell/Shell",
         "bin/FileOperation": "Userland/Services/FileOperation/FileOperation",
+        "bin/SystemMonitor": "Userland/Applications/SystemMonitor/SystemMonitor",
+        "bin/Escalator": "Userland/Applications/Escalator/Escalator",
+        "bin/NetworkSettings": "Userland/Applications/NetworkSettings/NetworkSettings",
+        "bin/lspci": "Userland/Utilities/lspci",
+        "bin/lsusb": "Userland/Utilities/lsusb",
+        "bin/memstat": "Userland/Utilities/memstat",
+        "bin/lsblk": "Userland/Utilities/lsblk",
+        "bin/lsdev": "Userland/Utilities/lsdev",
+        "bin/lsirq": "Userland/Utilities/lsirq",
         "bin/utmpupdate": "Userland/Utilities/utmpupdate",
         "bin/lscpu": "Userland/Utilities/lscpu",
         "bin/timezone": "Userland/Utilities/timezone",
@@ -75,8 +84,13 @@ def create_root(source, build, user_loader, work):
         shutil.copy2(executable, root / "bin" / name)
 
     (root / "res/apps").mkdir()
-    for name in ("Calendar", "CalendarSettings", "ClockSettings", "FileManager", "Terminal", "TerminalSettings", "TextEditor"):
+    for name in ("Calendar", "CalendarSettings", "ClockSettings", "FileManager", "NetworkSettings", "SystemMonitor", "Terminal", "TerminalSettings", "TextEditor"):
         shutil.copy2(source / "Base/res/apps" / f"{name}.af", root / "res/apps" / f"{name}.af")
+    # lspci and lsusb name devices from the ID databases the build downloads.
+    for filename in ("pci.ids", "usb.ids"):
+        shutil.copy2(build.parent / "caches" / filename, root / "res" / filename)
+        # The download caches are private to the host user; the guest user must be able to read them.
+        (root / "res" / filename).chmod(0o644)
     (root / "res/graphics").mkdir()
     shutil.copy2(source / "Base/res/graphics/brand-banner.png", root / "res/graphics/brand-banner.png")
     for filename in ("LaunchServer.ini", "FileIconProvider.ini", "shadow", "timezone"):
@@ -186,6 +200,7 @@ def create_disk(root, work):
         "/bin/keymap": (3, "0104750"),
         "/bin/shutdown": (3, "0104750"),
         "/bin/reboot": (3, "0104750"),
+        "/bin/Escalator": (1, "0104750"),
     }
     for path, (group, mode) in privileged_programs.items():
         operations.extend((

@@ -140,6 +140,9 @@ private:
 #elif ARCH(RISCV64)
     // RISC-V breakpoint instruction "ebreak"
     static constexpr u32 BREAKPOINT_INSTRUCTION = 0x00100073;
+#elif ARCH(POWERPC32)
+    // PowerPC unconditional trap "tw 31, 0, 0"
+    static constexpr u32 BREAKPOINT_INSTRUCTION = 0x7fe00008;
 #else
 #    error Unknown architecture
 #endif

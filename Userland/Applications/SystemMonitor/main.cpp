@@ -263,7 +263,9 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     if (auto result = Core::System::unveil("/boot/Kernel.debug", "r"); result.is_error() && (result.error().code() != EACCES && result.error().code() != ENOENT))
         return result.release_error();
 
-    TRY(Core::System::unveil("/bin/Profiler", "rx"));
+    // Profiler isn't built on architectures without a disassembler.
+    if (auto result = Core::System::unveil("/bin/Profiler", "rx"); result.is_error() && result.error().code() != ENOENT)
+        return result.release_error();
     // HackStudio doesn't exist in the minimal build configuration.
     if (auto result = Core::System::unveil("/bin/HackStudio", "rx"); result.is_error() && result.error().code() != ENOENT)
         return result.release_error();

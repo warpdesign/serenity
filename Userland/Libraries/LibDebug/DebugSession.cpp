@@ -385,6 +385,7 @@ FlatPtr DebugSession::single_step()
 #elif ARCH(AARCH64)
 #elif ARCH(RISCV64)
     TODO_RISCV64();
+#elif ARCH(POWERPC32)
 #else
 #    error Unknown architecture
 #endif

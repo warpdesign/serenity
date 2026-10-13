@@ -110,6 +110,12 @@ def prepare_root(args, source, build, user_loader, work, quick):
         "js_value_tag": "/bin/JSValueTagProbe",
         "p256_curve": "/bin/P256CurveProbe",
         "ps": "/bin/ps",
+        "lspci": "/bin/lspci",
+        "lsusb": "/bin/lsusb",
+        "memstat": "/bin/memstat",
+        "lsblk": "/bin/lsblk",
+        "lsdev": "/bin/lsdev",
+        "lsirq": "/bin/lsirq",
     }
     if not quick:
         commands.update({
@@ -302,7 +308,7 @@ def boot_and_check(args, disk, work, help_commands, behavior_commands):
     for text in (
         "PROGRAM_CHECK_COMPLETE", "powerpc", "Model: PowerPC 750", "ELF 32-bit MSB", "ELF 64-bit LSB",
         "u64=18446744073709551615", "atomic64=ok", "aligned-new=ok", "sincosf=ok", "sincos=ok",
-        "js-value-tag=ok", "p256=ok",
+        "js-value-tag=ok", "p256=ok", "VT8231 [PCI-to-ISA Bridge]",
     ):
         if text not in audit:
             missing.append(text)
