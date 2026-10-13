@@ -35,6 +35,13 @@ probe and is historical.
   PIO and LBA48. The desktop boots with its root filesystem as the only disk,
   attached to the IDE primary master, and writes leave a clean ext2 image.
   Interrupt-driven completion and bus-master DMA are not implemented yet.
+- An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
+  output routing left by the video BIOS, and programs the pixel PLL from the
+  expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
+  shows the desktop with correct colours. QEMU only implements the Rage 128
+  `CONFIG_CNTL` aperture swap, so the driver uses it for that device and
+  `SURFACE_CNTL` on real cards. The Radeon 9200 SE in the physical Pegasos 2 has
+  not run this driver yet.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
@@ -55,6 +62,7 @@ cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCPS2InputCheck
 cmake --build Build/powerpc --target PowerPCIDEBootCheck
+cmake --build Build/powerpc --target PowerPCRadeonDesktopCheck
 ```
 
 Each target has a `Quick` variant for a shorter run. The Browser target

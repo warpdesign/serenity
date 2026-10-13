@@ -76,6 +76,8 @@ set(KERNEL_SOURCES
     Devices/Generic/ZeroDevice.cpp
     Devices/GPU/3dfx/GraphicsAdapter.cpp
     Devices/GPU/3dfx/VoodooDisplayConnector.cpp
+    Devices/GPU/ATI/RadeonDisplayConnector.cpp
+    Devices/GPU/ATI/RadeonGraphicsAdapter.cpp
     Devices/GPU/Bochs/GraphicsAdapter.cpp
     Devices/GPU/Bochs/QEMUDisplayConnector.cpp
     Devices/GPU/Console/BootFramebufferConsole.cpp

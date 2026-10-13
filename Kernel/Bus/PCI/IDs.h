@@ -18,6 +18,7 @@ enum VendorID {
     VirtualBox = 0x80ee,
     VMWare = 0x15ad,
     Tdfx = 0x121a,
+    ATI = 0x1002,
     RaspberryPi = 0x1de4,
 };
 

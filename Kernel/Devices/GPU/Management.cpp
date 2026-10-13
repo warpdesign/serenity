@@ -8,6 +8,7 @@
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Devices/GPU/3dfx/GraphicsAdapter.h>
+#include <Kernel/Devices/GPU/ATI/RadeonGraphicsAdapter.h>
 #include <Kernel/Devices/GPU/Bochs/GraphicsAdapter.h>
 #include <Kernel/Devices/GPU/Intel/NativeGraphicsAdapter.h>
 #include <Kernel/Devices/GPU/Management.h>
@@ -88,6 +89,10 @@ static constexpr PCIGraphicsDriverInitializer s_initializers[] = {
     { VirtIOGraphicsAdapter::probe, VirtIOGraphicsAdapter::create },
     { VMWareGraphicsAdapter::probe, VMWareGraphicsAdapter::create },
     { VoodooGraphicsAdapter::probe, VoodooGraphicsAdapter::create },
+#if ARCH(POWERPC32)
+    // Only exercised on the Pegasos 2 so far; elsewhere a Radeon keeps its firmware framebuffer.
+    { RadeonGraphicsAdapter::probe, RadeonGraphicsAdapter::create },
+#endif
 };
 
 UNMAP_AFTER_INIT ErrorOr<void> GraphicsManagement::determine_and_initialize_graphics_device(PCI::DeviceIdentifier const& device_identifier)
