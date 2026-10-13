@@ -760,38 +760,42 @@ void UHCIController::get_port_status(Badge<UHCIRootHub>, u8 port, HubStatus& hub
     VERIFY(port < NUMBER_OF_ROOT_PORTS);
 
     u16 status = port == 0 ? read_portsc1() : read_portsc2();
+    u16 port_status = hub_port_status.status;
+    u16 port_change = hub_port_status.change;
 
     if (status & UHCI_PORTSC_CURRENT_CONNECT_STATUS)
-        hub_port_status.status |= PORT_STATUS_CURRENT_CONNECT_STATUS;
+        port_status |= PORT_STATUS_CURRENT_CONNECT_STATUS;
 
     if (status & UHCI_PORTSC_CONNECT_STATUS_CHANGED)
-        hub_port_status.change |= PORT_STATUS_CONNECT_STATUS_CHANGED;
+        port_change |= PORT_STATUS_CONNECT_STATUS_CHANGED;
 
     if (status & UHCI_PORTSC_PORT_ENABLED)
-        hub_port_status.status |= PORT_STATUS_PORT_ENABLED;
+        port_status |= PORT_STATUS_PORT_ENABLED;
 
     if (status & UHCI_PORTSC_PORT_ENABLE_CHANGED)
-        hub_port_status.change |= PORT_STATUS_PORT_ENABLED_CHANGED;
+        port_change |= PORT_STATUS_PORT_ENABLED_CHANGED;
 
     if (status & UHCI_PORTSC_LOW_SPEED_DEVICE)
-        hub_port_status.status |= PORT_STATUS_LOW_SPEED_DEVICE_ATTACHED;
+        port_status |= PORT_STATUS_LOW_SPEED_DEVICE_ATTACHED;
 
     if (status & UHCI_PORTSC_PORT_RESET)
-        hub_port_status.status |= PORT_STATUS_RESET;
+        port_status |= PORT_STATUS_RESET;
 
     if (m_port_reset_change_statuses & (1 << port))
-        hub_port_status.change |= PORT_STATUS_RESET_CHANGED;
+        port_change |= PORT_STATUS_RESET_CHANGED;
 
     if (status & UHCI_PORTSC_SUSPEND)
-        hub_port_status.status |= PORT_STATUS_SUSPEND;
+        port_status |= PORT_STATUS_SUSPEND;
 
     if (m_port_suspend_change_statuses & (1 << port))
-        hub_port_status.change |= PORT_STATUS_SUSPEND_CHANGED;
+        port_change |= PORT_STATUS_SUSPEND_CHANGED;
 
     // UHCI ports are always powered.
-    hub_port_status.status |= PORT_STATUS_PORT_POWER;
+    port_status |= PORT_STATUS_PORT_POWER;
 
-    dbgln_if(UHCI_DEBUG, "UHCI: get_port_status status={:#04x} change={:#04x}", hub_port_status.status, hub_port_status.change);
+    hub_port_status.status = port_status;
+    hub_port_status.change = port_change;
+    dbgln_if(UHCI_DEBUG, "UHCI: get_port_status status={:#04x} change={:#04x}", port_status, port_change);
 }
 
 void UHCIController::reset_port(u8 port)

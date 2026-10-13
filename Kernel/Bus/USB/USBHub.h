@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <AK/Endian.h>
+
 #include <AK/Types.h>
 #include <Kernel/Bus/USB/USBDevice.h>
 
@@ -50,8 +52,8 @@ enum HubFeatureSelector : u8 {
 // USB 2.0 Specification Section 11.24.2.{6,7}
 // This is used to store both the hub status and port status, as they have the same layout.
 struct [[gnu::packed]] HubStatus {
-    u16 status { 0 };
-    u16 change { 0 };
+    LittleEndian<u16> status { 0 };
+    LittleEndian<u16> change { 0 };
 };
 static_assert(AssertSize<HubStatus, 4>());
 

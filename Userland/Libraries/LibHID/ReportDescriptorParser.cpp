@@ -18,22 +18,22 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
     while (!stream.is_eof()) {
         auto item_header = TRY(stream.read_item_header());
 
-        switch (item_header.type) {
+        switch (item_header.type()) {
         case ItemType::Main:
-            switch (static_cast<MainItemTag>(item_header.tag)) {
+            switch (static_cast<MainItemTag>(item_header.tag())) {
             case MainItemTag::Input: {
                 auto input_item_data = TRY(stream.read_item_data<InputItemData>(item_header));
 
                 StringBuilder args;
-                TRY(args.try_append(input_item_data.constant ? "Constant, "sv : "Data, "sv));
-                TRY(args.try_append(input_item_data.variable ? "Variable, "sv : "Array, "sv));
-                TRY(args.try_append(input_item_data.relative ? "Relative, "sv : "Absolute, "sv));
-                TRY(args.try_append(input_item_data.wrap ? "Wrap, "sv : "No Wrap, "sv));
-                TRY(args.try_append(input_item_data.nonlinear ? "Nonlinear, "sv : "Linear, "sv));
-                TRY(args.try_append(input_item_data.no_preferred_state ? "No Preferred, "sv : "Preferred State, "sv));
-                TRY(args.try_append(input_item_data.has_null_state ? "Null state, "sv : "No Null Position, "sv));
+                TRY(args.try_append(input_item_data.constant() ? "Constant, "sv : "Data, "sv));
+                TRY(args.try_append(input_item_data.variable() ? "Variable, "sv : "Array, "sv));
+                TRY(args.try_append(input_item_data.relative() ? "Relative, "sv : "Absolute, "sv));
+                TRY(args.try_append(input_item_data.wrap() ? "Wrap, "sv : "No Wrap, "sv));
+                TRY(args.try_append(input_item_data.nonlinear() ? "Nonlinear, "sv : "Linear, "sv));
+                TRY(args.try_append(input_item_data.no_preferred_state() ? "No Preferred, "sv : "Preferred State, "sv));
+                TRY(args.try_append(input_item_data.has_null_state() ? "Null state, "sv : "No Null Position, "sv));
                 // Bit 7 is reserved
-                TRY(args.try_append(input_item_data.buffered_bytes ? "Buffered Bytes"sv : "Bit Field"sv));
+                TRY(args.try_append(input_item_data.buffered_bytes() ? "Buffered Bytes"sv : "Bit Field"sv));
 
                 outln("{: >{}}Input ({})", "", indent_level * 2, args.string_view());
                 break;
@@ -43,15 +43,15 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
                 auto output_item_data = TRY(stream.read_item_data<OutputItemData>(item_header));
 
                 StringBuilder args;
-                TRY(args.try_append(output_item_data.constant ? "Constant, "sv : "Data, "sv));
-                TRY(args.try_append(output_item_data.variable ? "Variable, "sv : "Array, "sv));
-                TRY(args.try_append(output_item_data.relative ? "Relative, "sv : "Absolute, "sv));
-                TRY(args.try_append(output_item_data.wrap ? "Wrap, "sv : "No Wrap, "sv));
-                TRY(args.try_append(output_item_data.nonlinear ? "Nonlinear, "sv : "Linear, "sv));
-                TRY(args.try_append(output_item_data.no_preferred_state ? "No Preferred, "sv : "Preferred State, "sv));
-                TRY(args.try_append(output_item_data.has_null_state ? "Null state, "sv : "No Null Position, "sv));
-                TRY(args.try_append(output_item_data.volatile_ ? "Volatile, "sv : "Non Volatile, "sv));
-                TRY(args.try_append(output_item_data.buffered_bytes ? "Buffered Bytes"sv : "Bit Field"sv));
+                TRY(args.try_append(output_item_data.constant() ? "Constant, "sv : "Data, "sv));
+                TRY(args.try_append(output_item_data.variable() ? "Variable, "sv : "Array, "sv));
+                TRY(args.try_append(output_item_data.relative() ? "Relative, "sv : "Absolute, "sv));
+                TRY(args.try_append(output_item_data.wrap() ? "Wrap, "sv : "No Wrap, "sv));
+                TRY(args.try_append(output_item_data.nonlinear() ? "Nonlinear, "sv : "Linear, "sv));
+                TRY(args.try_append(output_item_data.no_preferred_state() ? "No Preferred, "sv : "Preferred State, "sv));
+                TRY(args.try_append(output_item_data.has_null_state() ? "Null state, "sv : "No Null Position, "sv));
+                TRY(args.try_append(output_item_data.volatile_() ? "Volatile, "sv : "Non Volatile, "sv));
+                TRY(args.try_append(output_item_data.buffered_bytes() ? "Buffered Bytes"sv : "Bit Field"sv));
 
                 outln("{: >{}}Output ({})", "", indent_level * 2, args.string_view());
                 break;
@@ -61,15 +61,15 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
                 auto feature_item_data = TRY(stream.read_item_data<FeatureItemData>(item_header));
 
                 StringBuilder args;
-                TRY(args.try_append(feature_item_data.constant ? "Constant, "sv : "Data, "sv));
-                TRY(args.try_append(feature_item_data.variable ? "Variable, "sv : "Array, "sv));
-                TRY(args.try_append(feature_item_data.relative ? "Relative, "sv : "Absolute, "sv));
-                TRY(args.try_append(feature_item_data.wrap ? "Wrap, "sv : "No Wrap, "sv));
-                TRY(args.try_append(feature_item_data.nonlinear ? "Nonlinear, "sv : "Linear, "sv));
-                TRY(args.try_append(feature_item_data.no_preferred_state ? "No Preferred, "sv : "Preferred State, "sv));
-                TRY(args.try_append(feature_item_data.has_null_state ? "Null state, "sv : "No Null Position, "sv));
-                TRY(args.try_append(feature_item_data.volatile_ ? "Volatile, "sv : "Non Volatile, "sv));
-                TRY(args.try_append(feature_item_data.buffered_bytes ? "Buffered Bytes"sv : "Bit Field"sv));
+                TRY(args.try_append(feature_item_data.constant() ? "Constant, "sv : "Data, "sv));
+                TRY(args.try_append(feature_item_data.variable() ? "Variable, "sv : "Array, "sv));
+                TRY(args.try_append(feature_item_data.relative() ? "Relative, "sv : "Absolute, "sv));
+                TRY(args.try_append(feature_item_data.wrap() ? "Wrap, "sv : "No Wrap, "sv));
+                TRY(args.try_append(feature_item_data.nonlinear() ? "Nonlinear, "sv : "Linear, "sv));
+                TRY(args.try_append(feature_item_data.no_preferred_state() ? "No Preferred, "sv : "Preferred State, "sv));
+                TRY(args.try_append(feature_item_data.has_null_state() ? "Null state, "sv : "No Null Position, "sv));
+                TRY(args.try_append(feature_item_data.volatile_() ? "Volatile, "sv : "Non Volatile, "sv));
+                TRY(args.try_append(feature_item_data.buffered_bytes() ? "Buffered Bytes"sv : "Bit Field"sv));
 
                 outln("{: >{}}Feature ({})", "", indent_level * 2, args.string_view());
                 break;
@@ -93,7 +93,7 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
             break;
 
         case ItemType::Global:
-            switch (static_cast<GlobalItemTag>(item_header.tag)) {
+            switch (static_cast<GlobalItemTag>(item_header.tag())) {
             case GlobalItemTag::UsagePage:
                 // TODO: Pretty print the usage page name.
                 outln("{: >{}}Usage Page ({:#x})", "", indent_level * 2, TRY(stream.read_item_data_unsigned(item_header)));
@@ -150,7 +150,7 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
             break;
 
         case ItemType::Local:
-            switch (static_cast<LocalItemTag>(item_header.tag)) {
+            switch (static_cast<LocalItemTag>(item_header.tag())) {
             case LocalItemTag::Usage:
                 // TODO: Pretty print the usage name.
                 outln("{: >{}}Usage ({:#x})", "", indent_level * 2, TRY(stream.read_item_data_unsigned(item_header)));
@@ -198,7 +198,7 @@ ErrorOr<void> dump_report_descriptor(ReadonlyBytes report_descriptor)
             break;
 
         case ItemType::Reserved:
-            if (item_header.tag == TAG_LONG_ITEM)
+            if (item_header.tag() == TAG_LONG_ITEM)
                 return Error::from_string_view_or_print_error_and_return_errno("Long items are not supported"sv, EINVAL);
             else
                 return Error::from_string_view_or_print_error_and_return_errno("Unsupported reserved item"sv, EINVAL);
@@ -221,9 +221,9 @@ ErrorOr<ParsedReportDescriptor> ReportDescriptorParser::parse()
 {
     while (!m_stream.is_eof()) {
         auto item_header = TRY(m_stream.read_item_header());
-        switch (item_header.type) {
+        switch (item_header.type()) {
         case ItemType::Main:
-            switch (static_cast<MainItemTag>(item_header.tag)) {
+            switch (static_cast<MainItemTag>(item_header.tag())) {
             case MainItemTag::Input: {
                 auto input_item_data = TRY(m_stream.read_item_data<InputItemData>(item_header));
                 TRY(add_report_fields(FieldType::Input, input_item_data));
@@ -308,7 +308,7 @@ ErrorOr<ParsedReportDescriptor> ReportDescriptorParser::parse()
             break;
 
         case ItemType::Global:
-            switch (static_cast<GlobalItemTag>(item_header.tag)) {
+            switch (static_cast<GlobalItemTag>(item_header.tag())) {
             case GlobalItemTag::UsagePage:
                 m_current_item_state_table.global.usage_page = TRY(m_stream.read_item_data_unsigned(item_header));
                 break;
@@ -383,7 +383,7 @@ ErrorOr<ParsedReportDescriptor> ReportDescriptorParser::parse()
             break;
 
         case ItemType::Local:
-            switch (static_cast<LocalItemTag>(item_header.tag)) {
+            switch (static_cast<LocalItemTag>(item_header.tag())) {
             case LocalItemTag::Usage: {
                 u32 usage = TRY(m_stream.read_item_data_unsigned(item_header));
                 if (item_header.real_size() != 4) {
@@ -454,7 +454,7 @@ ErrorOr<ParsedReportDescriptor> ReportDescriptorParser::parse()
             break;
 
         case ItemType::Reserved:
-            if (item_header.tag == TAG_LONG_ITEM)
+            if (item_header.tag() == TAG_LONG_ITEM)
                 return Error::from_string_view_or_print_error_and_return_errno("Long items are not supported"sv, EINVAL);
             else
                 return Error::from_string_view_or_print_error_and_return_errno("Unsupported reserved item"sv, EINVAL);
@@ -482,7 +482,7 @@ ErrorOr<void> ReportDescriptorParser::add_report_fields(FieldType field_type, It
     if (m_current_item_state_table.local.usage_maximum.has_value() && !m_current_item_state_table.local.usage_minimum.has_value())
         return Error::from_string_view_or_print_error_and_return_errno("Usage Maximum item without a corresponding Usage Minimum item"sv, EINVAL);
 
-    if (item_data.variable && m_current_item_state_table.local.usage_minimum.has_value() && m_current_item_state_table.local.usage_maximum.has_value()) {
+    if (item_data.variable() && m_current_item_state_table.local.usage_minimum.has_value() && m_current_item_state_table.local.usage_maximum.has_value()) {
         if (m_current_item_state_table.local.usage_maximum.value() - m_current_item_state_table.local.usage_minimum.value() + 1 != m_current_item_state_table.global.report_count)
             return Error::from_string_view_or_print_error_and_return_errno("Variable item with Usage Maximum - Usage Minimum + 1 != Report Count"sv, EINVAL); // TODO: How are we supposed to handle this?
     }
@@ -533,7 +533,7 @@ ErrorOr<void> ReportDescriptorParser::add_report_fields(FieldType field_type, It
     for (size_t i = 0; i < m_current_item_state_table.global.report_count.value(); i++) {
         Optional<u32> usage;
 
-        if (item_data.variable) {
+        if (item_data.variable()) {
             if (!m_current_item_state_table.local.usages.is_empty()) {
                 if (i >= m_current_item_state_table.local.usages.size())
                     usage = m_current_item_state_table.local.usages.last();
@@ -548,17 +548,17 @@ ErrorOr<void> ReportDescriptorParser::add_report_fields(FieldType field_type, It
 
         // Assume Input/Output/Feature items without a preceding usage item are used for padding (6.2.2.9 Padding).
         if (usage.has_value() || m_current_item_state_table.local.usage_minimum.has_value()) {
-            if (item_data.variable)
+            if (item_data.variable())
                 VERIFY(usage.has_value());
 
-            auto field_usage_minimum = item_data.variable ? OptionalNone {} : m_current_item_state_table.local.usage_minimum;
-            auto field_usage_maximum = item_data.variable ? OptionalNone {} : m_current_item_state_table.local.usage_maximum;
+            auto field_usage_minimum = item_data.variable() ? OptionalNone {} : m_current_item_state_table.local.usage_minimum;
+            auto field_usage_maximum = item_data.variable() ? OptionalNone {} : m_current_item_state_table.local.usage_maximum;
 
             Field field {
                 .start_bit_index = start_bit_index,
                 .end_bit_index = start_bit_index + field_size_in_bits,
-                .is_array = !item_data.variable,
-                .is_relative = static_cast<bool>(item_data.relative),
+                .is_array = !item_data.variable(),
+                .is_relative = static_cast<bool>(item_data.relative()),
                 .logical_minimum = m_current_item_state_table.global.logical_minimum.value(),
                 .logical_maximum = m_current_item_state_table.global.logical_maximum.value(),
                 .usage = usage,

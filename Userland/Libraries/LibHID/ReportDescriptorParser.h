@@ -31,7 +31,7 @@ public:
     template<typename T>
     ErrorOr<T> read_item_data(ItemHeader item_header)
     {
-        VERIFY(item_header.type != ItemType::Reserved && item_header.tag != TAG_LONG_ITEM);
+        VERIFY(item_header.type() != ItemType::Reserved && item_header.tag() != TAG_LONG_ITEM);
 
         if (item_header.real_size() > sizeof(T))
             return Error::from_errno(EINVAL);
@@ -45,7 +45,7 @@ public:
 
     ErrorOr<u32> read_item_data_unsigned(ItemHeader item_header)
     {
-        VERIFY(item_header.type != ItemType::Reserved && item_header.tag != TAG_LONG_ITEM);
+        VERIFY(item_header.type() != ItemType::Reserved && item_header.tag() != TAG_LONG_ITEM);
 
         switch (item_header.real_size()) {
         case 0:
@@ -63,7 +63,7 @@ public:
 
     ErrorOr<i32> read_item_data_signed(ItemHeader item_header)
     {
-        VERIFY(item_header.type != ItemType::Reserved && item_header.tag != TAG_LONG_ITEM);
+        VERIFY(item_header.type() != ItemType::Reserved && item_header.tag() != TAG_LONG_ITEM);
 
         switch (item_header.real_size()) {
         case 0:

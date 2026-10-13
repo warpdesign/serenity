@@ -282,6 +282,26 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         VERBATIM
     )
 
+    set(powerpc_usb_input_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_usb_input.py")
+    set(powerpc_usb_input_arguments
+        --qemu qemu-system-ppc
+        --loader "${CMAKE_BINARY_DIR}/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf"
+        --user-loader "$<TARGET_FILE:Loader.so>"
+        --build-dir "${CMAKE_BINARY_DIR}"
+    )
+    add_custom_target(PowerPCUSBInputCheckQuick
+        COMMAND python3 "${powerpc_usb_input_test}" ${powerpc_usb_input_arguments} --cpu 750
+        DEPENDS PowerPCDesktopCheckQuick ${powerpc_desktop_utility_names}
+        USES_TERMINAL
+        VERBATIM
+    )
+    add_custom_target(PowerPCUSBInputCheck
+        COMMAND python3 "${powerpc_usb_input_test}" ${powerpc_usb_input_arguments} --cpu 750cxe
+        DEPENDS PowerPCUSBInputCheckQuick
+        USES_TERMINAL
+        VERBATIM
+    )
+
     set(powerpc_ide_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_ide_boot.py")
     set(powerpc_ide_boot_arguments
         --qemu qemu-system-ppc

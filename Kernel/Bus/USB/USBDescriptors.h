@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <AK/Endian.h>
 #include <AK/StdLibExtraDetails.h>
 #include <AK/Traits.h>
 #include <AK/Types.h>
@@ -28,14 +29,14 @@ struct [[gnu::packed]] USBDescriptorCommon {
 //  https://beyondlogic.org/usbnutshell/usb5.shtml#DeviceDescriptors
 struct [[gnu::packed]] USBDeviceDescriptor {
     USBDescriptorCommon descriptor_header;
-    u16 usb_spec_compliance_bcd;
+    LittleEndian<u16> usb_spec_compliance_bcd;
     u8 device_class;
     u8 device_sub_class;
     u8 device_protocol;
     u8 max_packet_size;
-    u16 vendor_id;
-    u16 product_id;
-    u16 device_release_bcd;
+    LittleEndian<u16> vendor_id;
+    LittleEndian<u16> product_id;
+    LittleEndian<u16> device_release_bcd;
     u8 manufacturer_id_descriptor_index;
     u8 product_string_descriptor_index;
     u8 serial_number_descriptor_index;
@@ -52,7 +53,7 @@ static_assert(AssertSize<USBDeviceDescriptor, 18>());
 //
 struct [[gnu::packed]] USBConfigurationDescriptor {
     USBDescriptorCommon descriptor_header;
-    u16 total_length;
+    LittleEndian<u16> total_length;
     u8 number_of_interfaces;
     u8 configuration_value;
     u8 configuration_string_descriptor_index;
@@ -95,7 +96,7 @@ struct [[gnu::packed]] USBEndpointDescriptor {
     USBDescriptorCommon descriptor_header;
     u8 endpoint_address;
     u8 endpoint_attributes_bitmap;
-    u16 max_packet_size;
+    LittleEndian<u16> max_packet_size;
     u8 poll_interval_in_frames;
 };
 static_assert(AssertSize<USBEndpointDescriptor, 7>());
@@ -115,7 +116,7 @@ struct [[gnu::packed]] USBSuperSpeedEndpointCompanionDescriptor {
             u8 super_speed_plus_companion : 1;
         } isoch;
     } endpoint_attributes_bitmap;
-    u16 bytes_per_interval;
+    LittleEndian<u16> bytes_per_interval;
 };
 static_assert(AssertSize<USBSuperSpeedEndpointCompanionDescriptor, 6>());
 
@@ -126,20 +127,13 @@ static_assert(AssertSize<USBSuperSpeedEndpointCompanionDescriptor, 6>());
 struct [[gnu::packed]] USBHubDescriptor {
     USBDescriptorCommon descriptor_header;
     u8 number_of_downstream_ports;
-    union [[gnu::packed]] {
-        u16 raw;
-        struct {
-            u16 logical_power_switching_mode : 2;
-            u16 compound_device : 1;
-            u16 over_current_protection_mode : 2;
-            u16 transaction_translator_think_time : 2;
-            u16 port_indicators_supported : 1;
-            u16 reserved0 : 8;
-        } usb2;
-    } hub_characteristics;
+    // wHubCharacteristics; decoded by shifts because bit-field order follows the CPU's byte order.
+    LittleEndian<u16> hub_characteristics;
     u8 power_on_to_power_good_time;
     u8 hub_controller_current;
     // NOTE: This does not contain DeviceRemovable or PortPwrCtrlMask because a struct cannot have two VLAs in a row.
+
+    u8 transaction_translator_think_time() const { return (hub_characteristics >> 5) & 0b11; }
 };
 static_assert(AssertSize<USBHubDescriptor, 7>());
 

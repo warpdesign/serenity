@@ -7,6 +7,7 @@
 #pragma once
 
 #include <AK/DistinctNumeric.h>
+#include <AK/Endian.h>
 #include <AK/StdLibExtraDetails.h>
 #include <AK/Types.h>
 
@@ -27,12 +28,14 @@ enum class ItemType : u8 {
 
 static constexpr u8 TAG_LONG_ITEM = 0b1111;
 
+// Fields are extracted with shifts: C bit-field order follows the CPU's byte order, the HID wire format doesn't.
 struct [[gnu::packed]] ItemHeader {
-    u8 size : 2;
-    ItemType type : 2;
-    u8 tag : 4;
+    u8 raw;
 
-    u8 real_size() const { return size == 3 ? 4 : size; }
+    u8 size() const { return raw & 0b11; }
+    ItemType type() const { return static_cast<ItemType>((raw >> 2) & 0b11); }
+    u8 tag() const { return raw >> 4; }
+    u8 real_size() const { return size() == 3 ? 4 : size(); }
 };
 static_assert(AssertSize<ItemHeader, 1>());
 
@@ -49,41 +52,46 @@ enum class MainItemTag : u8 {
 // 6.2.2.5 Input, Output, and Feature Items
 
 struct [[gnu::packed]] InputItemData {
-    u8 constant : 1;
-    u8 variable : 1;
-    u8 relative : 1;
-    u8 wrap : 1;
-    u8 nonlinear : 1;
-    u8 no_preferred_state : 1;
-    u8 has_null_state : 1;
-    u8 : 1;
-    u8 buffered_bytes : 1;
+    LittleEndian<u16> raw;
+
+    bool constant() const { return raw & (1 << 0); }
+    bool variable() const { return raw & (1 << 1); }
+    bool relative() const { return raw & (1 << 2); }
+    bool wrap() const { return raw & (1 << 3); }
+    bool nonlinear() const { return raw & (1 << 4); }
+    bool no_preferred_state() const { return raw & (1 << 5); }
+    bool has_null_state() const { return raw & (1 << 6); }
+    bool buffered_bytes() const { return raw & (1 << 8); }
 };
 static_assert(AssertSize<InputItemData, 2>());
 
 struct [[gnu::packed]] OutputItemData {
-    u8 constant : 1;
-    u8 variable : 1;
-    u8 relative : 1;
-    u8 wrap : 1;
-    u8 nonlinear : 1;
-    u8 no_preferred_state : 1;
-    u8 has_null_state : 1;
-    u8 volatile_ : 1;
-    u8 buffered_bytes : 1;
+    LittleEndian<u16> raw;
+
+    bool constant() const { return raw & (1 << 0); }
+    bool variable() const { return raw & (1 << 1); }
+    bool relative() const { return raw & (1 << 2); }
+    bool wrap() const { return raw & (1 << 3); }
+    bool nonlinear() const { return raw & (1 << 4); }
+    bool no_preferred_state() const { return raw & (1 << 5); }
+    bool has_null_state() const { return raw & (1 << 6); }
+    bool volatile_() const { return raw & (1 << 7); }
+    bool buffered_bytes() const { return raw & (1 << 8); }
 };
 static_assert(AssertSize<OutputItemData, 2>());
 
 struct [[gnu::packed]] FeatureItemData {
-    u8 constant : 1;
-    u8 variable : 1;
-    u8 relative : 1;
-    u8 wrap : 1;
-    u8 nonlinear : 1;
-    u8 no_preferred_state : 1;
-    u8 has_null_state : 1;
-    u8 volatile_ : 1;
-    u8 buffered_bytes : 1;
+    LittleEndian<u16> raw;
+
+    bool constant() const { return raw & (1 << 0); }
+    bool variable() const { return raw & (1 << 1); }
+    bool relative() const { return raw & (1 << 2); }
+    bool wrap() const { return raw & (1 << 3); }
+    bool nonlinear() const { return raw & (1 << 4); }
+    bool no_preferred_state() const { return raw & (1 << 5); }
+    bool has_null_state() const { return raw & (1 << 6); }
+    bool volatile_() const { return raw & (1 << 7); }
+    bool buffered_bytes() const { return raw & (1 << 8); }
 };
 static_assert(AssertSize<FeatureItemData, 2>());
 

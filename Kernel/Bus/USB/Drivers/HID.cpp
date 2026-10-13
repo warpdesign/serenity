@@ -203,7 +203,7 @@ ErrorOr<void> HIDDriver::probe(USB::Device& device)
 
             auto hid_interface_or_error = initialize_hid_interface(device, configuration, interface);
             if (hid_interface_or_error.is_error()) {
-                dmesgln("USB HID: Failed to initialize interface {} of device {:04x}:{:04x}", interface.descriptor().interface_id, device.device_descriptor().vendor_id, device.device_descriptor().product_id);
+                dmesgln("USB HID: Failed to initialize interface {} of device {:04x}:{:04x}: {}", interface.descriptor().interface_id, device.device_descriptor().vendor_id, device.device_descriptor().product_id, hid_interface_or_error.error());
                 continue;
             }
 

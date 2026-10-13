@@ -713,7 +713,7 @@ ErrorOr<void> xHCIController::initialize_device(USB::Device& device)
         // * If the device Speed = High-Speed (‘3’):
         if (speed == USB::Device::DeviceSpeed::HighSpeed) {
             // * TT Think Time (TTT) = Value of the TT Think Time sub-field (USB2 spec, Table 11-13) in the Hub Descriptor:wHubCharacteristics field.
-            slot_context->transaction_translator_think_time = hub_descriptor.hub_characteristics.usb2.transaction_translator_think_time;
+            slot_context->transaction_translator_think_time = hub_descriptor.transaction_translator_think_time();
             // * Multi-TT (MTT) = '1' if the Multi-TT Interface of the hub has been enabled with a Set Interface request, otherwise '0'.
             slot_context->multi_transaction_translator = 0;
         }
@@ -1156,36 +1156,37 @@ ErrorOr<HubStatus> xHCIController::get_port_status(Badge<xHCIRootHub>, u8 port)
         return EINVAL;
 
     PortStatusAndControl const port_status { .raw = m_operational_registers.port_registers[port].port_status_and_control.raw };
-    HubStatus hub_status {};
+    u16 status = 0;
+    u16 change = 0;
     if (port_status.current_connect_status)
-        hub_status.status |= PORT_STATUS_CURRENT_CONNECT_STATUS;
+        status |= PORT_STATUS_CURRENT_CONNECT_STATUS;
     if (port_status.connect_status_change)
-        hub_status.change |= PORT_STATUS_CONNECT_STATUS_CHANGED;
+        change |= PORT_STATUS_CONNECT_STATUS_CHANGED;
     if (port_status.port_enabled_disabled)
-        hub_status.status |= PORT_STATUS_PORT_ENABLED;
+        status |= PORT_STATUS_PORT_ENABLED;
     if (port_status.port_enabled_disabled_change)
-        hub_status.change |= PORT_STATUS_PORT_ENABLED_CHANGED;
+        change |= PORT_STATUS_PORT_ENABLED_CHANGED;
     if (port_status.port_reset)
-        hub_status.status |= PORT_STATUS_RESET;
+        status |= PORT_STATUS_RESET;
     if (port_status.port_reset_change)
-        hub_status.change |= PORT_STATUS_RESET_CHANGED;
+        change |= PORT_STATUS_RESET_CHANGED;
     if (port_status.over_current_active)
-        hub_status.status |= PORT_STATUS_OVER_CURRENT;
+        status |= PORT_STATUS_OVER_CURRENT;
     if (port_status.over_current_change)
-        hub_status.change |= HUB_STATUS_OVER_CURRENT_CHANGED;
+        change |= HUB_STATUS_OVER_CURRENT_CHANGED;
     if (port_status.port_power) {
         if (m_port_max_speeds[port] == USB::Device::DeviceSpeed::SuperSpeed)
-            hub_status.status |= SUPERSPEED_PORT_STATUS_POWER;
+            status |= SUPERSPEED_PORT_STATUS_POWER;
         else
-            hub_status.status |= PORT_STATUS_PORT_POWER;
+            status |= PORT_STATUS_PORT_POWER;
     }
     if (m_port_max_speeds[port] != USB::Device::DeviceSpeed::SuperSpeed) {
         if (port_status.port_speed == 2)
-            hub_status.status |= PORT_STATUS_LOW_SPEED_DEVICE_ATTACHED;
+            status |= PORT_STATUS_LOW_SPEED_DEVICE_ATTACHED;
         else if (port_status.port_speed == 3)
-            hub_status.status |= PORT_STATUS_HIGH_SPEED_DEVICE_ATTACHED;
+            status |= PORT_STATUS_HIGH_SPEED_DEVICE_ATTACHED;
     }
-    return hub_status;
+    return HubStatus { status, change };
 }
 
 ErrorOr<void> xHCIController::set_port_feature(Badge<xHCIRootHub>, u8 port, HubFeatureSelector feature)

@@ -6,6 +6,9 @@
 
 #pragma once
 
+#include <AK/Endian.h>
+#include <AK/StdLibExtras.h>
+
 #include <AK/Types.h>
 
 namespace Kernel::USB {
@@ -31,9 +34,10 @@ static constexpr u8 BM_REQUEST_RECIPIENT_OTHER = (3 << 0);
 struct USBRequestData {
     u8 request_type;
     u8 request;
-    u16 value;
-    u16 index;
-    u16 length;
+    LittleEndian<u16> value;
+    LittleEndian<u16> index;
+    LittleEndian<u16> length;
 };
+static_assert(AssertSize<USBRequestData, 8>());
 
 }

@@ -227,7 +227,7 @@ ErrorOr<size_t> xHCIRootHub::handle_control_transfer(Transfer& transfer)
 
         // If index != 0, the actual request is Set Port Feature.
 
-        auto feature_selector = (HubFeatureSelector)request.value;
+        auto feature_selector = static_cast<HubFeatureSelector>(static_cast<u16>(request.value));
         TRY(m_controller->set_port_feature({}, request.index - 1, feature_selector));
         break;
     }
@@ -248,7 +248,7 @@ ErrorOr<size_t> xHCIRootHub::handle_control_transfer(Transfer& transfer)
         }
 
         // If index != 0, the actual request is Clear Port Feature.
-        auto feature_selector = (HubFeatureSelector)request.value;
+        auto feature_selector = static_cast<HubFeatureSelector>(static_cast<u16>(request.value));
         TRY(m_controller->clear_port_feature({}, request.index - 1, feature_selector));
         break;
     }

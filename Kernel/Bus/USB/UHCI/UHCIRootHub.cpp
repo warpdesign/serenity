@@ -214,7 +214,7 @@ ErrorOr<size_t> UHCIRootHub::handle_control_transfer(Transfer& transfer)
         if (port > UHCIController::NUMBER_OF_ROOT_PORTS)
             return EINVAL;
 
-        auto feature_selector = (HubFeatureSelector)request.value;
+        auto feature_selector = static_cast<HubFeatureSelector>(static_cast<u16>(request.value));
         TRY(m_uhci_controller->set_port_feature({}, port - 1, feature_selector));
         break;
     }
@@ -239,7 +239,7 @@ ErrorOr<size_t> UHCIRootHub::handle_control_transfer(Transfer& transfer)
         if (port > UHCIController::NUMBER_OF_ROOT_PORTS)
             return EINVAL;
 
-        auto feature_selector = (HubFeatureSelector)request.value;
+        auto feature_selector = static_cast<HubFeatureSelector>(static_cast<u16>(request.value));
         TRY(m_uhci_controller->clear_port_feature({}, port - 1, feature_selector));
         break;
     }
