@@ -10,6 +10,8 @@
 _start:
     // Open Firmware supplies its client entry in r5.
     mr 30,5
+    // Keep the MSR the firmware entered with, for the loader's diagnostics.
+    mfmsr 29
     lis 6,__bss_start@ha
     addi 6,6,__bss_start@l
     lis 7,__bss_end@ha
@@ -32,7 +34,37 @@ _start:
     li 0,0
     stw 0,0(1)
     mr 3,30
+    mr 4,29
     bl loader_main
 .Lhalt:
     b .Lhalt
 .size _start,.-_start
+
+// int powerpc_loader_call_firmware_real_mode(void* arguments, int (*entry)(void*));
+// The PowerPC Open Firmware binding requires a real-mode firmware to be entered with IR and DR clear.
+// The loader, its stack and everything passed to the firmware are identity-addressed, so execution
+// continues at the same addresses when translation is turned off around the call.
+.globl powerpc_loader_call_firmware_real_mode
+.type powerpc_loader_call_firmware_real_mode,@function
+powerpc_loader_call_firmware_real_mode:
+    stwu 1,-32(1)
+    mflr 0
+    stw 0,36(1)
+    mfmsr 11
+    stw 11,24(1)
+    li 0,0x30
+    andc 11,11,0
+    sync
+    mtmsr 11
+    isync
+    mtctr 4
+    bctrl
+    lwz 11,24(1)
+    sync
+    mtmsr 11
+    isync
+    lwz 0,36(1)
+    mtlr 0
+    addi 1,1,32
+    blr
+.size powerpc_loader_call_firmware_real_mode,.-powerpc_loader_call_firmware_real_mode

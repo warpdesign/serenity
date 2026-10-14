@@ -26,12 +26,23 @@ struct FirmwareCall {
 extern "C" u8 _binary_kernel_elf_gz_start[];
 extern "C" u8 _binary_kernel_elf_gz_end[];
 extern "C" u32 powerpc_loader_high_marker();
+extern "C" int powerpc_loader_call_firmware_real_mode(void* arguments, FirmwareEntry entry);
 extern "C" void powerpc_loader_enable_translation(u32 sdr1);
 extern "C" void powerpc_loader_disable_translation();
 extern "C" u8 __loader_start[];
 extern "C" u8 __stack_end[];
 
 static BootMemoryRange s_memory_ranges[32];
+static FirmwareEntry s_firmware_entry;
+// SmartFirmware declares /options/real-mode? and must then be called with IR and DR clear.
+static bool s_firmware_real_mode;
+
+static int call_firmware(void* arguments)
+{
+    if (s_firmware_real_mode)
+        return powerpc_loader_call_firmware_real_mode(arguments, s_firmware_entry);
+    return s_firmware_entry(arguments);
+}
 static BootMemoryRange s_reserved_ranges[4];
 static char s_command_line[256];
 
@@ -212,9 +223,8 @@ static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
     return count;
 }
 
-static bool should_stop_before_kernel()
+static bool command_line_contains(char const* needle)
 {
-    char const* needle = "serenity-loader-stop-before-kernel";
     for (u32 offset = 0; s_command_line[offset] != '\0'; ++offset) {
         u32 index = 0;
         while (needle[index] != '\0' && s_command_line[offset + index] == needle[index])
@@ -223,6 +233,11 @@ static bool should_stop_before_kernel()
             return true;
     }
     return false;
+}
+
+static bool should_stop_before_kernel()
+{
+    return command_line_contains("serenity-loader-stop-before-kernel");
 }
 
 static void write_console(FirmwareEntry firmware, u32 stdout, char const* message)
@@ -245,9 +260,190 @@ static void write_hex(FirmwareEntry firmware, u32 stdout, u32 value)
     write_console(firmware, stdout, output);
 }
 
-extern "C" void loader_main(FirmwareEntry firmware);
-extern "C" void loader_main(FirmwareEntry firmware)
+static void write_text(FirmwareEntry firmware, u32 stdout, char const* text, u32 length)
 {
+    FirmwareCall call { "write", 3, 1, { stdout, firmware_pointer(text), length, 0 } };
+    firmware(&call);
+}
+
+static void write_word(FirmwareEntry firmware, u32 stdout, u32 value)
+{
+    char output[] = "0x00000000";
+    char const* digits = "0123456789abcdef";
+    for (int index = 9; index >= 2; --index) {
+        output[index] = digits[value & 15u];
+        value >>= 4;
+    }
+    write_text(firmware, stdout, output, 10);
+}
+
+static u32 parent_node(FirmwareEntry firmware, u32 node)
+{
+    FirmwareCall call { "parent", 1, 1, { node, 0 } };
+    if (firmware(&call) != 0)
+        return 0;
+    return call.cells[1];
+}
+
+static bool is_node(u32 node)
+{
+    return node != 0 && node != 0xffffffffu;
+}
+
+// Non-empty NUL-terminated strings are printed as text; anything else as big-endian cells.
+static void write_property_value(FirmwareEntry firmware, u32 stdout, u8 const* value, u32 length, u32 full_length)
+{
+    bool printable = length > 0 && value[length - 1] == 0;
+    for (u32 i = 0; printable && i < length; ++i) {
+        if (value[i] == 0 ? (i == 0 || value[i - 1] == 0) : (value[i] < 0x20 || value[i] > 0x7e))
+            printable = false;
+    }
+    if (printable) {
+        write_console(firmware, stdout, "\"");
+        for (u32 start = 0; start < length;) {
+            u32 end = start;
+            while (end < length && value[end] != 0)
+                ++end;
+            if (start != 0)
+                write_console(firmware, stdout, "\" \"");
+            write_text(firmware, stdout, reinterpret_cast<char const*>(value + start), end - start);
+            start = end + 1;
+        }
+        write_console(firmware, stdout, "\"");
+    } else {
+        write_console(firmware, stdout, "<");
+        for (u32 offset = 0; offset + 4 <= length; offset += 4) {
+            if (offset != 0)
+                write_console(firmware, stdout, " ");
+            write_word(firmware, stdout, (value[offset] << 24) | (value[offset + 1] << 16) | (value[offset + 2] << 8) | value[offset + 3]);
+        }
+        for (u32 offset = length & ~3u; offset < length; ++offset) {
+            char byte[4] = { ' ', "0123456789abcdef"[value[offset] >> 4], "0123456789abcdef"[value[offset] & 15], 0 };
+            write_console(firmware, stdout, byte);
+        }
+        write_console(firmware, stdout, ">");
+    }
+    if (full_length > length) {
+        write_console(firmware, stdout, " (");
+        write_word(firmware, stdout, full_length);
+        write_console(firmware, stdout, " bytes)");
+    }
+}
+
+static void dump_properties(FirmwareEntry firmware, u32 stdout, u32 node)
+{
+    static constexpr u32 max_shown_bytes = 128;
+    char name[32] {};
+    char next[32] {};
+    for (u32 count = 0; count < 256; ++count) {
+        FirmwareCall next_call { "nextprop", 3, 1, { node, firmware_pointer(name), firmware_pointer(next), 0 } };
+        if (firmware(&next_call) != 0 || next_call.cells[3] != 1)
+            return;
+        for (u32 i = 0; i < sizeof(name); ++i)
+            name[i] = next[i];
+        name[sizeof(name) - 1] = 0;
+
+        FirmwareCall length_call { "getproplen", 2, 1, { node, firmware_pointer(name), 0 } };
+        int full_length = firmware(&length_call) == 0 ? static_cast<int>(length_call.cells[2]) : -1;
+        write_console(firmware, stdout, "    ");
+        write_console(firmware, stdout, name);
+        if (full_length < 0) {
+            write_console(firmware, stdout, " (unreadable)\r\n");
+            continue;
+        }
+        u8 value[max_shown_bytes];
+        u32 wanted = static_cast<u32>(full_length) < max_shown_bytes ? static_cast<u32>(full_length) : max_shown_bytes;
+        int length = wanted == 0 ? 0 : get_property(firmware, node, name, value, wanted);
+        write_console(firmware, stdout, " = ");
+        write_property_value(firmware, stdout, value, length > 0 ? static_cast<u32>(length) : 0, static_cast<u32>(full_length));
+        write_console(firmware, stdout, "\r\n");
+    }
+}
+
+// Walks the whole device tree without recursion, printing every node's path and properties.
+static void dump_firmware_tree(FirmwareEntry firmware, u32 stdout)
+{
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware tree begin\r\n");
+    u32 root = find_device(firmware, "/");
+    u32 node = root;
+    for (u32 visited = 0; is_node(node) && visited < 1024; ++visited) {
+        char path[256] {};
+        FirmwareCall path_call { "package-to-path", 3, 1, { node, firmware_pointer(path), sizeof(path) - 1, 0 } };
+        write_console(firmware, stdout, "  ");
+        if (firmware(&path_call) == 0 && static_cast<int>(path_call.cells[3]) > 0)
+            write_console(firmware, stdout, path);
+        else
+            write_word(firmware, stdout, node);
+        write_console(firmware, stdout, "\r\n");
+        dump_properties(firmware, stdout, node);
+
+        u32 next = first_child(firmware, node);
+        while (!is_node(next) && is_node(node) && node != root) {
+            next = next_peer(firmware, node);
+            if (!is_node(next))
+                node = parent_node(firmware, node);
+        }
+        node = next;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware tree end\r\n");
+}
+
+static void write_firmware_identity(FirmwareEntry firmware, u32 stdout, u32 chosen, u32 entry_msr, bool is_qemu)
+{
+    u32 pvr;
+    asm volatile("mfpvr %0" : "=r"(pvr));
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware ");
+    write_console(firmware, stdout, is_qemu ? "QEMU Virtual Open Firmware" : "native Open Firmware");
+    write_console(firmware, stdout, s_firmware_real_mode ? ", real-mode client calls" : ", client calls as entered");
+    write_console(firmware, stdout, ", entry MSR ");
+    write_word(firmware, stdout, entry_msr);
+    write_console(firmware, stdout, ", PVR ");
+    write_word(firmware, stdout, pvr);
+    write_console(firmware, stdout, "\r\n");
+
+    char text[256] {};
+    FirmwareCall console_call { "instance-to-path", 3, 1, { stdout, firmware_pointer(text), sizeof(text) - 1, 0 } };
+    if (firmware(&console_call) == 0 && static_cast<int>(console_call.cells[3]) > 0) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: console ");
+        write_console(firmware, stdout, text);
+        write_console(firmware, stdout, "\r\n");
+    }
+    char const* properties[] = { "bootpath", "bootargs" };
+    for (char const* property : properties) {
+        for (auto& character : text)
+            character = 0;
+        if (get_property(firmware, chosen, property, text, sizeof(text) - 1) > 0) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: ");
+            write_console(firmware, stdout, property);
+            write_console(firmware, stdout, " ");
+            write_console(firmware, stdout, text);
+            write_console(firmware, stdout, "\r\n");
+        }
+    }
+}
+
+// The binding allows "true"/"false" strings or a 4-byte boolean.
+static bool firmware_requires_real_mode(FirmwareEntry firmware)
+{
+    u32 options = find_device(firmware, "/options");
+    if (!is_node(options))
+        return false;
+    u8 value[8] {};
+    int length = get_property(firmware, options, "real-mode?", value, sizeof(value));
+    if (length >= 4 && value[0] == 't' && value[1] == 'r' && value[2] == 'u' && value[3] == 'e')
+        return true;
+    if (length == 4 && value[0] != 'f')
+        return (value[0] | value[1] | value[2] | value[3]) != 0;
+    return false;
+}
+
+extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr);
+extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
+{
+    // These first calls run in the environment the firmware entered with, before the client-call
+    // convention is known; the loader and its stack are identity-addressed there.
+    s_firmware_entry = raw_firmware;
+    FirmwareEntry firmware = call_firmware;
     u32 chosen = find_device(firmware, "/chosen");
     if (chosen == 0 || chosen == 0xffffffffu)
         return;
@@ -256,6 +452,22 @@ extern "C" void loader_main(FirmwareEntry firmware)
         { chosen, firmware_pointer("stdout"), firmware_pointer(&stdout), sizeof(stdout) } };
     if (firmware(&stdout_call) != 0 || stdout_call.cells[4] != sizeof(stdout))
         return;
+    u32 qemu_boot_kernel[2];
+    bool is_qemu = get_property(firmware, chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) > 0;
+    u32 command_line_length = prepare_command_line(firmware, chosen);
+    s_firmware_real_mode = firmware_requires_real_mode(firmware) || command_line_contains("serenity-loader-real-mode-calls");
+
+    write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
+    if (!is_qemu || command_line_contains("serenity-loader-firmware-dump"))
+        dump_firmware_tree(firmware, stdout);
+    if (!is_qemu) {
+        // Claiming memory, taking over the MMU and quiescing the firmware are not implemented for
+        // other firmware yet; return to its prompt instead of risking the machine state.
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: stopping, only QEMU firmware is supported past this point\r\n");
+        FirmwareCall exit_call { "exit", 0, 0, {} };
+        firmware(&exit_call);
+        return;
+    }
 
     u32 compressed_size = _binary_kernel_elf_gz_end - _binary_kernel_elf_gz_start;
     u32 kernel_elf_size = Kernel::PowerPC::Loader::gzip_uncompressed_size(_binary_kernel_elf_gz_start, compressed_size);
@@ -385,7 +597,7 @@ extern "C" void loader_main(FirmwareEntry firmware)
     boot_info.physical_to_virtual_offset = static_cast<u32>(runtime_base) - physical_base;
     boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
     boot_info.kernel_load_base = static_cast<u32>(runtime_base);
-    boot_info.arch_specific.open_firmware_entry = firmware_pointer(reinterpret_cast<void const*>(firmware));
+    boot_info.arch_specific.open_firmware_entry = firmware_pointer(reinterpret_cast<void const*>(raw_firmware));
     boot_info.arch_specific.hpt_virtual_address = mappings.table_virtual;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { mappings.table_physical };
     boot_info.arch_specific.hpt_group_count = mappings.group_count;
@@ -397,7 +609,7 @@ extern "C" void loader_main(FirmwareEntry firmware)
         return;
     }
     boot_info.arch_specific.pci_host_bridge_count = POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT;
-    boot_info.cmdline = AK::StringView { s_command_line, prepare_command_line(firmware, chosen) };
+    boot_info.cmdline = AK::StringView { s_command_line, command_line_length };
 
     PowerPCHashPageTable validated_table;
     if (!Kernel::PowerPC::boot_hpt_from_boot_info(boot_info, validated_table)

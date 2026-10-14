@@ -141,7 +141,13 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   the kernel build with KUBSAN disabled. RDB partition tables in LibPartition, the SD card image
   tool, and a QEMU check booting the card layout; fixed EBR detection hiding other table formats.
 
-Next, in the plan's order: a SmartFirmware probe loader (real-mode client calls, banner and firmware
-tree dump over serial, then stop) to boot from the card on the physical machine.
+- 2026-10-14: SmartFirmware probe loader (real-mode client-call trampoline, banner, full device tree
+  dump, `exit` on non-QEMU firmware). QEMU test: `-append "serenity-loader-firmware-dump
+  serenity-loader-real-mode-calls serenity-loader-stop-before-kernel" -d trace:vof_write -D vof.log`.
+  The probe card is `Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
+
+Next: dd the probe card to the SD card, `boot ide:0 serenity.elf` at the SmartFirmware prompt, and
+capture the serial log. Use the dump to write phase 2 (claims from `/memory`, `BootInfo` capture,
+native UART, `quiesce`). Rewrite only the loader on a card with `make-pegasos-card.py boot-only`.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.

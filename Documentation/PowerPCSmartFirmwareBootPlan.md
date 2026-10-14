@@ -115,6 +115,19 @@ point; add more as needed.
 
 Checkpoint: banner, firmware identity, CPU (PVR) and memory ranges printed.
 
+Status (2026-10-14): implemented, verified in QEMU only. The loader reads
+`/options` `real-mode?` and, when it is true, makes every later client call
+through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
+and DR around the call. It prints the firmware kind, the call mode, the entry
+MSR, the PVR, the console path, `bootpath` and `bootargs`, then dumps the whole
+device tree (every node and property, values cut at 128 bytes). On firmware
+without `/chosen` `qemu,boot-kernel` it then calls `exit` and returns to the
+SmartFirmware prompt, before any `claim` or MMU change. In QEMU, the
+`serenity-loader-firmware-dump` and `serenity-loader-real-mode-calls` boot
+arguments exercise the dump and the trampoline; the boot then continues
+normally. The card image with this loader is
+`Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
+
 ### 2. Capture the firmware contract, then quiesce
 
 - Choose memory from `/memory` `available` and `claim` exact addresses; never
