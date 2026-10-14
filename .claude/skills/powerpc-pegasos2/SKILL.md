@@ -242,6 +242,18 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   Ethernet `1106:3065` is unsupported and AC'97 reported 1040 Hz. No QEMU
   boot was run. The new entropy and mouse changes await physical validation.
 
+- 2026-10-15: Investigated the VIA AC'97 1040 Hz log. `AudioChannel::create`
+  requested 44,100 Hz; the physical codec readback was 1040 Hz. Linux
+  `via82xx` and Haiku `auvia` set bit 25 (primary codec valid) on AC'97
+  commands, while Serenity omitted it. The compiled VIA driver now sets that
+  bit for read/write, waits for read completion, and rejects invalid DAC
+  rates after three attempts. The host VIA codec-command quick/normal
+  contract targets pass; native quick/normal audio log targets reject 1040 Hz.
+  The user is still copying/testing the current SD image: **do not
+  rewrite `pegasos2-sdcard.img` or its checksum yet**. The loader build
+  contains the audio change, but the card image does not. No QEMU run was
+  made; physical audio behavior is pending.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 to the SD card (SHA-256 `c0637453aef68892a5ff72355d67c25d48df9993fd4791de2b89c22034bef693`),
 boot with `boot ide:0 serenity.elf insecure_entropy`,

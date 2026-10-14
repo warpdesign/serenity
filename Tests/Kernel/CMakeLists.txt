@@ -106,6 +106,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCRtasPCIContractCheckQuick
         VERBATIM
     )
+    set(powerpc_via_codec_contract_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestVIAAC97CodecContract.cpp")
+    set(powerpc_via_codec_contract_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-VIA-AC97-codec-contract")
+    add_custom_target(PowerPCVIAAC97CodecContractCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_via_codec_contract_source}" -o "${powerpc_via_codec_contract_executable}"
+        COMMAND "${powerpc_via_codec_contract_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCVIAAC97CodecContractCheck
+        COMMAND "${powerpc_via_codec_contract_executable}" extended
+        DEPENDS PowerPCVIAAC97CodecContractCheckQuick
+        VERBATIM
+    )
     set(powerpc_native_pci_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_pci_boot.py")
     add_custom_target(PowerPCNativePCIHardwareCheckQuick
         COMMAND python3 "${powerpc_native_pci_boot_test}"
@@ -150,6 +163,15 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     add_custom_target(PowerPCNativePS2MouseCheck
         COMMAND python3 "${powerpc_native_pci_boot_test}" --require-ps2-mouse --normal
         DEPENDS PowerPCNativePS2MouseCheckQuick
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeVIAAudioCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-via-audio
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeVIAAudioCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-via-audio --normal
+        DEPENDS PowerPCNativeVIAAudioCheckQuick
         VERBATIM
     )
 

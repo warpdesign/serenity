@@ -11,7 +11,7 @@ from pathlib import Path
 
 def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         require_uhci_progress: bool = False, require_entropy_progress: bool = False,
-        require_ps2_mouse: bool = False) -> None:
+        require_ps2_mouse: bool = False, require_via_audio: bool = False) -> None:
     if require_rtas and "PCI: Pegasos 2 using RTAS PCI configuration" not in log:
         raise AssertionError("RTAS PCI configuration did not succeed")
     if ("PCI: Pegasos 2 using RTAS PCI configuration" not in log
@@ -40,6 +40,10 @@ def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
             raise AssertionError("i8042 did not continue past the absent keyboard")
         if "PS2MouseDevice: Mouse wheel enabled!" not in log and "PS2MouseDevice: No mouse wheel detected!" not in log:
             raise AssertionError("the PS/2 mouse did not finish initialization")
+    if require_via_audio:
+        audio_rate = re.search(r"VIA AC'97:.*PCM output ready at (\d+) Hz", log)
+        if audio_rate is None or not 42000 <= int(audio_rate.group(1)) <= 46000:
+            raise AssertionError("VIA AC'97 did not report a usable 44.1 kHz output rate")
     if require_userland and "Running first user process:" not in log:
         raise AssertionError("the kernel did not start userland")
 
@@ -86,6 +90,15 @@ Running first user process: /sbin/init
         "I8042: Continuing with second port after keyboard probe failure\n"
         "PS2MouseDevice: No mouse wheel detected!\nRunning first user process:")
     check_boot(mouse_boot, True, require_ps2_mouse=True)
+    audio_boot = recovered.replace("Running first user process:",
+        "VIA AC'97: PCI [0000:00:0c:05]: PCM output ready at 44100 Hz\nRunning first user process:")
+    check_boot(audio_boot, True, require_via_audio=True)
+    try:
+        check_boot(audio_boot.replace("44100 Hz", "1040 Hz"), True, require_via_audio=True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("the observed 1040 Hz readback must fail")
     try:
         check_boot(entropy_ready_boot, True, require_ps2_mouse=True)
     except AssertionError:
@@ -119,6 +132,7 @@ def main() -> None:
     parser.add_argument("--require-uhci-progress", action="store_true", help="require UHCI to finish or time out")
     parser.add_argument("--require-entropy-progress", action="store_true", help="require opt-in PowerPC entropy readiness")
     parser.add_argument("--require-ps2-mouse", action="store_true", help="require PS/2 mouse startup after a missing keyboard")
+    parser.add_argument("--require-via-audio", action="store_true", help="require a usable VIA AC'97 output rate")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -128,7 +142,8 @@ def main() -> None:
     if not path:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
     check_boot(Path(path).read_text(errors="replace"), args.normal, args.require_rtas,
-        args.require_uhci_progress, args.require_entropy_progress, args.require_ps2_mouse)
+        args.require_uhci_progress, args.require_entropy_progress, args.require_ps2_mouse,
+        args.require_via_audio)
 
 
 if __name__ == "__main__":

@@ -109,6 +109,11 @@ check the explicitly enabled bring-up entropy pool and, for the normal target,
 WindowServer startup. `PowerPCNativePS2MouseCheckQuick` and
 `PowerPCNativePS2MouseCheck` check that a missing PS/2 keyboard does not
 prevent the attached PS/2 mouse from initializing.
+`PowerPCNativeVIAAudioCheckQuick` and `PowerPCNativeVIAAudioCheck` reject the
+observed 1040 Hz codec readback and require a rate near 44.1 kHz.
+`PowerPCVIAAC97CodecContractCheckQuick` and
+`PowerPCVIAAC97CodecContractCheck` verify the VIA command words on the host;
+both pass without starting QEMU.
 
 ## SmartFirmware probe card
 
@@ -221,6 +226,17 @@ mode and advertises that as the preferred timing in its generic EDID; native
 1920×1080 selection remains to implement after the desktop starts. The
 physical VIA Ethernet `1106:3065` has no driver yet, and AC'97 reported
 1040 Hz output on this board; both remain open.
+
+`AudioChannel::create()` requests 44,100 Hz. The physical VIA driver wrote
+that rate but read back 1040 Hz. Linux `via82xx` and Haiku `auvia` both set
+the primary-codec-valid bit in AC'97 read and write commands; Serenity had
+omitted it. The compiled driver now sets the bit, allows a read to settle,
+and rejects an invalid DAC-rate readback after three attempts. The native
+audio log regression rejects the observed 1040 Hz. The user is still
+copying/testing the current SD image, so that image and checksum have not
+been changed. The rebuilt loader contains the audio change, but its FFS
+copy does not yet. The host VIA codec-command contract check passes. Physical
+audio behavior remains unverified; no QEMU run was made.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

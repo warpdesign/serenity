@@ -9,6 +9,7 @@
 #include <Kernel/Arch/Delay.h>
 #include <Kernel/Arch/MemoryFences.h>
 #include <Kernel/Arch/powerpc/Pegasos2/VIAAC97.h>
+#include <Kernel/Arch/powerpc/Pegasos2/VIAAC97Codec.h>
 #include <Kernel/Bus/PCI/API.h>
 #include <Kernel/Bus/PCI/Access.h>
 #include <Kernel/Devices/Audio/Management.h>
@@ -43,8 +44,6 @@ static constexpr u8 playback_terminate = 1 << 6;
 static constexpr u8 playback_stereo_16bit = (1 << 5) | (1 << 4);
 
 static constexpr u32 descriptor_end_of_list = 1u << 31;
-static constexpr u32 codec_read_command = 1u << 23;
-static constexpr u32 codec_data_valid = 1u << 25;
 static constexpr u32 codec_busy = 1u << 24;
 
 UNMAP_AFTER_INIT ErrorOr<bool> VIAAC97::probe(PCI::DeviceIdentifier const& identifier)
@@ -83,11 +82,16 @@ ErrorOr<void> VIAAC97::wait_for_codec()
 ErrorOr<u16> VIAAC97::read_codec(u8 register_offset)
 {
     TRY(wait_for_codec());
-    m_io_window->write32(codec_command_register, codec_read_command | (static_cast<u32>(register_offset) << 16));
+    m_io_window->write32(codec_command_register, VIAAC97Codec::read_command(register_offset));
+    microseconds_delay(20);
     for (unsigned attempt = 0; attempt < 10000; ++attempt) {
         auto result = m_io_window->read32(codec_command_register);
-        if (!(result & codec_busy) && (result & codec_data_valid))
-            return static_cast<u16>(result);
+        if (!(result & codec_busy) && (result & VIAAC97Codec::primary_valid)) {
+            microseconds_delay(25);
+            auto confirmed = m_io_window->read32(codec_command_register);
+            if (!(confirmed & codec_busy) && (confirmed & VIAAC97Codec::primary_valid))
+                return static_cast<u16>(confirmed);
+        }
         microseconds_delay(1);
     }
     return ETIMEDOUT;
@@ -96,7 +100,7 @@ ErrorOr<u16> VIAAC97::read_codec(u8 register_offset)
 ErrorOr<void> VIAAC97::write_codec(u8 register_offset, u16 value)
 {
     TRY(wait_for_codec());
-    m_io_window->write32(codec_command_register, (static_cast<u32>(register_offset) << 16) | value);
+    m_io_window->write32(codec_command_register, VIAAC97Codec::write_command(register_offset, value));
     return wait_for_codec();
 }
 
@@ -162,9 +166,19 @@ ErrorOr<void> VIAAC97::set_pcm_output_sample_rate(size_t channel_index, u32 rate
     if (rate < 8000 || rate > 48000)
         return ENOTSUP;
     MutexLocker locker(m_write_lock);
-    TRY(write_codec(codec_dac_rate_register, static_cast<u16>(rate)));
-    m_sample_rate = TRY(read_codec(codec_dac_rate_register));
-    return {};
+    u16 observed_rate = 0;
+    for (unsigned attempt = 0; attempt < 3; ++attempt) {
+        TRY(write_codec(codec_dac_rate_register, static_cast<u16>(rate)));
+        microseconds_delay(25);
+        observed_rate = TRY(read_codec(codec_dac_rate_register));
+        if (observed_rate >= 8000 && observed_rate <= 48000) {
+            m_sample_rate = observed_rate;
+            return {};
+        }
+    }
+    dmesgln_pci(*this, "Codec rejected {} Hz: readback {} Hz, command {:#010x}",
+        rate, observed_rate, m_io_window->read32(codec_command_register));
+    return EIO;
 }
 
 ErrorOr<u32> VIAAC97::get_pcm_output_sample_rate(size_t channel_index)

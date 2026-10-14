@@ -96,6 +96,13 @@ The Radeon driver currently uses a fixed safe 1024×768 mode and synthetic
 EDID with 1024×768 preferred; the monitor's native 1920×1080 mode is still
 an open display task.
 
+The physical VIA AC'97 driver reported 1040 Hz after the generic audio
+channel requested 44,100 Hz. Linux `via82xx` and Haiku `auvia` mark
+primary-codec commands valid; Serenity omitted that bit. The compiled fix
+sets it for reads and writes, waits for a settled read, and rejects an
+invalid DAC-rate readback. The current SD image remains unchanged while the
+user copies/tests it.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB
