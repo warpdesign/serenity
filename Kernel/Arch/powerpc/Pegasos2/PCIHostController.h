@@ -8,6 +8,7 @@
 
 #include <AK/Array.h>
 #include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
+#include <Kernel/Arch/powerpc/Pegasos2/RTAS.h>
 #include <Kernel/Bus/PCI/Controller/HostController.h>
 #include <Kernel/Memory/TypedMapping.h>
 
@@ -15,12 +16,15 @@ namespace Kernel::PowerPC::Pegasos2 {
 
 class PCIHostController final : public PCI::HostController {
 public:
-    static ErrorOr<NonnullOwnPtr<PCIHostController>> create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const&);
+    static ErrorOr<NonnullOwnPtr<PCIHostController>> create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const&, Optional<PowerPCRtasInfo> const&);
     ErrorOr<void> assign_unconfigured_resources(PowerPCPCIHostBridgeInfo const&);
     size_t assign_unconfigured_interrupt_lines(PowerPCPCIHostBridgeInfo const&, Array<u8, 4> const& pirq_lines);
 
 private:
-    PCIHostController(PCI::Domain const&, Memory::TypedMapping<volatile u32[]>, u16 address_offset);
+    PCIHostController(PCI::Domain const&, Memory::TypedMapping<volatile u32[]>, u16 address_offset,
+        Optional<PowerPCRtasInfo> const&, Memory::TypedMapping<volatile PowerPCRtasArguments>);
+    Optional<u32> read_rtas_config(PCI::BusNumber, PCI::DeviceNumber, PCI::FunctionNumber, u32 field, u32 size);
+    bool write_rtas_config(PCI::BusNumber, PCI::DeviceNumber, PCI::FunctionNumber, u32 field, u32 size, u32 value);
 
     virtual void write8_field_locked(PCI::BusNumber, PCI::DeviceNumber, PCI::FunctionNumber, u32 field, u8 value) override;
     virtual void write16_field_locked(PCI::BusNumber, PCI::DeviceNumber, PCI::FunctionNumber, u32 field, u16 value) override;
@@ -34,6 +38,8 @@ private:
 
     Memory::TypedMapping<volatile u32[]> m_registers;
     u16 m_address_offset;
+    Optional<PowerPCRtasInfo> m_rtas;
+    Memory::TypedMapping<volatile PowerPCRtasArguments> m_rtas_arguments;
 };
 
 }

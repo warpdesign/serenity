@@ -14,6 +14,8 @@ struct PowerPCRtasInfo {
     unsigned int power_off_token;
     unsigned int system_reboot_token;
     unsigned int get_time_of_day_token;
+    unsigned int read_pci_config_token;
+    unsigned int write_pci_config_token;
 };
 
 struct PowerPCRtasArguments {
@@ -22,6 +24,14 @@ struct PowerPCRtasArguments {
     unsigned int result_count;
     unsigned int values[13];
 };
+
+#ifdef __cplusplus
+constexpr unsigned int powerpc_rtas_pci_config_address(unsigned int bridge, unsigned int bus,
+    unsigned int device, unsigned int function, unsigned int offset)
+{
+    return (bridge << 24) | (bus << 16) | (((device << 3) | function) << 8) | offset;
+}
+#endif
 
 #ifdef __cplusplus
 extern "C" {

@@ -48,7 +48,8 @@ probe and is historical.
   native path allocates kernel staging, the loaded image and HPT from
   `/memory@0/available`, captures firmware settings, calls `quiesce`, switches
   to direct UART output, sets up its MMU, and enters the kernel. That combined
-  path has reached the desktop in QEMU; the physical run is pending.
+  path has reached the desktop in QEMU. On the physical board it now enters
+  the kernel and reaches storage discovery.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
   output routing left by the video BIOS, and programs the pixel PLL from the
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
@@ -91,6 +92,13 @@ tests local rendering and network configuration; it does not replay a live
 Google search. The user's interactive sequence for the earlier allocator
 crash is recorded in the kmalloc investigation document.
 
+The RTAS PCI address contract has a host-only quick/normal target:
+`PowerPCRtasPCIContractCheckQuick` and `PowerPCRtasPCIContractCheck`. After a
+physical boot, set `PEGASOS2_NATIVE_SERIAL_LOG` to its capture and run
+`PowerPCNativePCIHardwareCheckQuick` for PCI IDs and storage discovery, or
+`PowerPCNativePCIHardwareCheck` to require the first user process too. The
+recorded 2026-10-15 PCI failure is rejected by that checker.
+
 ## SmartFirmware probe card
 
 On 2026-10-14 this host rebuilt the 6.1 MB loader and passed
@@ -106,7 +114,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`198ef2096243943241acb2613e81e6493b5c4c52d894c043d6a7f1898f3709e8`.
+`eda98b476c228b9b0e6f2cf0741cca58c6399df4e7f5fd4cd171ed128617def0`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -120,7 +128,22 @@ allocations, or `ofdump` to show the already captured device tree. QEMU's
 forced native path boots the desktop from IDE with no explicit `root=` and
 writes a 108,894-byte file with a clean ext2 result on both 750 and 750CXe.
 The FFS `serenity.elf` in that card image matches the rebuilt loader byte for
-byte. The physical full boot has not been tested yet.
+byte. That physical boot reached `init_stage2`, then failed at PCI resource
+assignment. The canonical image was updated afterward with the RTAS PCI
+change; its FFS `serenity.elf` matches the new loader byte for byte.
+
+The 2026-10-15 physical serial log confirms large RAM claims, kernel
+decompression and relocation, HPT setup, firmware `quiesce`, native serial
+output, kernel memory initialization, the scheduler and RTC. The first failure
+was `PCI: Failed to assign Pegasos 2 device resources`; with no PCI controller
+registered, i8042, graphics, audio and IDE were all absent. Root mounting
+panicked after ten seconds. The local Haiku `pegasos2-support` port uses RTAS
+PCI configuration on physical SmartFirmware and preserves firmware BARs, while
+using direct MV64361 config access and BAR setup in QEMU. Serenity now
+instantiates RTAS before `quiesce` and follows that physical PCI split. The
+kernel and loader compile and the host RTAS PCI contract test passes. No QEMU
+boot was run for this change at the user's request. The new physical behavior
+remains unverified until the next card boot.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

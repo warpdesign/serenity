@@ -33,14 +33,17 @@ UNMAP_AFTER_INIT void initialize()
 
     auto registers_base = PowerPC::boot_mv64361_registers_base(g_boot_info);
     auto bridges = PowerPC::boot_pci_host_bridges(g_boot_info);
+    auto rtas = PowerPC::boot_rtas_info(g_boot_info);
+    if (rtas.has_value() && (rtas->read_pci_config_token == 0 || rtas->write_pci_config_token == 0))
+        rtas.clear();
     if (!registers_base.has_value() || !bridges.has_value()) {
         dmesgln("PCI: Pegasos 2 firmware bridge information unavailable");
         g_pci_access_io_probe_failed.set();
         return;
     }
 
-    auto south = PowerPC::Pegasos2::PCIHostController::create(PhysicalAddress { registers_base.value() }, (*bridges)[0]);
-    auto agp = PowerPC::Pegasos2::PCIHostController::create(PhysicalAddress { registers_base.value() }, (*bridges)[1]);
+    auto south = PowerPC::Pegasos2::PCIHostController::create(PhysicalAddress { registers_base.value() }, (*bridges)[0], rtas);
+    auto agp = PowerPC::Pegasos2::PCIHostController::create(PhysicalAddress { registers_base.value() }, (*bridges)[1], rtas);
     if (south.is_error() || agp.is_error()) {
         dmesgln("PCI: Failed to map Pegasos 2 host controllers");
         g_pci_access_io_probe_failed.set();
@@ -49,11 +52,26 @@ UNMAP_AFTER_INIT void initialize()
 
     auto south_controller = south.release_value();
     auto agp_controller = agp.release_value();
-    if (south_controller->assign_unconfigured_resources((*bridges)[0]).is_error()
-        || agp_controller->assign_unconfigured_resources((*bridges)[1]).is_error()) {
-        dmesgln("PCI: Failed to assign Pegasos 2 device resources");
-        g_pci_access_io_probe_failed.set();
-        return;
+    if (rtas.has_value()) {
+        auto bus = (*bridges)[0].start_bus;
+        auto vendor = south_controller->read16_field(bus, 12, 0, 0);
+        auto device = south_controller->read16_field(bus, 12, 0, 2);
+        dmesgln("PCI: Pegasos 2 RTAS south bridge {:04x}:{:04x}; preserving firmware BARs", vendor, device);
+        if (vendor != 0x1106 || device != 0x8231) {
+            g_pci_access_io_probe_failed.set();
+            return;
+        }
+        auto agp_bus = (*bridges)[1].start_bus;
+        dmesgln("PCI: Pegasos 2 RTAS IDE {:04x}:{:04x}, display {:04x}:{:04x}",
+            south_controller->read16_field(bus, 12, 1, 0), south_controller->read16_field(bus, 12, 1, 2),
+            agp_controller->read16_field(agp_bus, 8, 0, 0), agp_controller->read16_field(agp_bus, 8, 0, 2));
+    } else {
+        if (south_controller->assign_unconfigured_resources((*bridges)[0]).is_error()
+            || agp_controller->assign_unconfigured_resources((*bridges)[1]).is_error()) {
+            dmesgln("PCI: Failed to assign Pegasos 2 device resources");
+            g_pci_access_io_probe_failed.set();
+            return;
+        }
     }
 
     // Firmware may leave add-on PCI devices' Interrupt Line register unset.

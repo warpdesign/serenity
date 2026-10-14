@@ -245,7 +245,7 @@ static int prepare_rtas(void)
     sync_instruction_cache(base, image_allocation_size);
     s_rtas_info = (struct PowerPCRtasInfo) {
         base, allocation_size, entry, base + image_allocation_size,
-        power_off_token, reboot_token, clock_token
+        power_off_token, reboot_token, clock_token, 0, 0
     };
     return 1;
 }

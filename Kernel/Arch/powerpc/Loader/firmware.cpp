@@ -14,6 +14,7 @@
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
 #include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/Pegasos2/OpenFirmwarePCIRanges.h>
+#include <Kernel/Arch/powerpc/Pegasos2/RTAS.h>
 
 using FirmwareEntry = int (*)(void*);
 
@@ -46,6 +47,7 @@ static bool s_native_previous_was_carriage_return;
 static u32 s_native_timebase_frequency;
 static u32 s_native_mv64361_registers_base;
 static PowerPCPCIHostBridgeInfo s_native_pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT];
+static PowerPCRtasInfo s_native_rtas;
 static FirmwareEntry s_firmware_entry;
 // SmartFirmware declares /options/real-mode? and must then be called with IR and DR clear.
 static bool s_firmware_real_mode;
@@ -56,7 +58,7 @@ static int call_firmware(void* arguments)
         return powerpc_loader_call_firmware_real_mode(arguments, s_firmware_entry);
     return s_firmware_entry(arguments);
 }
-static BootMemoryRange s_reserved_ranges[4];
+static BootMemoryRange s_reserved_ranges[5];
 static char s_command_line[256];
 
 static u32 firmware_pointer(void const* pointer)
@@ -364,6 +366,58 @@ static u32 claim_available(FirmwareEntry firmware, u32 stdout, char const* name,
     write_console(firmware, stdout, name);
     write_console(firmware, stdout, "\r\n");
     return candidate;
+}
+
+static bool instantiate_native_rtas(FirmwareEntry firmware, u32 stdout)
+{
+    u32 node = find_device(firmware, "/rtas");
+    if (node == 0 || node == 0xffffffffu)
+        return false;
+    u32 size = 0;
+    if (get_property(firmware, node, "rtas-size", &size, sizeof(size)) != sizeof(size)
+        || size == 0 || size > 0x100000u)
+        return false;
+    u32 rounded_size = (size + 4095u) & ~4095u;
+    u32 base = claim_available(firmware, stdout, "RTAS runtime", rounded_size + 4096u, 4096u);
+    if (base == 0)
+        return false;
+    FirmwareCall open_call { "open", 1, 1, { firmware_pointer("/rtas"), 0 } };
+    if (firmware(&open_call) != 0 || open_call.cells[1] == 0 || open_call.cells[1] == 0xffffffffu)
+        return false;
+    u32 instance = open_call.cells[1];
+    FirmwareCall instantiate { "call-method", 3, 2,
+        { firmware_pointer("instantiate-rtas"), instance, base, 0, 0 } };
+    bool success = firmware(&instantiate) == 0 && instantiate.cells[3] == 0
+        && instantiate.cells[4] >= base && instantiate.cells[4] < base + rounded_size;
+    FirmwareCall close_call { "close", 1, 0, { instance } };
+    firmware(&close_call);
+    if (!success)
+        return false;
+
+    for (u32 address = base; address < base + rounded_size; address += 32u)
+        asm volatile("dcbf 0,%0" : : "r"(address) : "memory");
+    asm volatile("sync" : : : "memory");
+    for (u32 address = base; address < base + rounded_size; address += 32u)
+        asm volatile("icbi 0,%0" : : "r"(address) : "memory");
+    asm volatile("sync; isync" : : : "memory");
+
+    auto& rtas = s_native_rtas;
+    rtas.runtime_base = base;
+    rtas.runtime_size = rounded_size + 4096u;
+    rtas.entry_physical = instantiate.cells[4];
+    rtas.arguments_physical = base + rounded_size;
+    if (get_property(firmware, node, "power-off", &rtas.power_off_token, sizeof(u32)) != sizeof(u32)
+        || get_property(firmware, node, "system-reboot", &rtas.system_reboot_token, sizeof(u32)) != sizeof(u32)
+        || get_property(firmware, node, "read-pci-config", &rtas.read_pci_config_token, sizeof(u32)) != sizeof(u32)
+        || get_property(firmware, node, "write-pci-config", &rtas.write_pci_config_token, sizeof(u32)) != sizeof(u32)
+        || rtas.power_off_token == 0 || rtas.system_reboot_token == 0
+        || rtas.read_pci_config_token == 0 || rtas.write_pci_config_token == 0)
+        return false;
+    auto* arguments = reinterpret_cast<volatile u32*>(rtas.arguments_physical);
+    for (u32 index = 0; index < 4096u / sizeof(u32); ++index)
+        arguments[index] = 0;
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: native RTAS PCI ready\r\n");
+    return true;
 }
 
 static bool capture_native_firmware(FirmwareEntry firmware, u32 stdout)
@@ -680,7 +734,13 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
             }
             return;
         }
-        if (!capture_native_firmware(firmware, stdout) || !quiesce_native_firmware(firmware, stdout))
+        if (!capture_native_firmware(firmware, stdout))
+            return;
+        if (!is_qemu && !instantiate_native_rtas(firmware, stdout)) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: native RTAS PCI unavailable\r\n");
+            return;
+        }
+        if (!quiesce_native_firmware(firmware, stdout))
             return;
     }
 
@@ -734,11 +794,16 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     s_reserved_ranges[1] = { loader_start, loader_end - loader_start };
     s_reserved_ranges[2] = { physical_base, span };
     s_reserved_ranges[3] = { mappings.table_physical, table_size };
+    u32 reserved_range_count = 4;
+    if (!is_qemu && use_available_claims) {
+        s_reserved_ranges[4] = { s_native_rtas.runtime_base, s_native_rtas.runtime_size };
+        reserved_range_count = 5;
+    }
 
     Kernel::BootInfo boot_info {};
     boot_info.boot_method = Kernel::BootMethod::FirmwareMemoryMap;
     boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap {
-        memory_ranges, memory_range_count, s_reserved_ranges, 4
+        memory_ranges, memory_range_count, s_reserved_ranges, reserved_range_count
     };
     boot_info.physical_to_virtual_offset = static_cast<u32>(runtime_base) - physical_base;
     boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
@@ -762,6 +827,8 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
         }
     }
     boot_info.arch_specific.pci_host_bridge_count = POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT;
+    if (!is_qemu)
+        boot_info.arch_specific.rtas = s_native_rtas;
     boot_info.cmdline = AK::StringView { s_command_line, command_line_length };
 
     PowerPCHashPageTable validated_table;

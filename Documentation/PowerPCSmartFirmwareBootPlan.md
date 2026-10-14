@@ -27,17 +27,24 @@ loader.
 | Area | Current behaviour | Remaining physical check |
 | --- | --- | --- |
 | Client calls | Uses the real-mode trampoline when `/options/real-mode?` is true. | Calls after the completed survey, especially `quiesce`. |
-| Memory | Native path claims the ELF staging area, loaded kernel and HPT at exact addresses selected from `/memory@0/available`. | Large claims and writes on physical RAM. |
-| MMU | Turns translation off after `quiesce`; the HPT setup replaces the firmware BATs with identity RAM and PCI I/O mappings before enabling translation. | BAT switch and high alias on the physical CPU. |
-| Firmware lifetime | Captures the needed firmware properties, then calls `quiesce` before MMU takeover. | SmartFirmware `quiesce` result. |
-| Console | Uses firmware `stdout` before `quiesce`, then polls the native UART without changing its line settings. | Serial output after `quiesce` on the physical board. |
+| Memory | Native path claims the ELF staging area, loaded kernel and HPT at exact addresses selected from `/memory@0/available`. | Confirmed through kernel memory initialization on the physical board. |
+| MMU | Turns translation off after `quiesce`; the HPT setup replaces the firmware BATs with identity RAM and PCI I/O mappings before enabling translation. | Confirmed through kernel scheduler startup on the physical CPU. |
+| Firmware lifetime | Captures the needed firmware properties, then calls `quiesce` before MMU takeover. | Confirmed by kernel execution after the physical `quiesce` call. |
+| Console | Uses firmware `stdout` before `quiesce`, then polls the native UART without changing its line settings. | Physical kernel messages arrived on the native serial console. |
 | Device addresses | Validates that the firmware's PCI I/O and MV64361 bases match the kernel's current Pegasos 2 constants. | Remove the remaining constants after the first native boot. |
-| RTAS | Not passed to the kernel, so RTAS shutdown/reboot is unused. | Instantiate RTAS before `quiesce` and pass it on. |
+| RTAS | The next loader instantiates RTAS before `quiesce`, reserves its runtime and passes its PCI and power tokens to the kernel. | First physical RTAS PCI config access and device enumeration. |
 | Image size | 6.1 MB with KUBSAN and the kernel gzip-compressed (2.4 MB without KUBSAN). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
 The kernel itself does not call Open Firmware after entry. PCI bridge windows,
 the MV64361 base, memory ranges and the timebase are already read from the
 firmware tree.
+
+The 2026-10-15 physical boot reached `init_stage2`. PCI resource assignment
+then failed and aborted PCI registration, leaving no IDE disk or graphics
+device. Haiku's local physical Pegasos port uses SmartFirmware RTAS for PCI
+configuration and preserves the BARs assigned by firmware. The next Serenity
+image follows that approach. The change compiles but awaits a physical boot;
+QEMU boot tests were skipped at the user's request.
 
 ## Boot media
 

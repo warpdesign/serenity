@@ -170,10 +170,26 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   boot has not run yet. `stop` in `bootargs` stops after allocations on the
   same card; `ofdump` explicitly enables the tree dump.
 
+- 2026-10-15: The next physical boot reached the kernel and `init_stage2`:
+  kernel loading, HPT, `quiesce`, native serial, scheduler, and RTC all worked.
+  Its first error was `PCI: Failed to assign Pegasos 2 device resources`;
+  PCI registration stopped, so storage detected zero devices and root mount
+  panicked. The local Haiku `pegasos2-support` source uses RTAS PCI config on
+  physical SmartFirmware and preserves firmware BARs. Serenity now instantiates
+  RTAS before `quiesce`, passes its runtime/tokens to the kernel, selects RTAS
+  PCI config on physical firmware, and preserves those BARs. QEMU's direct
+  config/resource assignment path remains selected when PCI RTAS tokens are
+  absent. The host RTAS PCI contract target passes and kernel/loader compile.
+  The user explicitly requested no further QEMU verification runs. Physical
+  RTAS enumeration and boot are still unverified.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card, boot with `boot ide:0 serenity.elf`, and capture the serial
-output from `native allocation preparation starting` onward. The last
-checkpoint will identify a claim, UART, `quiesce`, MMU, kernel, or userland
-failure. Do not build separate cards for each checkpoint.
+to the SD card (SHA-256 `eda98b476c228b9b0e6f2cf0741cca58c6399df4e7f5fd4cd171ed128617def0`),
+boot with `boot ide:0 serenity.elf`,
+and capture the serial output from `native RTAS PCI ready` through storage
+discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,
+`PCI: Pegasos 2 RTAS IDE`, and `StorageManagement: Detected`. Do not build
+separate cards for each checkpoint or run QEMU verification until the user
+requests it.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.

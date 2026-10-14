@@ -7,10 +7,15 @@
 #include <Kernel/Arch/powerpc/Pegasos2/PCIConfig.h>
 #include <Kernel/Arch/powerpc/Pegasos2/PCIHostController.h>
 #include <Kernel/Bus/PCI/AddressAssignment.h>
+#include <Kernel/Locking/Spinlock.h>
+#include <Kernel/Memory/MemoryManager.h>
 
 namespace Kernel::PowerPC::Pegasos2 {
 
-ErrorOr<NonnullOwnPtr<PCIHostController>> PCIHostController::create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const& info)
+static Spinlock<LockRank::None> s_rtas_config_lock;
+
+ErrorOr<NonnullOwnPtr<PCIHostController>> PCIHostController::create(PhysicalAddress registers_base,
+    PowerPCPCIHostBridgeInfo const& info, Optional<PowerPCRtasInfo> const& rtas)
 {
     if (info.bridge_number >= POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT
         || info.start_bus > info.end_bus || info.end_bus > 255
@@ -20,8 +25,13 @@ ErrorOr<NonnullOwnPtr<PCIHostController>> PCIHostController::create(PhysicalAddr
     if (!offsets.has_value())
         return EINVAL;
     auto registers = TRY(Memory::map_typed<volatile u32[]>(registers_base, 0x1000, Memory::Region::Access::ReadWrite));
+    Memory::TypedMapping<volatile PowerPCRtasArguments> arguments;
+    if (rtas.has_value())
+        arguments = TRY(Memory::map_typed<volatile PowerPCRtasArguments>(
+            PhysicalAddress { rtas->arguments_physical }, sizeof(PowerPCRtasArguments), Memory::Region::Access::ReadWrite));
     PCI::Domain domain { info.bridge_number, static_cast<u8>(info.start_bus), static_cast<u8>(info.end_bus) };
-    auto controller = TRY(adopt_nonnull_own_or_enomem(new (nothrow) PCIHostController(domain, move(registers), offsets->address_offset)));
+    auto controller = TRY(adopt_nonnull_own_or_enomem(new (nothrow) PCIHostController(
+        domain, move(registers), offsets->address_offset, rtas, move(arguments))));
     for (u32 index = 0; index < info.range_count; ++index) {
         auto const& range = info.ranges[index];
         if (range.length == 0 || range.length > 0xffffffffull || range.host_address >= 0x100000000ull
@@ -38,11 +48,62 @@ ErrorOr<NonnullOwnPtr<PCIHostController>> PCIHostController::create(PhysicalAddr
     return controller;
 }
 
-PCIHostController::PCIHostController(PCI::Domain const& domain, Memory::TypedMapping<volatile u32[]> registers, u16 address_offset)
+PCIHostController::PCIHostController(PCI::Domain const& domain, Memory::TypedMapping<volatile u32[]> registers,
+    u16 address_offset, Optional<PowerPCRtasInfo> const& rtas, Memory::TypedMapping<volatile PowerPCRtasArguments> arguments)
     : HostController(domain)
     , m_registers(move(registers))
     , m_address_offset(address_offset)
+    , m_rtas(rtas)
+    , m_rtas_arguments(move(arguments))
 {
+}
+
+Optional<u32> PCIHostController::read_rtas_config(PCI::BusNumber bus, PCI::DeviceNumber device,
+    PCI::FunctionNumber function, u32 field, u32 size)
+{
+    if (!m_rtas.has_value() || field + size > 256 || (field & (size - 1)) != 0)
+        return {};
+    SpinlockLocker locker(s_rtas_config_lock);
+    auto* arguments = m_rtas_arguments.ptr();
+    arguments->token = m_rtas->read_pci_config_token;
+    arguments->argument_count = 2;
+    arguments->result_count = 2;
+    arguments->values[0] = powerpc_rtas_pci_config_address(domain_number(), bus.value(),
+        device.value(), function.value(), field);
+    arguments->values[1] = size;
+    arguments->values[2] = 0xffffffffu;
+    arguments->values[3] = 0xffffffffu;
+    asm volatile("sync" : : : "memory");
+    auto real_return = Memory::virtual_to_low_physical(reinterpret_cast<FlatPtr>(powerpc_rtas_return_real));
+    powerpc_rtas_enter(m_rtas->arguments_physical, m_rtas->entry_physical,
+        real_return, reinterpret_cast<FlatPtr>(powerpc_rtas_return_virtual));
+    asm volatile("sync" : : : "memory");
+    if (arguments->values[2] != 0)
+        return {};
+    return arguments->values[3];
+}
+
+bool PCIHostController::write_rtas_config(PCI::BusNumber bus, PCI::DeviceNumber device,
+    PCI::FunctionNumber function, u32 field, u32 size, u32 value)
+{
+    if (!m_rtas.has_value() || field + size > 256 || (field & (size - 1)) != 0)
+        return false;
+    SpinlockLocker locker(s_rtas_config_lock);
+    auto* arguments = m_rtas_arguments.ptr();
+    arguments->token = m_rtas->write_pci_config_token;
+    arguments->argument_count = 3;
+    arguments->result_count = 1;
+    arguments->values[0] = powerpc_rtas_pci_config_address(domain_number(), bus.value(),
+        device.value(), function.value(), field);
+    arguments->values[1] = size;
+    arguments->values[2] = value;
+    arguments->values[3] = 0xffffffffu;
+    asm volatile("sync" : : : "memory");
+    auto real_return = Memory::virtual_to_low_physical(reinterpret_cast<FlatPtr>(powerpc_rtas_return_real));
+    powerpc_rtas_enter(m_rtas->arguments_physical, m_rtas->entry_physical,
+        real_return, reinterpret_cast<FlatPtr>(powerpc_rtas_return_virtual));
+    asm volatile("sync" : : : "memory");
+    return arguments->values[3] == 0;
 }
 
 ErrorOr<void> PCIHostController::assign_unconfigured_resources(PowerPCPCIHostBridgeInfo const& info)
@@ -192,6 +253,8 @@ size_t PCIHostController::assign_unconfigured_interrupt_lines(PowerPCPCIHostBrid
 u8 PCIHostController::read8_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value())
+        return read_rtas_config(bus, device, function, field, 1).value_or(0xffu);
     if (field > 0xff)
         return 0xff;
     return read_pci_config8(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field)).value_or(0xff);
@@ -200,6 +263,8 @@ u8 PCIHostController::read8_field_locked(PCI::BusNumber bus, PCI::DeviceNumber d
 u16 PCIHostController::read16_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value())
+        return read_rtas_config(bus, device, function, field, 2).value_or(0xffffu);
     if (field > 0xff)
         return 0xffff;
     return read_pci_config16(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field)).value_or(0xffff);
@@ -208,6 +273,8 @@ u16 PCIHostController::read16_field_locked(PCI::BusNumber bus, PCI::DeviceNumber
 u32 PCIHostController::read32_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value())
+        return read_rtas_config(bus, device, function, field, 4).value_or(0xffffffffu);
     if (field > 0xff)
         return 0xffffffffu;
     return read_pci_config32(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field)).value_or(0xffffffffu);
@@ -216,6 +283,10 @@ u32 PCIHostController::read32_field_locked(PCI::BusNumber bus, PCI::DeviceNumber
 void PCIHostController::write8_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field, u8 value)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value()) {
+        (void)write_rtas_config(bus, device, function, field, 1, value);
+        return;
+    }
     if (field <= 0xff)
         (void)write_pci_config8(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field), value);
 }
@@ -223,6 +294,10 @@ void PCIHostController::write8_field_locked(PCI::BusNumber bus, PCI::DeviceNumbe
 void PCIHostController::write16_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field, u16 value)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value()) {
+        (void)write_rtas_config(bus, device, function, field, 2, value);
+        return;
+    }
     if (field <= 0xff)
         (void)write_pci_config16(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field), value);
 }
@@ -230,6 +305,10 @@ void PCIHostController::write16_field_locked(PCI::BusNumber bus, PCI::DeviceNumb
 void PCIHostController::write32_field_locked(PCI::BusNumber bus, PCI::DeviceNumber device, PCI::FunctionNumber function, u32 field, u32 value)
 {
     VERIFY(m_access_lock.is_locked());
+    if (m_rtas.has_value()) {
+        (void)write_rtas_config(bus, device, function, field, 4, value);
+        return;
+    }
     if (field <= 0xff)
         (void)write_pci_config32(address_register(), data_register(), bus.value(), device.value(), function.value(), static_cast<u16>(field), value);
 }

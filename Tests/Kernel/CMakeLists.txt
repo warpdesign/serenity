@@ -92,6 +92,31 @@ target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
+    find_program(POWERPC_HOST_CXX NAMES c++ clang++ REQUIRED)
+    set(powerpc_rtas_contract_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRTASPCIContract.cpp")
+    set(powerpc_rtas_contract_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-RTAS-PCI-contract")
+    add_custom_target(PowerPCRtasPCIContractCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_rtas_contract_source}" -o "${powerpc_rtas_contract_executable}"
+        COMMAND "${powerpc_rtas_contract_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCRtasPCIContractCheck
+        COMMAND "${powerpc_rtas_contract_executable}" extended
+        DEPENDS PowerPCRtasPCIContractCheckQuick
+        VERBATIM
+    )
+    set(powerpc_native_pci_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_pci_boot.py")
+    add_custom_target(PowerPCNativePCIHardwareCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativePCIHardwareCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --normal
+        DEPENDS PowerPCNativePCIHardwareCheckQuick
+        VERBATIM
+    )
+
     string(REGEX REPLACE "gcc$" "" powerpc_test_cross_compile "${CMAKE_C_COMPILER}")
     set(powerpc_kmalloc_hpt_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_kernel_entry.py")
     set(powerpc_kmalloc_hpt_arguments
