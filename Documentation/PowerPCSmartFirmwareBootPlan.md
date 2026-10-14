@@ -60,6 +60,14 @@ fallback. It accepts that fallback only if both the south bridge and IDE PCI
 IDs match the captured firmware tree. Neither native path reassigns the
 firmware BARs.
 
+Comparison with Haiku's physical Pegasos RTAS caller and Linux's CHRP RTAS
+PCI caller showed the same return convention used by Serenity: the first
+return cell is status and the second is the PCI value. Haiku maps the RTAS
+argument buffer as regular RAM, and Linux places its argument block in kernel
+RAM. Serenity was mapping its physical RAM argument page with cache-inhibited,
+guarded I/O attributes. The next build uses normal RAM attributes for both
+PCI and power-service RTAS calls. The physical outcome is still pending.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB

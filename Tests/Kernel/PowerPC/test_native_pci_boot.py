@@ -9,7 +9,9 @@ import re
 from pathlib import Path
 
 
-def check_boot(log: str, require_userland: bool) -> None:
+def check_boot(log: str, require_userland: bool, require_rtas: bool = False) -> None:
+    if require_rtas and "PCI: Pegasos 2 using RTAS PCI configuration" not in log:
+        raise AssertionError("RTAS PCI configuration did not succeed")
     if ("PCI: Pegasos 2 using RTAS PCI configuration" not in log
             and "PCI: Pegasos 2 direct fallback south 1106:8231, IDE 1106:0571" not in log):
         raise AssertionError("neither PCI configuration path identified the VT8231 and VIA IDE")
@@ -42,14 +44,22 @@ Running first user process: /sbin/init
 """
     check_boot(recovered, False)
     check_boot(recovered, True)
+    check_boot(recovered, True, True)
     fallback = recovered.replace("PCI: Pegasos 2 using RTAS PCI configuration",
         "PCI: Pegasos 2 direct fallback south 1106:8231, IDE 1106:0571")
     check_boot(fallback, True)
+    try:
+        check_boot(fallback, True, True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("direct fallback must not pass the RTAS-specific check")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Check a physical Pegasos 2 serial boot log")
     parser.add_argument("--normal", action="store_true", help="also require userland startup")
+    parser.add_argument("--require-rtas", action="store_true", help="require PCI access through RTAS")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -58,7 +68,7 @@ def main() -> None:
     path = os.environ.get("PEGASOS2_NATIVE_SERIAL_LOG")
     if not path:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
-    check_boot(Path(path).read_text(errors="replace"), args.normal)
+    check_boot(Path(path).read_text(errors="replace"), args.normal, args.require_rtas)
 
 
 if __name__ == "__main__":

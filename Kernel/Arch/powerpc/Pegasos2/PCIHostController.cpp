@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/powerpc/Pegasos2/PCIConfig.h>
 #include <Kernel/Arch/powerpc/Pegasos2/PCIHostController.h>
+#include <Kernel/Arch/powerpc/Pegasos2/RTASMapping.h>
 #include <Kernel/Bus/PCI/AddressAssignment.h>
 #include <Kernel/Locking/Spinlock.h>
 #include <Kernel/Memory/MemoryManager.h>
@@ -27,8 +28,7 @@ ErrorOr<NonnullOwnPtr<PCIHostController>> PCIHostController::create(PhysicalAddr
     auto registers = TRY(Memory::map_typed<volatile u32[]>(registers_base, 0x1000, Memory::Region::Access::ReadWrite));
     Memory::TypedMapping<volatile PowerPCRtasArguments> arguments;
     if (rtas.has_value())
-        arguments = TRY(Memory::map_typed<volatile PowerPCRtasArguments>(
-            PhysicalAddress { rtas->arguments_physical }, sizeof(PowerPCRtasArguments), Memory::Region::Access::ReadWrite));
+        arguments = TRY(map_rtas_arguments(PhysicalAddress { rtas->arguments_physical }));
     PCI::Domain domain { info.bridge_number, static_cast<u8>(info.start_bus), static_cast<u8>(info.end_bus) };
     auto controller = TRY(adopt_nonnull_own_or_enomem(new (nothrow) PCIHostController(
         domain, move(registers), offsets->address_offset, rtas, move(arguments))));

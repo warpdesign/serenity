@@ -201,8 +201,18 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   `1106:8231` and `1106:0571`. Firmware BARs are preserved on both native
   paths. Physical outcome is pending; no QEMU boot was run.
 
+- 2026-10-15: Compared RTAS result handling in the local Haiku Pegasos port
+  and Linux CHRP PCI code. Both, like Serenity, read status from return cell
+  zero and the PCI value from return cell one. Haiku uses a regular RAM
+  mapping for its RTAS argument page; Linux uses a static RAM block. Serenity
+  had used the generic MMIO helper, which mapped this RAM page with I/O cache
+  attributes. The next build maps it as normal cacheable RAM for PCI and
+  power calls. Added native quick/normal targets that specifically require
+  RTAS PCI success, separate from the fallback-tolerant native PCI check.
+  No QEMU run was made; physical confirmation is pending.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `a6de695c744a84bf3c2a007d1e52b144c676bc1f4d45697cabe435dd55f08d4f`),
+to the SD card (SHA-256 `75e33dd0f9af33d77c5333148c7e4b58c79083cdec8238ed4497d699455e0bc8`),
 boot with `boot ide:0 serenity.elf`,
 and capture the serial output from `native RTAS PCI ready` through storage
 discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,

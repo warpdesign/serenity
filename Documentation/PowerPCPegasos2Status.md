@@ -98,6 +98,9 @@ physical boot, set `PEGASOS2_NATIVE_SERIAL_LOG` to its capture and run
 `PowerPCNativePCIHardwareCheckQuick` for PCI IDs and storage discovery, or
 `PowerPCNativePCIHardwareCheck` to require the first user process too. The
 recorded 2026-10-15 PCI failure is rejected by that checker.
+`PowerPCNativeRTASHardwareCheckQuick` and `PowerPCNativeRTASHardwareCheck`
+additionally require the physical boot to use RTAS rather than the guarded
+direct-config fallback.
 
 ## SmartFirmware probe card
 
@@ -114,7 +117,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`a6de695c744a84bf3c2a007d1e52b144c676bc1f4d45697cabe435dd55f08d4f`.
+`75e33dd0f9af33d77c5333148c7e4b58c79083cdec8238ed4497d699455e0bc8`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -164,6 +167,16 @@ direct-config path and continues only if that path identifies both the VT8231
 and VIA IDE controller. Firmware BARs remain untouched in either native path.
 This guarded fallback is compiled and its serial-log checker self-test passes;
 the physical result is pending. No QEMU boot was run.
+
+A source comparison found that the RTAS return-cell indexing was already the
+same in Serenity, Haiku and Linux: status first, PCI value second. The
+important difference was the argument page mapping. Haiku maps the RTAS
+argument page as ordinary RAM; Linux uses a static kernel RAM argument block.
+Serenity had mapped that RAM page with I/O attributes. The next build maps it
+as normal cacheable RAM for both PCI and power-service calls. This is a
+plausible cause of the `ffff:ffff` result, but only the next physical boot can
+confirm it. The RTAS-specific native hardware check will distinguish success
+from a boot that used direct PCI fallback.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

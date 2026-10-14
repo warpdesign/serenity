@@ -8,6 +8,7 @@
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/Pegasos2/RTAS.h>
+#include <Kernel/Arch/powerpc/Pegasos2/RTASMapping.h>
 #include <Kernel/Boot/BootInfo.h>
 #include <Kernel/Interrupts/InterruptDisabler.h>
 #include <Kernel/Memory/MemoryManager.h>
@@ -21,8 +22,7 @@ static bool call_rtas_power_service(u32 token, u32 argument_count)
     if (!info.has_value())
         return false;
 
-    auto mapping = Memory::map_typed<volatile PowerPCRtasArguments>(PhysicalAddress { info->arguments_physical },
-        sizeof(PowerPCRtasArguments), Memory::Region::Access::ReadWrite);
+    auto mapping = PowerPC::Pegasos2::map_rtas_arguments(PhysicalAddress { info->arguments_physical });
     if (mapping.is_error())
         return false;
     auto arguments = mapping.release_value();
