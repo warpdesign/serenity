@@ -183,8 +183,18 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   The user explicitly requested no further QEMU verification runs. Physical
   RTAS enumeration and boot are still unverified.
 
+- 2026-10-15: The first RTAS image reserved runtime memory at
+  `0x0318a000`–`0x0318dfff`, entered the kernel, and faulted at
+  `boot_rtas_info()` before any RTAS call. The access was to `0x007c3268`,
+  the loader's low-memory reservation array after its mapping had gone away.
+  The loader now fully validates RTAS against that array before handoff; PCI
+  and power services use a late lookup that only reads copied RTAS fields.
+  `TestBootInfo.cpp` covers late lookup with the reservation pointer absent.
+  Physical PCI identification remains the next checkpoint. Do not run QEMU
+  verification unless the user asks to resume it.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `eda98b476c228b9b0e6f2cf0741cca58c6399df4e7f5fd4cd171ed128617def0`),
+to the SD card (SHA-256 `a7eb780c7d71d70cb57b59ec504cca6e742a3f3e62721da8d7a3b627844d2e35`),
 boot with `boot ide:0 serenity.elf`,
 and capture the serial output from `native RTAS PCI ready` through storage
 discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,

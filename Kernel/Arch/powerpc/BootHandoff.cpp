@@ -51,7 +51,7 @@ Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo 
     return ReadonlySpan<PowerPCPCIHostBridgeInfo> { arch.pci_host_bridges, arch.pci_host_bridge_count };
 }
 
-Optional<PowerPCRtasInfo> boot_rtas_info(BootInfo const& boot_info)
+Optional<PowerPCRtasInfo> boot_rtas_info_after_handoff(BootInfo const& boot_info)
 {
     if (boot_info.boot_method != BootMethod::FirmwareMemoryMap)
         return {};
@@ -64,15 +64,23 @@ Optional<PowerPCRtasInfo> boot_rtas_info(BootInfo const& boot_info)
         || info.power_off_token == 0 || info.system_reboot_token == 0)
         return {};
 
+    return info;
+}
+
+Optional<PowerPCRtasInfo> boot_rtas_info(BootInfo const& boot_info)
+{
+    auto info = boot_rtas_info_after_handoff(boot_info);
+    if (!info.has_value())
+        return {};
     auto const& memory_map = boot_info.boot_method_specific.firmware_memory_map;
     if (!memory_map.reserved_ranges)
         return {};
     for (u32 index = 0; index < memory_map.reserved_range_count; ++index) {
         auto const& reservation = memory_map.reserved_ranges[index];
-        if (reservation.physical_start <= info.runtime_base
-            && reservation.length >= info.runtime_size
+        if (reservation.physical_start <= info->runtime_base
+            && reservation.length >= info->runtime_size
             && reservation.physical_start <= ~0ull - reservation.length
-            && reservation.physical_start + reservation.length >= static_cast<u64>(info.runtime_base) + info.runtime_size)
+            && reservation.physical_start + reservation.length >= static_cast<u64>(info->runtime_base) + info->runtime_size)
             return info;
     }
     return {};

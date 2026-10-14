@@ -71,6 +71,13 @@ extern "C" int powerpc_boot_handoff_test(BootMemoryRange const* ranges, u32 rang
     if (!runtime.has_value() || runtime->entry_physical != rtas->entry_physical
         || runtime->arguments_physical != rtas->arguments_physical)
         return 0;
+    // The physical loader's reservation array is only mapped during handoff.
+    // Runtime users must still find RTAS after that array has been unmapped.
+    boot_info.boot_method_specific.firmware_memory_map.reserved_ranges = nullptr;
+    if (Kernel::PowerPC::boot_rtas_info(boot_info).has_value()
+        || !Kernel::PowerPC::boot_rtas_info_after_handoff(boot_info).has_value())
+        return 0;
+    boot_info.boot_method_specific.firmware_memory_map.reserved_ranges = reservations;
     boot_info.boot_method_specific.firmware_memory_map.reserved_range_count = 2;
     if (Kernel::PowerPC::boot_rtas_info(boot_info).has_value())
         return 0;

@@ -33,7 +33,7 @@ UNMAP_AFTER_INIT void initialize()
 
     auto registers_base = PowerPC::boot_mv64361_registers_base(g_boot_info);
     auto bridges = PowerPC::boot_pci_host_bridges(g_boot_info);
-    auto rtas = PowerPC::boot_rtas_info(g_boot_info);
+    auto rtas = PowerPC::boot_rtas_info_after_handoff(g_boot_info);
     if (rtas.has_value() && (rtas->read_pci_config_token == 0 || rtas->write_pci_config_token == 0))
         rtas.clear();
     if (!registers_base.has_value() || !bridges.has_value()) {

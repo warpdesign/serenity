@@ -114,7 +114,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`eda98b476c228b9b0e6f2cf0741cca58c6399df4e7f5fd4cd171ed128617def0`.
+`a7eb780c7d71d70cb57b59ec504cca6e742a3f3e62721da8d7a3b627844d2e35`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -144,6 +144,17 @@ instantiates RTAS before `quiesce` and follows that physical PCI split. The
 kernel and loader compile and the host RTAS PCI contract test passes. No QEMU
 boot was run for this change at the user's request. The new physical behavior
 remains unverified until the next card boot.
+
+The next physical boot did instantiate and reserve RTAS at `0x0318a000`–
+`0x0318dfff`, then faulted in `boot_rtas_info()` at kernel PCI startup. The
+faulting load dereferenced `0x007c3268`, a pointer into the loader's temporary
+reservation array after its low mapping was removed. RTAS itself had not yet
+been called. The loader now checks the reservation while that array is mapped;
+later PCI and power-service users validate the copied RTAS fields without
+reading the stale memory-map pointer. A regression in `TestBootInfo.cpp`
+checks that late RTAS lookup works with the reservation pointer unavailable.
+The canonical card's FFS loader has been updated and matches the rebuilt ELF
+byte for byte. The physical RTAS PCI path still needs its first hardware call.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

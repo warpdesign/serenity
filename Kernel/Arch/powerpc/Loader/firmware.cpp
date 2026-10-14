@@ -837,7 +837,8 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
         || validated_table.group_count != mappings.group_count
         || !Kernel::PowerPC::boot_timebase_frequency(boot_info).has_value()
         || !Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value()
-        || !Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value()) {
+        || !Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value()
+        || (!is_qemu && !Kernel::PowerPC::boot_rtas_info(boot_info).has_value())) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff invalid\r\n");
         return;
     }

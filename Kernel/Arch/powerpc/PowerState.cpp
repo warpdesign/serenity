@@ -17,7 +17,7 @@ namespace Kernel {
 
 static bool call_rtas_power_service(u32 token, u32 argument_count)
 {
-    auto info = PowerPC::boot_rtas_info(g_boot_info);
+    auto info = PowerPC::boot_rtas_info_after_handoff(g_boot_info);
     if (!info.has_value())
         return false;
 
@@ -43,7 +43,7 @@ static bool call_rtas_power_service(u32 token, u32 argument_count)
 
 void arch_specific_poweroff(PowerOffOrRebootReason)
 {
-    auto info = PowerPC::boot_rtas_info(g_boot_info);
+    auto info = PowerPC::boot_rtas_info_after_handoff(g_boot_info);
     if (!info.has_value() || !call_rtas_power_service(info->power_off_token, 2))
         dmesgln("PowerPC: RTAS power-off unavailable or returned an error");
     Processor::halt();
@@ -51,7 +51,7 @@ void arch_specific_poweroff(PowerOffOrRebootReason)
 
 void arch_specific_reboot(PowerOffOrRebootReason)
 {
-    auto info = PowerPC::boot_rtas_info(g_boot_info);
+    auto info = PowerPC::boot_rtas_info_after_handoff(g_boot_info);
     if (!info.has_value() || !call_rtas_power_service(info->system_reboot_token, 0))
         dmesgln("PowerPC: RTAS system-reboot unavailable or returned an error");
     Processor::halt();

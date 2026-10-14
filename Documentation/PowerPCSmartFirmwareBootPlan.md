@@ -46,6 +46,13 @@ configuration and preserves the BARs assigned by firmware. The next Serenity
 image follows that approach. The change compiles but awaits a physical boot;
 QEMU boot tests were skipped at the user's request.
 
+The first RTAS image reached kernel PCI startup and then faulted before its
+first RTAS PCI call. The kernel's `boot_rtas_info()` re-read the loader's
+reservation array through physical address `0x007c3268`, which was no longer
+mapped. The next image validates that reservation in the loader, then uses
+only the copied RTAS fields after kernel memory initialization. The next
+physical log should show the RTAS south-bridge and IDE PCI identifiers.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB
