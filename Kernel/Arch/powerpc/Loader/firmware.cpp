@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/Loader/FirmwarePropertyValue.h>
 #include <Kernel/Arch/powerpc/Loader/Inflate.h>
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
 #include <Kernel/Arch/powerpc/Loader/KernelMappings.h>
@@ -290,46 +291,6 @@ static bool is_node(u32 node)
     return node != 0 && node != 0xffffffffu;
 }
 
-// Non-empty NUL-terminated strings are printed as text; anything else as big-endian cells.
-static void write_property_value(FirmwareEntry firmware, u32 stdout, u8 const* value, u32 length, u32 full_length)
-{
-    bool printable = length > 0 && value[length - 1] == 0;
-    for (u32 i = 0; printable && i < length; ++i) {
-        if (value[i] == 0 ? (i == 0 || value[i - 1] == 0) : (value[i] < 0x20 || value[i] > 0x7e))
-            printable = false;
-    }
-    if (printable) {
-        write_console(firmware, stdout, "\"");
-        for (u32 start = 0; start < length;) {
-            u32 end = start;
-            while (end < length && value[end] != 0)
-                ++end;
-            if (start != 0)
-                write_console(firmware, stdout, "\" \"");
-            write_text(firmware, stdout, reinterpret_cast<char const*>(value + start), end - start);
-            start = end + 1;
-        }
-        write_console(firmware, stdout, "\"");
-    } else {
-        write_console(firmware, stdout, "<");
-        for (u32 offset = 0; offset + 4 <= length; offset += 4) {
-            if (offset != 0)
-                write_console(firmware, stdout, " ");
-            write_word(firmware, stdout, (value[offset] << 24) | (value[offset + 1] << 16) | (value[offset + 2] << 8) | value[offset + 3]);
-        }
-        for (u32 offset = length & ~3u; offset < length; ++offset) {
-            char byte[4] = { ' ', "0123456789abcdef"[value[offset] >> 4], "0123456789abcdef"[value[offset] & 15], 0 };
-            write_console(firmware, stdout, byte);
-        }
-        write_console(firmware, stdout, ">");
-    }
-    if (full_length > length) {
-        write_console(firmware, stdout, " (");
-        write_word(firmware, stdout, full_length);
-        write_console(firmware, stdout, " bytes)");
-    }
-}
-
 static void dump_properties(FirmwareEntry firmware, u32 stdout, u32 node)
 {
     static constexpr u32 max_shown_bytes = 128;
@@ -355,7 +316,9 @@ static void dump_properties(FirmwareEntry firmware, u32 stdout, u32 node)
         u32 wanted = static_cast<u32>(full_length) < max_shown_bytes ? static_cast<u32>(full_length) : max_shown_bytes;
         int length = wanted == 0 ? 0 : get_property(firmware, node, name, value, wanted);
         write_console(firmware, stdout, " = ");
-        write_property_value(firmware, stdout, value, length > 0 ? static_cast<u32>(length) : 0, static_cast<u32>(full_length));
+        Kernel::PowerPC::Loader::write_firmware_property_value(
+            [&](char const* text, u32 size) { write_text(firmware, stdout, text, size); },
+            value, length > 0 ? static_cast<u32>(length) : 0, wanted, static_cast<u32>(full_length));
         write_console(firmware, stdout, "\r\n");
     }
 }

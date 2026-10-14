@@ -90,6 +90,13 @@ def main():
     args = parser.parse_args()
 
     if not args.corrupt_only:
+        source_root = Path(__file__).parents[3]
+        with tempfile.TemporaryDirectory(prefix="serenity-firmware-property-") as directory:
+            fixture = source_root / "Tests/Kernel/PowerPC/TestFirmwarePropertyValue.cpp"
+            executable = Path(directory) / "test-firmware-property-value"
+            subprocess.run(["c++", "-std=c++20", "-I", str(source_root), str(fixture), "-o", str(executable)], check=True)
+            subprocess.run([str(executable)], check=True)
+
         source = args.kernel_elf.read_bytes()
 
         def inspect(monitor: Path, output: bytes):

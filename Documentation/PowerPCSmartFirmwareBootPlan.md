@@ -115,18 +115,39 @@ point; add more as needed.
 
 Checkpoint: banner, firmware identity, CPU (PVR) and memory ranges printed.
 
-Status (2026-10-14): implemented, verified in QEMU only. The loader reads
+Status (2026-10-14): implemented and the initial physical firmware survey
+started. The loader reads
 `/options` `real-mode?` and, when it is true, makes every later client call
 through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
 and DR around the call. It prints the firmware kind, the call mode, the entry
 MSR, the PVR, the console path, `bootpath` and `bootargs`, then dumps the whole
 device tree (every node and property, values cut at 128 bytes). On firmware
-without `/chosen` `qemu,boot-kernel` it then calls `exit` and returns to the
-SmartFirmware prompt, before any `claim` or MMU change. In QEMU, the
+without `/chosen` `qemu,boot-kernel` it is intended to call `exit` and return
+to the SmartFirmware prompt, before any `claim` or MMU change. In QEMU, the
 `serenity-loader-firmware-dump` and `serenity-loader-real-mode-calls` boot
 arguments exercise the dump and the trampoline; the boot then continues
 normally. The card image with this loader is
 `Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
+
+The first Pegasos 2 serial capture reached the ATI display node's large `rom`
+property. The loader kept printing numbers there, so the machine was reset
+before the tree-end or `exit` marker. The printer had trusted the length
+returned by `getprop` even though it supplied a 128-byte buffer. Its output
+is now bounded by the supplied capacity and still reports the full property
+length. A host regression reproduced the excessive output before the fix and
+passed afterward; both QEMU loader targets pass. The card image above has
+been updated with the fixed loader. A second physical run is needed to verify
+that the tree ends and control returns to the prompt.
+
+The first capture established SmartFirmware 1.2 (`Pegasos2,1.2`), entry MSR
+`0x00003030`, CPU PVR `0x00083311`, console path `/failsafe`, and boot path
+`/pci@80000000/ide@C,1/disk@0,0`. `/memory@0/reg` is 512 MiB;
+`available` contains `0x00000000`–`0x01000000` and
+`0x01800000`–`0x0fc00000`. The south PCI bridge reports I/O window
+`0xfe000000` and interrupt acknowledge `0xf1000cb4`; the other PCI bridge
+reports I/O window `0xf8000000`. An ISA serial node exists at I/O port
+`0x2f8`, and the Radeon has PCI ID `1002:5964`. These are observations for
+phase 2, not yet passed to the kernel.
 
 ### 2. Capture the firmware contract, then quiesce
 

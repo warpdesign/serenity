@@ -44,7 +44,9 @@ probe and is historical.
 - The loader can survey native Open Firmware: it prints the firmware identity,
   entry MSR, PVR, console and boot properties, then dumps the device tree. On
   firmware other than QEMU's VOF it calls `exit` before claiming memory or
-  changing the MMU. The first physical SmartFirmware run is still pending.
+  changing the MMU. The first physical SmartFirmware run reached the Radeon
+  ROM property; a dump-length bug stopped it there and has been fixed. The
+  second physical run is pending.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
   output routing left by the video BIOS, and programs the pixel PLL from the
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
@@ -104,11 +106,15 @@ The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
 
-The next evidence needed is a serial capture from the physical Pegasos 2,
-starting with its firmware banner and `boot ide:0 serenity.elf` command and
-continuing through the loader's firmware tree dump and return to the prompt.
-Record the exact last line if output stops early. The hardware plan and
-remaining loader work are in
+The first physical serial capture confirmed SmartFirmware 1.2, real-mode
+client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It
+stopped while printing the Radeon `rom` property because the printer used a
+reported property length beyond its 128-byte buffer. A host regression failed
+before the bound and passed after it; the quick and normal QEMU loader checks
+pass. `serenity.elf` in the local FFS partition has been replaced with the
+fixed loader and matches the rebuilt ELF byte for byte. The next evidence
+needed is a second serial capture showing `firmware tree end` and the return
+to the prompt. The hardware plan and full observations are in
 [PowerPCSmartFirmwareBootPlan.md](PowerPCSmartFirmwareBootPlan.md).
 
 ## PixelPaint bring-up
