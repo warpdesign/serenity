@@ -43,7 +43,7 @@ $(BUILD_DIR)/mmu_probe.o: MMUProbe.S | $(BUILD_DIR)
 $(BUILD_DIR)/inflate.o: Inflate.cpp Inflate.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/firmware.o: firmware.cpp Inflate.h KernelImagePlan.h KernelMappings.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+$(BUILD_DIR)/firmware.o: firmware.cpp AvailableMemoryClaim.h FirmwarePropertyValue.h Inflate.h KernelImagePlan.h KernelMappings.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/kernel_image_plan.o: KernelImagePlan.cpp KernelImagePlan.h ../../../../Userland/Libraries/LibELF/ELFABI.h ../../../../Userland/Libraries/LibELF/Relocation.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)

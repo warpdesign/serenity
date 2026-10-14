@@ -14,7 +14,7 @@ import time
 
 
 def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, terminal_marker: bytes,
-                     require_hex_after: bool = False, inspect=None) -> bytes:
+                     require_hex_after: bool = False, inspect=None, append_arguments: str = "") -> bytes:
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-loader-qemu-") as directory:
         trace = Path(directory) / "vof.log"
         monitor = Path(directory) / "monitor.sock"
@@ -23,7 +23,7 @@ def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, term
             "-M", "pegasos2",
             "-m", str(memory),
             "-kernel", str(loader),
-            "-append", "serenity-loader-stop-before-kernel",
+            "-append", "serenity-loader-stop-before-kernel" + (f" {append_arguments}" if append_arguments else ""),
             "-display", "none",
             "-serial", "none",
             "-monitor", f"unix:{monitor},server,nowait",
@@ -91,11 +91,21 @@ def main():
 
     if not args.corrupt_only:
         source_root = Path(__file__).parents[3]
-        with tempfile.TemporaryDirectory(prefix="serenity-firmware-property-") as directory:
-            fixture = source_root / "Tests/Kernel/PowerPC/TestFirmwarePropertyValue.cpp"
-            executable = Path(directory) / "test-firmware-property-value"
-            subprocess.run(["c++", "-std=c++20", "-I", str(source_root), str(fixture), "-o", str(executable)], check=True)
-            subprocess.run([str(executable)], check=True)
+        with tempfile.TemporaryDirectory(prefix="serenity-firmware-loader-") as directory:
+            for name in ("TestFirmwarePropertyValue", "TestAvailableMemoryClaim"):
+                fixture = source_root / "Tests/Kernel/PowerPC" / f"{name}.cpp"
+                executable = Path(directory) / name
+                subprocess.run(["c++", "-std=c++20", "-Wall", "-Wextra", "-Werror",
+                                "-I", str(source_root), str(fixture), "-o", str(executable)], check=True)
+                subprocess.run([str(executable)], check=True)
+
+        claim_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
+                                        b"SerenityOS PowerPC loader: claim probe released",
+                                        append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe")
+        for marker in (b"real-mode client calls", b"claim probe candidate", b"claim probe succeeded",
+                       b"claim probe released"):
+            if marker not in claim_output:
+                raise SystemExit(f"PowerPC loader missed {marker!r} in the claim probe")
 
         source = args.kernel_elf.read_bytes()
 

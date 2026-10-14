@@ -146,8 +146,18 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   serenity-loader-real-mode-calls serenity-loader-stop-before-kernel" -d trace:vof_write -D vof.log`.
   The probe card is `Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
 
-Next: dd the probe card to the SD card, `boot ide:0 serenity.elf` at the SmartFirmware prompt, and
-capture the serial log. Use the dump to write phase 2 (claims from `/memory`, `BootInfo` capture,
-native UART, `quiesce`). Rewrite only the loader on a card with `make-pegasos-card.py boot-only`.
+- 2026-10-14: The physical G3 Pegasos 2 completed the firmware tree dump after
+  bounding a large Radeon `rom` property to 128 displayed bytes. SmartFirmware
+  printed `Program terminated!` and restarted after the loader's `exit` call;
+  this is its observed normal termination behavior. The next image,
+  `Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`,
+  claims and releases one 4 KiB page selected from `/memory@0/available`,
+  then stops before changing the MMU. QEMU's forced real-mode check passes.
+
+Next: boot the claim-probe card on the physical Pegasos 2 with `boot ide:0 serenity.elf` and
+capture the `claim probe candidate`, `succeeded`, and `released` lines. The prior physical map
+predicts candidate `0x01800000`. After that, implement full phase 2 (kernel/HPT claims from
+`available`, `BootInfo` capture, native UART and `quiesce`). Rewrite only the loader on a card
+with `make-pegasos-card.py boot-only` during iterations.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.

@@ -106,6 +106,15 @@ The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
 
+The next physical image is
+`Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`.
+It preserves the RDB and ext2 root, with a new loader that selects a page
+from `/memory@0/available`, asks SmartFirmware to claim that exact physical
+address, and releases it before `exit`. Both quick and normal loader checks
+pass, including a QEMU run through the forced real-mode client-call path.
+The FFS `serenity.elf` in this image matches the rebuilt loader byte for byte.
+No MMU or kernel handoff is attempted on native firmware yet.
+
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It
 stopped while printing the Radeon `rom` property because the printer used a

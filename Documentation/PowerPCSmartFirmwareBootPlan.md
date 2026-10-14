@@ -160,6 +160,13 @@ These are observations for phase 2, not yet passed to the kernel.
 
 - Choose memory from `/memory` `available` and `claim` exact addresses; never
   use address-unspecified claims.
+- Before claiming space for the kernel, run a small exact-address probe. It
+  selects a 4 MiB-aligned page from the largest available range above the
+  loader, claims 4 KiB at that address, then releases it. The probe card is
+  `Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`.
+  QEMU's forced real-mode path selected `0x00800000` and reported successful
+  claim and release. On the physical memory map captured above, the expected
+  candidate is `0x01800000`; only the hardware run can confirm that claim.
 - Record everything the kernel needs into `BootInfo`: memory and reserved
   ranges, timebase, PCI bridges (existing), interrupt acknowledge (existing),
   PCI I/O window base, serial port (from the chosen console path or the VT8231
@@ -172,6 +179,11 @@ These are observations for phase 2, not yet passed to the kernel.
   marker. No firmware call after this point.
 
 Checkpoint: both UART markers, and a dump of the captured `BootInfo`.
+
+The exact-address claim probe is the next physical checkpoint. It still calls
+`exit` before any MMU change or kernel entry, so the expected final firmware
+behavior is the same restart observed during the survey. The full memory,
+UART, RTAS and `quiesce` handoff in this phase remains to be implemented.
 
 ### 3. Take over the MMU
 

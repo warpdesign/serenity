@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/Loader/AvailableMemoryClaim.h>
 #include <Kernel/Arch/powerpc/Loader/FirmwarePropertyValue.h>
 #include <Kernel/Arch/powerpc/Loader/Inflate.h>
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
@@ -34,6 +35,7 @@ extern "C" u8 __loader_start[];
 extern "C" u8 __stack_end[];
 
 static BootMemoryRange s_memory_ranges[32];
+static BootMemoryRange s_available_ranges[32];
 static FirmwareEntry s_firmware_entry;
 // SmartFirmware declares /options/real-mode? and must then be called with IR and DR clear.
 static bool s_firmware_real_mode;
@@ -104,7 +106,8 @@ static u32 next_peer(FirmwareEntry firmware, u32 node)
     return call.cells[1];
 }
 
-static bool discover_memory_ranges(FirmwareEntry firmware, u32 root, u32& range_count)
+static bool discover_memory_ranges(FirmwareEntry firmware, u32 root, char const* property,
+    BootMemoryRange* ranges, u32& range_count)
 {
     u32 address_cells = 1;
     u32 size_cells = 1;
@@ -118,12 +121,12 @@ static bool discover_memory_ranges(FirmwareEntry firmware, u32 root, u32& range_
     if (memory == 0 || memory == 0xffffffffu)
         return false;
     u32 cells[64];
-    int length = get_property(firmware, memory, "reg", cells, sizeof(cells));
-    if (length <= 0 || length % sizeof(u32) != 0)
+    int length = get_property(firmware, memory, property, cells, sizeof(cells));
+    if (length <= 0 || length > static_cast<int>(sizeof(cells)) || length % sizeof(u32) != 0)
         return false;
     unsigned long long total_bytes;
     return powerpc_parse_open_firmware_memory_reg(cells, length / sizeof(u32),
-        address_cells, size_cells, s_memory_ranges, 32, &range_count, &total_bytes);
+        address_cells, size_cells, ranges, 32, &range_count, &total_bytes);
 }
 
 static u32 discover_timebase_frequency(FirmwareEntry firmware)
@@ -265,6 +268,42 @@ static void write_text(FirmwareEntry firmware, u32 stdout, char const* text, u32
 {
     FirmwareCall call { "write", 3, 1, { stdout, firmware_pointer(text), length, 0 } };
     firmware(&call);
+}
+
+static bool run_claim_probe(FirmwareEntry firmware, u32 stdout)
+{
+    u32 root = find_device(firmware, "/");
+    u32 range_count = 0;
+    if (root == 0 || root == 0xffffffffu
+        || !discover_memory_ranges(firmware, root, "available", s_available_ranges, range_count)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe available memory unavailable\r\n");
+        return false;
+    }
+
+    constexpr u32 probe_size = 4096;
+    constexpr u32 probe_alignment = 4 * 1024 * 1024;
+    u32 loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + probe_size - 1) & ~(probe_size - 1);
+    u32 candidate = 0;
+    if (!Kernel::PowerPC::Loader::choose_claim_probe_address(
+            s_available_ranges, range_count, loader_end, probe_size, probe_alignment, candidate)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe has no safe candidate\r\n");
+        return false;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe candidate ");
+    write_hex(firmware, stdout, candidate);
+    if (claim_pages_at(firmware, candidate, probe_size) != candidate) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe failed\r\n");
+        return false;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe succeeded\r\n");
+
+    FirmwareCall release_call { "release", 2, 0, { candidate, probe_size } };
+    if (firmware(&release_call) != 0) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe release failed\r\n");
+        return false;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe released\r\n");
+    return true;
 }
 
 static void write_word(FirmwareEntry firmware, u32 stdout, u32 value)
@@ -423,9 +462,14 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
     if (!is_qemu || command_line_contains("serenity-loader-firmware-dump"))
         dump_firmware_tree(firmware, stdout);
+    if (!is_qemu || command_line_contains("serenity-loader-claim-probe")) {
+        run_claim_probe(firmware, stdout);
+        if (is_qemu)
+            return;
+    }
     if (!is_qemu) {
-        // Claiming memory, taking over the MMU and quiescing the firmware are not implemented for
-        // other firmware yet; return to its prompt instead of risking the machine state.
+        // Full kernel/HPT allocation, MMU takeover and quiesce remain unsupported on native
+        // firmware. The tested Pegasos 2 SmartFirmware restarts after this exit call.
         write_console(firmware, stdout, "SerenityOS PowerPC loader: stopping, only QEMU firmware is supported past this point\r\n");
         FirmwareCall exit_call { "exit", 0, 0, {} };
         firmware(&exit_call);
@@ -541,7 +585,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     u32 root = find_device(firmware, "/");
     u32 memory_range_count = 0;
     if (root == 0 || root == 0xffffffffu
-        || !discover_memory_ranges(firmware, root, memory_range_count)) {
+        || !discover_memory_ranges(firmware, root, "reg", s_memory_ranges, memory_range_count)) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware memory unavailable\r\n");
         return;
     }
