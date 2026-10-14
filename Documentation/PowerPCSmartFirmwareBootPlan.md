@@ -116,6 +116,17 @@ after quiesce, while keeping its firmware claims in `available`. Linux and
 Haiku use `reg` for physical RAM. Both paths can be tested with one SD image;
 the full-RAM path has not been validated on the board.
 
+The next physical boot reached the desktop with the conservative RAM map.
+The display looked bluish and startup was slow: `/init` at 10.126 s,
+WindowServer's main loop at 24.275 s, LoginServer's user session at
+34.330 s, and Taskbar/Terminal loading at about 44 s. The native RV280
+driver set `SURF_TRANSLATION_DIS` alongside the byte-swap bit. Linux
+radeonfb documents that the former disables the swapper on later Radeon
+chips. The next card image clears stale surface descriptors, keeps that bit
+clear on native big-endian Radeon hardware, and logs `SURFACE_CNTL` for the
+next serial capture. The IDE path uses polled PIO; its contribution to the
+startup delay remains unmeasured.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB

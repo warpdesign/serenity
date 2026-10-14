@@ -134,7 +134,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`.
+`4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -272,8 +272,27 @@ The user authorized updating the existing card image. Its FFS `serenity.elf`
 now contains the AC'97 fix, Radeon budget cap, optional installed-RAM map,
 and short boot arguments. Extraction from FFS matched the
 loader byte for byte. The root partition was not rewritten. The image SHA-256
-is `46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`;
-physical results for these changes are pending.
+is `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+
+The next physical boot reached the desktop with `weakrng` and the default
+244 MiB firmware-available map. The user saw a bluish desktop and slow
+startup/repainting. The attached serial capture begins when `/init` starts
+at 10.126 s. WindowServer entered its main loop at 24.275 s, the user session
+started at 34.330 s, and Taskbar and Terminal started loading at about 44 s.
+The IDE driver uses polled PIO transfers; no timing breakdown yet separates
+disk I/O, process loading, and framebuffer updates. The first appearance of
+the pointer before Taskbar is consistent with this staged startup.
+
+The physical RV280 driver requested 32-bit aperture byte swapping while also
+setting `SURF_TRANSLATION_DIS`. [Linux radeonfb](https://github.com/torvalds/linux/blob/master/drivers/video/fbdev/aty/radeon_base.c)
+notes that this bit disables the swapper on later Radeon chips. On big-endian
+native Radeon hardware, the driver now clears stale surface descriptors and
+enables swapping on both nonsurface apertures without translation disable.
+QEMU's older CONFIG_CNTL swap path is unchanged. The new serial log prints
+`Radeon: SURFACE_CNTL=...`; a native log regression requires swap bits 21 and
+23 and rejects translation-disable bit 8. Host checks and the kernel build
+pass, but the corrected colors still need physical confirmation. The updated
+card contains this fix, with only its FFS loader partition rewritten.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

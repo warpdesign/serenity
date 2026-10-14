@@ -296,14 +296,25 @@ ErrorOr<void> RadeonDisplayConnector::set_mode_setting(ModeSetting const& mode_s
     write32(Register::CRTCPitch, pitch | (pitch << 16));
     write32(Register::CRTCOffset, 0);
 
-    u32 surface_control = SurfaceControl::TranslationDisable;
+    // Linux radeonfb documents that SURF_TRANSLATION_DIS disables the aperture
+    // swapper on later chips. Clear stale firmware surface descriptors before
+    // leaving translation enabled for native big-endian framebuffer writes.
+    if constexpr (!AK::HostIsLittleEndian) {
+        if (m_aperture_swap == ApertureSwap::SurfaceControl) {
+            for (u32 index = 0; index < 8; ++index) {
+                write32(Register::Surface0LowerBound + 0x10 * index, 0);
+                write32(Register::Surface0UpperBound + 0x10 * index, 0x1f);
+                write32(Register::Surface0Info + 0x10 * index, 0);
+            }
+        }
+    }
+    u32 surface_control = surface_control_for_linear_32bpp(m_aperture_swap, AK::HostIsLittleEndian);
     if constexpr (!AK::HostIsLittleEndian) {
         if (m_aperture_swap == ApertureSwap::ConfigControl)
             write32_masked(Register::ConfigControl, ConfigControl::Aperture0Swap32BPP, ~ConfigControl::Aperture0EndianMask);
-        else
-            surface_control |= SurfaceControl::Aperture0Swap32BPP;
     }
     write32(Register::SurfaceControl, surface_control);
+    dmesgln("Radeon: SURFACE_CNTL={:#08x}", read32(Register::SurfaceControl));
 
     program_digital_output(horizontal_sync, vertical_sync);
     program_pll(dividers, horizontal_total);

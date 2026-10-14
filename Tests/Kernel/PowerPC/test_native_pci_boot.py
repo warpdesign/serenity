@@ -12,7 +12,8 @@ from pathlib import Path
 def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         require_uhci_progress: bool = False, require_entropy_progress: bool = False,
         require_ps2_mouse: bool = False, require_via_audio: bool = False,
-        require_desktop_memory: bool = False, require_installed_memory: bool = False) -> None:
+        require_desktop_memory: bool = False, require_installed_memory: bool = False,
+        require_radeon_endian: bool = False) -> None:
     if require_rtas and "PCI: Pegasos 2 using RTAS PCI configuration" not in log:
         raise AssertionError("RTAS PCI configuration did not succeed")
     if ("PCI: Pegasos 2 using RTAS PCI configuration" not in log
@@ -61,6 +62,13 @@ def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         regions = re.findall(r"MM: Physical region: P([0-9a-f]+) - P([0-9a-f]+)", log)
         if not any(int(end, 16) >= 0x1fffffff for _, end in regions):
             raise AssertionError("the kernel did not receive the full 512 MiB RAM range")
+    if require_radeon_endian:
+        surface_control = re.search(r"Radeon: SURFACE_CNTL=0x([0-9a-f]+)", log)
+        if surface_control is None:
+            raise AssertionError("Radeon did not report its aperture swap setting")
+        value = int(surface_control.group(1), 16)
+        if (value & 0x100) or (value & 0xa00000) != 0xa00000:
+            raise AssertionError("Radeon aperture byte swapping is disabled")
     if require_userland and "Running first user process:" not in log:
         raise AssertionError("the kernel did not start userland")
 
@@ -120,6 +128,15 @@ Running first user process: /sbin/init
         "MM: Physical region: P0000000006401000 - P000000001fffffff (size 0x19bff000)\n"
         "Running first user process:")
     check_boot(installed_memory_boot, True, require_desktop_memory=True, require_installed_memory=True)
+    radeon_endian_boot = desktop_memory_boot.replace("Running first user process:",
+        "Radeon: SURFACE_CNTL=0x00a00000\nRunning first user process:")
+    check_boot(radeon_endian_boot, True, require_radeon_endian=True)
+    try:
+        check_boot(radeon_endian_boot.replace("0x00a00000", "0x00200100"), True, require_radeon_endian=True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("the earlier disabled Radeon swapper must fail")
     try:
         check_boot(desktop_memory_boot, True, require_installed_memory=True)
     except AssertionError:
@@ -175,6 +192,7 @@ def main() -> None:
     parser.add_argument("--require-via-audio", action="store_true", help="require a usable VIA AC'97 output rate")
     parser.add_argument("--require-desktop-memory", action="store_true", help="require Radeon to leave RAM for userland")
     parser.add_argument("--require-installed-memory", action="store_true", help="require the optional full installed-RAM handoff")
+    parser.add_argument("--require-radeon-endian", action="store_true", help="require physical Radeon aperture byte swapping")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -185,7 +203,8 @@ def main() -> None:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
     check_boot(Path(path).read_text(errors="replace"), args.normal, args.require_rtas,
         args.require_uhci_progress, args.require_entropy_progress, args.require_ps2_mouse,
-        args.require_via_audio, args.require_desktop_memory, args.require_installed_memory)
+        args.require_via_audio, args.require_desktop_memory, args.require_installed_memory,
+        args.require_radeon_endian)
 
 
 if __name__ == "__main__":

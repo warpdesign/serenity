@@ -145,6 +145,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCRadeonFramebufferBudgetCheckQuick
         VERBATIM
     )
+    set(powerpc_radeon_aperture_endian_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRadeonApertureEndian.cpp")
+    set(powerpc_radeon_aperture_endian_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-Radeon-aperture-endian")
+    add_custom_target(PowerPCRadeonApertureEndianCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_radeon_aperture_endian_source}" -o "${powerpc_radeon_aperture_endian_executable}"
+        COMMAND "${powerpc_radeon_aperture_endian_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCRadeonApertureEndianCheck
+        COMMAND "${powerpc_radeon_aperture_endian_executable}" extended
+        DEPENDS PowerPCRadeonApertureEndianCheckQuick
+        VERBATIM
+    )
     set(powerpc_native_pci_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_pci_boot.py")
     add_custom_target(PowerPCNativePCIHardwareCheckQuick
         COMMAND python3 "${powerpc_native_pci_boot_test}"
@@ -216,6 +229,15 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     add_custom_target(PowerPCNativeInstalledMemoryCheck
         COMMAND python3 "${powerpc_native_pci_boot_test}" --require-installed-memory --normal
         DEPENDS PowerPCNativeInstalledMemoryCheckQuick
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeRadeonEndianCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-radeon-endian
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeRadeonEndianCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-radeon-endian --normal
+        DEPENDS PowerPCNativeRadeonEndianCheckQuick
         VERBATIM
     )
 

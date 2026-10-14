@@ -53,6 +53,9 @@ static constexpr u32 LVDSGeneralControl = 0x02d0;
 static constexpr u32 Overlay0ScaleControl = 0x0420;
 static constexpr u32 SubpictureControl = 0x0540;
 static constexpr u32 SurfaceControl = 0x0b00;
+static constexpr u32 Surface0LowerBound = 0x0b04;
+static constexpr u32 Surface0UpperBound = 0x0b08;
+static constexpr u32 Surface0Info = 0x0b0c;
 }
 
 namespace CRTCGeneralControl {
@@ -118,8 +121,9 @@ static constexpr u32 VGAAddressEnable = 1 << 13;
 
 namespace SurfaceControl {
 static constexpr u32 TranslationDisable = 1 << 8;
-// Byte-swap 32-bit words written through aperture 0, so big-endian CPUs see native-order pixels.
+// Byte-swap 32-bit words written through the nonsurface apertures.
 static constexpr u32 Aperture0Swap32BPP = 1 << 21;
+static constexpr u32 Aperture1Swap32BPP = 1 << 23;
 }
 
 // Rage 128-style aperture endianness control, which QEMU's ati-vga uses instead of SURFACE_CNTL.
@@ -133,6 +137,13 @@ enum class ApertureSwap {
     SurfaceControl,
     ConfigControl,
 };
+
+constexpr u32 surface_control_for_linear_32bpp(ApertureSwap aperture_swap, bool host_is_little_endian)
+{
+    if (!host_is_little_endian && aperture_swap == ApertureSwap::SurfaceControl)
+        return SurfaceControl::Aperture0Swap32BPP | SurfaceControl::Aperture1Swap32BPP;
+    return SurfaceControl::TranslationDisable;
+}
 
 namespace ClockControlIndex {
 static constexpr u32 IndexMask = 0x3f;

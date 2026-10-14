@@ -271,18 +271,32 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   boot-argument changes;
   extraction matched the rebuilt loader. Root ext2 was not rewritten. The
   image SHA-256 is
-  `46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`.
-  No QEMU run was made; physical desktop progress remains pending.
+  `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+  No QEMU run was made.
+
+- 2026-10-15: Physical boot with `weakrng` reached the desktop. Serial timing:
+  `/init` 10.126 s, WindowServer main loop 24.275 s, user login 34.330 s,
+  Taskbar and Terminal began loading around 44 s. The display was bluish,
+  and repainting was slow. The physical RV280 path set `SURF_TRANSLATION_DIS`
+  along with the 32-bit aperture byte-swap bit. Linux radeonfb notes that
+  translation disable also disables the swapper on later chips. The rebuilt
+  driver clears stale surface descriptors, enables both aperture swap bits
+  without translation disable on big-endian native Radeon, and logs the
+  resulting `SURFACE_CNTL`. Host and native-log regression checks were added;
+  physical color correction is pending. IDE uses polled PIO, but the time
+  spent on disk versus painting has not yet been measured. The sole current
+  SD image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`; its SHA-256 is
+  `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+  The FFS loader was replaced; ext2 root was unchanged. No QEMU run was made.
 
 Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 to the SD card, then boot with `boot ide:0 serenity.elf weakrng`.
 Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, and `native`.
-Capture the serial output through `Entering WindowServer main loop` or the
-next failure, including the new Radeon framebuffer mapping and AC'97 rate
-lines. The default RAM map remains conservative. If that boot reaches a
-stable desktop, the same SD card can separately test the upper RAM with
-`boot ide:0 serenity.elf weakrng fullram`.
+Capture the `Radeon: SURFACE_CNTL=` line and check whether desktop colors
+now look normal. The default RAM map remains conservative. The same SD card
+can separately test the upper RAM with
+`boot ide:0 serenity.elf weakrng fullram` after the color check.
 Check that the loader prints `using installed RAM from /memory/reg` and the
 kernel lists physical RAM ending at `0x1fffffff`. Plug the USB keyboard in
 after firmware boot. The monitor should still report 1024×768/60 until native
