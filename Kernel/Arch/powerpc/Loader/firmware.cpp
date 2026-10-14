@@ -36,6 +36,16 @@ extern "C" u8 __stack_end[];
 
 static BootMemoryRange s_memory_ranges[32];
 static BootMemoryRange s_available_ranges[32];
+static BootMemoryRange s_claimed_ranges[4];
+static u32 s_available_range_count;
+static u32 s_claimed_range_count;
+static u32 s_loader_end;
+static u32 s_native_uart_physical_base;
+static bool s_native_uart_output;
+static bool s_native_previous_was_carriage_return;
+static u32 s_native_timebase_frequency;
+static u32 s_native_mv64361_registers_base;
+static PowerPCPCIHostBridgeInfo s_native_pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT];
 static FirmwareEntry s_firmware_entry;
 // SmartFirmware declares /options/real-mode? and must then be called with IR and DR clear.
 static bool s_firmware_real_mode;
@@ -239,9 +249,45 @@ static bool command_line_contains(char const* needle)
     return false;
 }
 
+static bool append_native_root(u32& count)
+{
+    if (command_line_contains("root="))
+        return true;
+    char const* root = " root=lun3:0:0;part1";
+    for (u32 index = 0; root[index] != '\0'; ++index) {
+        if (count + 1 >= sizeof(s_command_line))
+            return false;
+        s_command_line[count++] = root[index];
+    }
+    s_command_line[count] = '\0';
+    return true;
+}
+
 static bool should_stop_before_kernel()
 {
     return command_line_contains("serenity-loader-stop-before-kernel");
+}
+
+static void write_native_uart_character(u8 value)
+{
+    auto* uart = reinterpret_cast<volatile u8*>(s_native_uart_physical_base);
+    u32 attempts = 100'000;
+    while ((uart[5] & 0x20u) == 0 && --attempts != 0)
+        asm volatile("nop" : : : "memory");
+    if (attempts != 0) {
+        uart[0] = value;
+        asm volatile("eieio" : : : "memory");
+    }
+}
+
+static void write_native_uart_text(char const* message, u32 length)
+{
+    for (u32 index = 0; index < length; ++index) {
+        if (message[index] == '\n' && !s_native_previous_was_carriage_return)
+            write_native_uart_character('\r');
+        write_native_uart_character(static_cast<u8>(message[index]));
+        s_native_previous_was_carriage_return = message[index] == '\r';
+    }
 }
 
 static void write_console(FirmwareEntry firmware, u32 stdout, char const* message)
@@ -249,6 +295,10 @@ static void write_console(FirmwareEntry firmware, u32 stdout, char const* messag
     u32 length = 0;
     while (message[length] != '\0')
         ++length;
+    if (s_native_uart_output) {
+        write_native_uart_text(message, length);
+        return;
+    }
     FirmwareCall call { "write", 3, 1, { stdout, firmware_pointer(message), length, 0 } };
     (void)firmware(&call);
 }
@@ -270,39 +320,104 @@ static void write_text(FirmwareEntry firmware, u32 stdout, char const* text, u32
     firmware(&call);
 }
 
-static bool run_claim_probe(FirmwareEntry firmware, u32 stdout)
+static bool prepare_available_claims(FirmwareEntry firmware, u32 stdout)
 {
     u32 root = find_device(firmware, "/");
-    u32 range_count = 0;
     if (root == 0 || root == 0xffffffffu
-        || !discover_memory_ranges(firmware, root, "available", s_available_ranges, range_count)) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe available memory unavailable\r\n");
+        || !discover_memory_ranges(firmware, root, "available", s_available_ranges, s_available_range_count)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: available RAM unavailable\r\n");
         return false;
     }
+    s_loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + 4095u) & ~4095u;
+    s_claimed_range_count = 0;
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: available RAM ready\r\n");
+    return true;
+}
 
-    constexpr u32 probe_size = 4096;
-    constexpr u32 probe_alignment = 4 * 1024 * 1024;
-    u32 loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + probe_size - 1) & ~(probe_size - 1);
+static u32 claim_available(FirmwareEntry firmware, u32 stdout, char const* name, u32 size, u32 alignment)
+{
+    if (s_claimed_range_count >= sizeof(s_claimed_ranges) / sizeof(s_claimed_ranges[0]))
+        return 0;
     u32 candidate = 0;
-    if (!Kernel::PowerPC::Loader::choose_claim_probe_address(
-            s_available_ranges, range_count, loader_end, probe_size, probe_alignment, candidate)) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe has no safe candidate\r\n");
-        return false;
+    if (!Kernel::PowerPC::Loader::choose_available_claim_address(
+            s_available_ranges, s_available_range_count, s_claimed_ranges, s_claimed_range_count,
+            s_loader_end, size, alignment, candidate)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: no available RAM for ");
+        write_console(firmware, stdout, name);
+        write_console(firmware, stdout, "\r\n");
+        return 0;
     }
-    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe candidate ");
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claiming ");
+    write_console(firmware, stdout, name);
+    write_console(firmware, stdout, " at ");
     write_hex(firmware, stdout, candidate);
-    if (claim_pages_at(firmware, candidate, probe_size) != candidate) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe failed\r\n");
-        return false;
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim size ");
+    write_hex(firmware, stdout, size);
+    if (claim_pages_at(firmware, candidate, size) != candidate) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim failed for ");
+        write_console(firmware, stdout, name);
+        write_console(firmware, stdout, "\r\n");
+        return 0;
     }
-    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe succeeded\r\n");
+    s_claimed_ranges[s_claimed_range_count++] = BootMemoryRange { candidate, size };
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: claimed ");
+    write_console(firmware, stdout, name);
+    write_console(firmware, stdout, "\r\n");
+    return candidate;
+}
 
-    FirmwareCall release_call { "release", 2, 0, { candidate, probe_size } };
-    if (firmware(&release_call) != 0) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe release failed\r\n");
+static bool capture_native_firmware(FirmwareEntry firmware, u32 stdout)
+{
+    u32 root = find_device(firmware, "/");
+    if (root == 0 || root == 0xffffffffu)
+        return false;
+    s_native_timebase_frequency = discover_timebase_frequency(firmware);
+    u32 south_bridge = 0;
+    s_native_mv64361_registers_base = discover_controller_base(firmware, root, south_bridge);
+    if (s_native_timebase_frequency == 0 || s_native_mv64361_registers_base == 0
+        || !discover_pci_host_bridges(firmware, root, south_bridge, s_native_pci_host_bridges)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: native firmware handoff unavailable\r\n");
         return false;
     }
-    write_console(firmware, stdout, "SerenityOS PowerPC loader: claim probe released\r\n");
+
+    constexpr u64 uart_port = 0x2f8;
+    for (u32 index = 0; index < s_native_pci_host_bridges[0].range_count; ++index) {
+        auto const& range = s_native_pci_host_bridges[0].ranges[index];
+        if (range.space != 1 || range.bus_address > uart_port
+            || uart_port - range.bus_address + 8 > range.length)
+            continue;
+        u64 physical = range.host_address + uart_port - range.bus_address;
+        if (physical > 0xffffffffu)
+            continue;
+        s_native_uart_physical_base = static_cast<u32>(physical);
+        break;
+    }
+    // The kernel's current early debug output still uses this Pegasos 2 address.
+    if (s_native_uart_physical_base != PEGASOS2_UART_PHYSICAL_BASE
+        || s_native_mv64361_registers_base != PEGASOS2_MV64361_REGISTERS_PHYSICAL_BASE) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: native I/O addresses differ from kernel\r\n");
+        return false;
+    }
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: native firmware handoff captured\r\n");
+    return true;
+}
+
+static bool quiesce_native_firmware(FirmwareEntry firmware, u32 stdout)
+{
+    char const* marker = "SerenityOS PowerPC loader: native UART before quiesce\r\n";
+    u32 marker_length = 0;
+    while (marker[marker_length] != '\0')
+        ++marker_length;
+    write_native_uart_text(marker, marker_length);
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware quiesce begin\r\n");
+    FirmwareCall call { "quiesce", 0, 0, {} };
+    if (firmware(&call) != 0) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware quiesce failed\r\n");
+        return false;
+    }
+    s_native_uart_output = true;
+    powerpc_loader_disable_translation();
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware quiesce complete\r\n");
     return true;
 }
 
@@ -457,30 +572,31 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     u32 qemu_boot_kernel[2];
     bool is_qemu = get_property(firmware, chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) > 0;
     u32 command_line_length = prepare_command_line(firmware, chosen);
+    if ((!is_qemu || command_line_contains("nativeboot")) && !append_native_root(command_line_length))
+        return;
     s_firmware_real_mode = firmware_requires_real_mode(firmware) || command_line_contains("serenity-loader-real-mode-calls");
 
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
     if (command_line_contains("ofdump"))
         dump_firmware_tree(firmware, stdout);
-    if (!is_qemu || command_line_contains("serenity-loader-claim-probe")) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: exact RAM claim probe starting\r\n");
-        run_claim_probe(firmware, stdout);
-        if (is_qemu)
+    bool use_available_claims = !is_qemu || command_line_contains("serenity-loader-claim-probe")
+        || command_line_contains("nativeboot");
+    if (use_available_claims) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: native allocation preparation starting\r\n");
+        if (!prepare_available_claims(firmware, stdout))
             return;
-    }
-    if (!is_qemu) {
-        // Full kernel/HPT allocation, MMU takeover and quiesce remain unsupported on native
-        // firmware. The tested Pegasos 2 SmartFirmware restarts after this exit call.
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: stopping, only QEMU firmware is supported past this point\r\n");
-        FirmwareCall exit_call { "exit", 0, 0, {} };
-        firmware(&exit_call);
-        return;
     }
 
     u32 compressed_size = _binary_kernel_elf_gz_end - _binary_kernel_elf_gz_start;
     u32 kernel_elf_size = Kernel::PowerPC::Loader::gzip_uncompressed_size(_binary_kernel_elf_gz_start, compressed_size);
     u32 above_loader = (reinterpret_cast<FlatPtr>(__stack_end) + 0xfffffu) & ~0xfffffu;
-    u32 kernel_elf_physical = kernel_elf_size == 0 ? 0 : claim_pages_at(firmware, above_loader, (kernel_elf_size + 4095u) & ~4095u);
+    u32 kernel_elf_physical = 0;
+    if (kernel_elf_size != 0 && kernel_elf_size <= 0xffffffffu - 4095u) {
+        u32 allocation_size = (kernel_elf_size + 4095u) & ~4095u;
+        kernel_elf_physical = use_available_claims
+            ? claim_available(firmware, stdout, "kernel ELF staging", allocation_size, 4 * 1024 * 1024)
+            : claim_pages_at(firmware, above_loader, allocation_size);
+    }
     if (kernel_elf_physical == 0 || kernel_elf_physical == 0xffffffffu
         || !Kernel::PowerPC::Loader::gzip_inflate(_binary_kernel_elf_gz_start, compressed_size,
             reinterpret_cast<u8*>(kernel_elf_physical), kernel_elf_size)) {
@@ -503,7 +619,9 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     write_hex(firmware, stdout, plan.entry_offset);
 
     u32 span = plan.end_virtual_offset - plan.first_virtual_offset;
-    u32 physical_base = claim_pages(firmware, span, 2 * 1024 * 1024);
+    u32 physical_base = use_available_claims
+        ? claim_available(firmware, stdout, "kernel load span", (span + 4095u) & ~4095u, 2 * 1024 * 1024)
+        : claim_pages(firmware, span, 2 * 1024 * 1024);
     if (physical_base == 0 || physical_base == 0xffffffffu
         || (physical_base & (2 * 1024 * 1024 - 1)) != 0
         || physical_base > 0xffffffffu - span
@@ -536,7 +654,9 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     // a cache. With 65536 hash groups, each of the four kernel segments can
     // occupy at most two entries in a complementary group pair.
     constexpr u32 table_size = 4 * 1024 * 1024;
-    u32 table_physical = claim_pages(firmware, table_size, table_size);
+    u32 table_physical = use_available_claims
+        ? claim_available(firmware, stdout, "HPT", table_size, table_size)
+        : claim_pages(firmware, table_size, table_size);
     Kernel::PowerPC::Loader::KernelMappings mappings;
     if (table_physical == 0 || table_physical == 0xffffffffu
         || !Kernel::PowerPC::Loader::map_kernel_image(kernel_elf,
@@ -550,6 +670,19 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     write_hex(firmware, stdout, mappings.table_physical);
     write_console(firmware, stdout, "SerenityOS PowerPC loader: mapped pages ");
     write_hex(firmware, stdout, mappings.mapped_pages);
+
+    if (use_available_claims) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: native allocation preparation passed\r\n");
+        if ((!is_qemu && command_line_contains("stop")) || (is_qemu && !command_line_contains("nativeboot"))) {
+            if (!is_qemu) {
+                FirmwareCall exit_call { "exit", 0, 0, {} };
+                firmware(&exit_call);
+            }
+            return;
+        }
+        if (!capture_native_firmware(firmware, stdout) || !quiesce_native_firmware(firmware, stdout))
+            return;
+    }
 
     u32 marker_physical = firmware_pointer(reinterpret_cast<void const*>(powerpc_loader_high_marker));
     u32 marker_high = KERNEL_MAPPING_BASE + marker_physical;
@@ -583,12 +716,17 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     }
     write_console(firmware, stdout, "SerenityOS PowerPC loader: high kernel alias passed\r\n");
 
-    u32 root = find_device(firmware, "/");
-    u32 memory_range_count = 0;
-    if (root == 0 || root == 0xffffffffu
-        || !discover_memory_ranges(firmware, root, "reg", s_memory_ranges, memory_range_count)) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware memory unavailable\r\n");
-        return;
+    u32 memory_range_count = s_available_range_count;
+    BootMemoryRange const* memory_ranges = s_available_ranges;
+    u32 root = 0;
+    if (!use_available_claims) {
+        root = find_device(firmware, "/");
+        if (root == 0 || root == 0xffffffffu
+            || !discover_memory_ranges(firmware, root, "reg", s_memory_ranges, memory_range_count)) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware memory unavailable\r\n");
+            return;
+        }
+        memory_ranges = s_memory_ranges;
     }
     u32 loader_start = reinterpret_cast<FlatPtr>(__loader_start);
     u32 loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + 4095u) & ~4095u;
@@ -600,7 +738,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     Kernel::BootInfo boot_info {};
     boot_info.boot_method = Kernel::BootMethod::FirmwareMemoryMap;
     boot_info.boot_method_specific.firmware_memory_map = BootMemoryMap {
-        s_memory_ranges, memory_range_count, s_reserved_ranges, 4
+        memory_ranges, memory_range_count, s_reserved_ranges, 4
     };
     boot_info.physical_to_virtual_offset = static_cast<u32>(runtime_base) - physical_base;
     boot_info.kernel_mapping_base = KERNEL_MAPPING_BASE;
@@ -609,12 +747,19 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     boot_info.arch_specific.hpt_virtual_address = mappings.table_virtual;
     boot_info.arch_specific.hpt_physical_address = PhysicalAddress { mappings.table_physical };
     boot_info.arch_specific.hpt_group_count = mappings.group_count;
-    boot_info.arch_specific.timebase_frequency_hz = discover_timebase_frequency(firmware);
-    u32 south_bridge = 0;
-    boot_info.arch_specific.mv64361_registers_physical_base = discover_controller_base(firmware, root, south_bridge);
-    if (!discover_pci_host_bridges(firmware, root, south_bridge, boot_info.arch_specific.pci_host_bridges)) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware PCI bridges unavailable\r\n");
-        return;
+    if (use_available_claims) {
+        boot_info.arch_specific.timebase_frequency_hz = s_native_timebase_frequency;
+        boot_info.arch_specific.mv64361_registers_physical_base = s_native_mv64361_registers_base;
+        for (u32 index = 0; index < POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT; ++index)
+            boot_info.arch_specific.pci_host_bridges[index] = s_native_pci_host_bridges[index];
+    } else {
+        boot_info.arch_specific.timebase_frequency_hz = discover_timebase_frequency(firmware);
+        u32 south_bridge = 0;
+        boot_info.arch_specific.mv64361_registers_physical_base = discover_controller_base(firmware, root, south_bridge);
+        if (!discover_pci_host_bridges(firmware, root, south_bridge, boot_info.arch_specific.pci_host_bridges)) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware PCI bridges unavailable\r\n");
+            return;
+        }
     }
     boot_info.arch_specific.pci_host_bridge_count = POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT;
     boot_info.cmdline = AK::StringView { s_command_line, command_line_length };

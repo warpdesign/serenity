@@ -1,6 +1,6 @@
 # SerenityOS on PowerPC Pegasos 2: current status
 
-Status checked on 2026-10-14.
+Status checked on 2026-10-15.
 
 The goal is to port SerenityOS to the Pegasos 2, a 32-bit PowerPC G3/G4
 machine. The port currently boots and runs a graphical SerenityOS desktop on
@@ -43,11 +43,12 @@ probe and is historical.
   disk with `root=lun3:0:0;part1`, the desktop runs from the ext2 partition.
 - The loader can survey native Open Firmware: it prints the firmware identity,
   entry MSR, PVR, console and boot properties, and dumps the device tree when
-  `ofdump` is requested. On firmware other than QEMU's
-  VOF it calls `exit` before kernel allocation or MMU changes. The first
-  physical run found a dump-length bug at the
-  Radeon ROM property; the second run completed the tree dump and reached the
-  stop message. SmartFirmware then restarted after the `exit` call.
+  `ofdump` is requested. The physical survey completed, and a later 4 KiB
+  exact-address claim at `0x01800000` succeeded and was released. The current
+  native path allocates kernel staging, the loaded image and HPT from
+  `/memory@0/available`, captures firmware settings, calls `quiesce`, switches
+  to direct UART output, sets up its MMU, and enters the kernel. That combined
+  path has reached the desktop in QEMU; the physical run is pending.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
   output routing left by the video BIOS, and programs the pixel PLL from the
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
@@ -81,6 +82,7 @@ cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 cmake --build Build/powerpc --target PowerPCPS2InputCheck
 cmake --build Build/powerpc --target PowerPCIDEBootCheck
 cmake --build Build/powerpc --target PowerPCRDBCardBootCheck
+cmake --build Build/powerpc --target PowerPCNativeCardBootCheck
 cmake --build Build/powerpc --target PowerPCRadeonDesktopCheck
 ```
 
@@ -103,22 +105,22 @@ booted the desktop from the card's ext2 partition on IDE, wrote a 108,894-byte
 file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
+Its SHA-256 is
+`198ef2096243943241acb2613e81e6493b5c4c52d894c043d6a7f1898f3709e8`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
 
-It preserves the RDB and ext2 root, with a loader that selects a page
-from `/memory@0/available`, asks SmartFirmware to claim that exact physical
-address, and releases it before `exit`. Both quick and normal loader checks
-pass, including a QEMU run through the forced real-mode client-call path.
-The FFS `serenity.elf` in this image matches the rebuilt loader byte for byte.
-The loader does not print the full device tree unless explicitly requested
-in `bootargs`, and prints `exact RAM claim probe starting` before the claim.
-The most recent physical log contained neither claim markers nor errors
-between `firmware tree end` and the stop message. It matches the earlier
-survey-only loader; the exact card image used there is unconfirmed. The
-obsolete generated card images were removed to avoid confusion. No MMU or
-kernel handoff is attempted on native firmware yet.
+The physical 4 KiB claim probe subsequently printed candidate `0x01800000`,
+success and release markers. The current loader now claims three real memory
+regions, loads and relocates the kernel, prepares the HPT, captures firmware
+settings, switches to direct UART output around `quiesce`, and enters the
+kernel by default. The same card accepts `stop` in `bootargs` to stop after
+allocations, or `ofdump` to show the already captured device tree. QEMU's
+forced native path boots the desktop from IDE with no explicit `root=` and
+writes a 108,894-byte file with a clean ext2 result on both 750 and 750CXe.
+The FFS `serenity.elf` in that card image matches the rebuilt loader byte for
+byte. The physical full boot has not been tested yet.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It
@@ -129,8 +131,7 @@ pass. `serenity.elf` in the local FFS partition has been replaced with the
 fixed loader and matches the rebuilt ELF byte for byte. The second physical
 capture showed the bounded ROM property, `firmware tree end`, the stop
 message, and `Program terminated!` before SmartFirmware restarted. The
-read-only firmware survey is complete; the next work is the native memory,
-UART and MMU handoff. The hardware plan and full observations are in
+read-only firmware survey is complete. The hardware plan and full observations are in
 [PowerPCSmartFirmwareBootPlan.md](PowerPCSmartFirmwareBootPlan.md).
 
 ## PixelPaint bring-up

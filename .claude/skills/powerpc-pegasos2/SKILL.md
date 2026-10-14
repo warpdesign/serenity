@@ -157,13 +157,23 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   The next submitted physical log had no claim markers between tree end and
   the stop message, which matches the earlier survey-only loader. The exact
   card image used is unconfirmed. Obsolete generated card images were removed;
-  the one current image prints `exact RAM claim probe starting` and makes the
-  tree dump opt-in via `ofdump`.
+  the claim image printed `exact RAM claim probe starting` and made the tree
+  dump opt-in via `ofdump`. The current image is the combined boot path below.
 
-Next: boot the claim-probe card on the physical Pegasos 2 with `boot ide:0 serenity.elf` and
-capture the `claim probe candidate`, `succeeded`, and `released` lines. The prior physical map
-predicts candidate `0x01800000`. After that, implement full phase 2 (kernel/HPT claims from
-`available`, `BootInfo` capture, native UART and `quiesce`). Rewrite only the loader on a card
-with `make-pegasos-card.py boot-only` during iterations.
+- 2026-10-15: The physical 4 KiB claim at `0x01800000` succeeded and was released.
+  To avoid more SD card writes for one-purpose probes, the current loader now
+  claims kernel staging, loaded kernel and HPT from `/memory@0/available`,
+  captures firmware settings, calls `quiesce`, keeps serial output through the
+  native UART, switches the MMU and enters the kernel. QEMU's forced native
+  path reaches the desktop from the RDB IDE card and writes a 108,894-byte
+  file with a clean ext2 result on both 750 and 750CXe. The physical full
+  boot has not run yet. `stop` in `bootargs` stops after allocations on the
+  same card; `ofdump` explicitly enables the tree dump.
+
+Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+to the SD card, boot with `boot ide:0 serenity.elf`, and capture the serial
+output from `native allocation preparation starting` onward. The last
+checkpoint will identify a claim, UART, `quiesce`, MMU, kernel, or userland
+failure. Do not build separate cards for each checkpoint.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.

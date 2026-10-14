@@ -50,7 +50,8 @@ def boot_and_write(args, card, work):
         command = [
             args.qemu, "-M", "pegasos2", "-cpu", args.cpu, "-m", str(args.memory),
             "-vga", "none", "-device", "virtio-gpu-pci", "-device", "virtio-keyboard-pci",
-            "-device", "virtio-mouse-pci", "-kernel", str(args.loader), "-append", "root=lun3:0:0;part1",
+            "-device", "virtio-mouse-pci", "-kernel", str(args.loader), "-append",
+            "nativeboot serenity-loader-real-mode-calls" if args.nativeboot else "root=lun3:0:0;part1",
             "-drive", f"if=ide,format=raw,index=0,file={card}",
             "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0",
             "-display", "none", "-serial", f"file:{serial}",
@@ -96,11 +97,17 @@ def boot_and_write(args, card, work):
     expected = "".join(f"{n}\n" for n in range(1, LINE_COUNT + 1)).encode()
     file_matches = written.exists() and written.read_bytes() == expected
     fsck = subprocess.run([find_e2fsck(), "-fn", str(disk)], capture_output=True, text=True)
+    native_markers_present = not args.nativeboot or all(marker in output for marker in (
+        b"native UART before quiesce",
+        b"firmware quiesce complete", b"high kernel alias passed", b"boot handoff validated",
+        b"entering kernel", b"Entering WindowServer main loop"))
     if (b"Detected RDB partition, DosType 444f5303" not in output or b"Detected RDB partition, DosType 4c4e5800" not in output
+            or not native_markers_present
             or not typed or not file_matches or fsck.returncode != 0
             or b"KERNEL PANIC" in output or b"CRASH:" in output):
         raise SystemExit(
-            f"Pegasos 2 RDB card boot failed: typed={typed}, file matches={file_matches}, e2fsck={fsck.returncode}\n"
+            f"Pegasos 2 RDB card boot failed: typed={typed}, native markers={native_markers_present}, "
+            f"file matches={file_matches}, e2fsck={fsck.returncode}\n"
             + fsck.stdout[-1000:] + output.decode(errors="replace")[-3500:] + errors.decode(errors="replace")[-1000:]
         )
     print(f"Pegasos 2 booted the desktop from the RDB card's ext2 partition and wrote {len(expected)} bytes with a clean filesystem")
@@ -115,6 +122,7 @@ def main():
     parser.add_argument("--cpu", default="750cxe")
     parser.add_argument("--memory", type=int, default=512)
     parser.add_argument("--timeout", type=int, default=300)
+    parser.add_argument("--nativeboot", action="store_true")
     args = parser.parse_args()
     source = Path(__file__).parents[3]
     with tempfile.TemporaryDirectory(prefix="powerpc-card-boot-", dir="/tmp") as directory:

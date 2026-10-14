@@ -54,6 +54,33 @@ def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, term
         return output
 
 
+def check_native_handoff(qemu: str, loader: Path, memory: int, cpu: str | None):
+    with tempfile.TemporaryDirectory(prefix="serenity-powerpc-native-handoff-") as directory:
+        serial = Path(directory) / "serial.log"
+        command = [qemu, "-M", "pegasos2", "-m", str(memory), "-kernel", str(loader),
+                   "-append", "nativeboot serenity-loader-real-mode-calls serenity-loader-stop-before-kernel",
+                   "-display", "none", "-serial", f"file:{serial}", "-monitor", "none", "-no-reboot"]
+        if cpu:
+            command.extend(("-cpu", cpu))
+        process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 30
+            while time.monotonic() < deadline and process.poll() is None:
+                output = serial.read_bytes() if serial.exists() else b""
+                if b"SerenityOS PowerPC loader: boot handoff validated" in output:
+                    break
+                time.sleep(0.05)
+        finally:
+            process.terminate()
+            _, errors = process.communicate(timeout=5)
+        output = serial.read_bytes() if serial.exists() else b""
+        for marker in (b"native UART before quiesce", b"firmware quiesce complete",
+                       b"high kernel alias passed", b"boot handoff validated"):
+            if marker not in output:
+                raise SystemExit(f"PowerPC native handoff missed {marker!r}:\n"
+                                 + output.decode(errors="replace") + errors.decode(errors="replace"))
+
+
 def read_physical_memory(monitor: Path, addresses: list[tuple[int, bytes]]):
     with socket.socket(socket.AF_UNIX) as client:
         client.settimeout(3)
@@ -100,21 +127,27 @@ def main():
                 subprocess.run([str(executable)], check=True)
 
         claim_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
-                                        b"SerenityOS PowerPC loader: claim probe released",
+                                        b"SerenityOS PowerPC loader: native allocation preparation passed",
                                         append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe")
-        for marker in (b"real-mode client calls", b"exact RAM claim probe starting",
-                       b"claim probe candidate", b"claim probe succeeded",
-                       b"claim probe released"):
+        for marker in (b"real-mode client calls", b"native allocation preparation starting",
+                       b"kernel ELF staging", b"kernel image decompressed",
+                       b"kernel load span", b"kernel relocations applied",
+                       b"HPT", b"kernel high mappings prepared",
+                       b"native allocation preparation passed"):
             if marker not in claim_output:
                 raise SystemExit(f"PowerPC loader missed {marker!r} in the claim probe")
+        if claim_output.count(b"SerenityOS PowerPC loader: claimed ") != 3:
+            raise SystemExit("PowerPC loader did not claim all three native allocations")
         if b"firmware tree begin" in claim_output:
             raise SystemExit("PowerPC claim probe dumped the full firmware tree without a request")
 
         dump_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
-                                       b"SerenityOS PowerPC loader: claim probe released",
+                                       b"SerenityOS PowerPC loader: native allocation preparation passed",
                                        append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe ofdump")
         if b"firmware tree begin" not in dump_output or b"firmware tree end" not in dump_output:
             raise SystemExit("PowerPC loader did not dump the firmware tree when requested")
+
+        check_native_handoff(args.qemu, args.loader, args.memory, args.cpu)
 
         source = args.kernel_elf.read_bytes()
 

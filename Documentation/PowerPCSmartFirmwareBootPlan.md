@@ -19,19 +19,19 @@ The Haiku PowerPC port has already booted this machine
 are the starting point here; each one still has to be confirmed for our
 loader.
 
-## What the current loader assumes
+## Loader handoff and remaining hardware checks
 
 `Kernel/Arch/powerpc/Loader/` is one ELF containing the kernel
-(`_binary_kernel_elf_*`). It is written for VOF:
+(`_binary_kernel_elf_*`). It now has a native SmartFirmware handoff path:
 
-| Area | Current behaviour | Problem on SmartFirmware |
+| Area | Current behaviour | Remaining physical check |
 | --- | --- | --- |
-| Client calls | Calls the entry in `r5` with whatever MSR firmware entered with. | SmartFirmware reports `/options/real-mode? = true` but enters with `MSR = 0x3030` (IR/DR on). Calls must be made with IR/DR off. |
-| Memory | `claim(0, size, align)` for the kernel and HPT. | An address-unspecified `claim` returned 0 on the real machine. |
-| MMU | Loads SDR1 and turns translation on, leaving BATs alone. | Firmware leaves identity DBATs at `0x00000000`, `0x80000000`, `0xc0000000` and `0xf0000000`. BATs win over the HPT, and `0xc0000000` is our kernel base. |
-| Firmware lifetime | Never calls `quiesce`; passes the entry point to the kernel. | Firmware must be stopped before the OS owns the MMU. |
-| Console | Firmware `stdout` until kernel entry. | `stdout` may be the screen; the serial port must be found and used natively. |
-| Device addresses | Kernel uses QEMU constants: PCI I/O base `0xfe000000`, COM2 at `0x2f8` (`Pegasos2/HardwareAddresses.h`) for debug output, PIC, RTC and i8042. | Must come from the firmware tree. |
+| Client calls | Uses the real-mode trampoline when `/options/real-mode?` is true. | Calls after the completed survey, especially `quiesce`. |
+| Memory | Native path claims the ELF staging area, loaded kernel and HPT at exact addresses selected from `/memory@0/available`. | Large claims and writes on physical RAM. |
+| MMU | Turns translation off after `quiesce`; the HPT setup replaces the firmware BATs with identity RAM and PCI I/O mappings before enabling translation. | BAT switch and high alias on the physical CPU. |
+| Firmware lifetime | Captures the needed firmware properties, then calls `quiesce` before MMU takeover. | SmartFirmware `quiesce` result. |
+| Console | Uses firmware `stdout` before `quiesce`, then polls the native UART without changing its line settings. | Serial output after `quiesce` on the physical board. |
+| Device addresses | Validates that the firmware's PCI I/O and MV64361 bases match the kernel's current Pegasos 2 constants. | Remove the remaining constants after the first native boot. |
 | RTAS | Not passed to the kernel, so RTAS shutdown/reboot is unused. | Instantiate RTAS before `quiesce` and pass it on. |
 | Image size | 6.1 MB with KUBSAN and the kernel gzip-compressed (2.4 MB without KUBSAN). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
@@ -122,10 +122,9 @@ through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
 and DR around the call. It prints the firmware kind, the call mode, the entry
 MSR, the PVR, the console path, `bootpath` and `bootargs`. The complete device
 tree is printed only when `ofdump` is supplied in
-`bootargs`; the physical survey already captured it. On firmware without
-`/chosen` `qemu,boot-kernel` it calls `exit` before kernel allocation or MMU
-change. On the physical Pegasos 2, SmartFirmware restarts after that call;
-it does not return directly to the existing prompt. In QEMU, the
+`bootargs`; the physical survey already captured it. The original survey
+loader called `exit` before kernel allocation or MMU changes. On the physical
+Pegasos 2, SmartFirmware restarted after that call. In QEMU, the
 `ofdump` and `serenity-loader-real-mode-calls` boot
 arguments exercise the dump and the trampoline; the boot then continues
 normally. The earlier survey image has been retired; the one current SD card
@@ -161,38 +160,42 @@ These are observations for phase 2, not yet passed to the kernel.
 
 - Choose memory from `/memory` `available` and `claim` exact addresses; never
   use address-unspecified claims.
-- Before claiming space for the kernel, run a small exact-address probe. It
-  selects a 4 MiB-aligned page from the largest available range above the
-  loader, claims 4 KiB at that address, then releases it. The probe card is
-  `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
-  QEMU's forced real-mode path selected `0x00800000` and reported successful
-  claim and release. On the physical memory map captured above, the expected
-  candidate is `0x01800000`; only the hardware run can confirm that claim.
+- A 4 KiB exact-address claim at `0x01800000` succeeded and was released on
+  the physical machine. The current loader uses the same selection rules for
+  the decompressed kernel ELF, loaded kernel span and 4 MiB HPT, excluding its
+  previous claims. It keeps those allocations until kernel entry.
 - Record everything the kernel needs into `BootInfo`: memory and reserved
   ranges, timebase, PCI bridges (existing), interrupt acknowledge (existing),
-  PCI I/O window base, serial port (from the chosen console path or the VT8231
-  node, with its clock), display node properties (read without opening the
-  `screen` package; opening it re-runs the Radeon BIOS), boot path and
-  arguments.
+  PCI I/O window and UART. The current loader captures the timebase, MV64361
+  base and PCI ranges before `quiesce`, and validates that the I/O and UART
+  addresses match the kernel's current Pegasos 2 constants. Dynamic kernel
+  addresses and display properties remain to be added.
 - Instantiate RTAS and pass its entry, base and size; the kernel's
   `RTASCall.S` and `PowerState.cpp` already know how to call it.
-- Initialise the native UART, print a marker, call `quiesce`, print a second
-  marker. No firmware call after this point.
+- Print directly through the native UART, call `quiesce`, disable translation,
+  and keep printing through that UART. No firmware call after this point.
 
-Checkpoint: both UART markers, and a dump of the captured `BootInfo`.
+Checkpoint: `native UART before quiesce`, `firmware quiesce complete`,
+`high kernel alias passed`, `boot handoff validated`, and the first kernel
+serial message on the physical machine.
 
-The exact-address claim probe is the next physical checkpoint. The latest
-physical log went directly from `firmware tree end` to the stop message, with
-no claim-probe marker or error. That matches the earlier survey-only loader;
-the card image used for that boot has not been identified. The one current
-image skips the dump by default and prints `exact RAM claim probe starting`
-before reading `available`. Its SHA-256 is
-`a8e01109aba1ac46bd469c90618196ffb223f16ac4091185ad312a445d7c0cb0`.
-The FFS `serenity.elf` was extracted and run in QEMU: it printed the start,
-candidate, success and release markers without a tree dump. It still calls
-`exit` before any MMU change or kernel entry, so the expected final firmware
-behavior is the same restart observed during the survey. The full memory,
-UART, RTAS and `quiesce` handoff in this phase remains to be implemented.
+The loader's forced native path boots the QEMU Pegasos 2 desktop from the RDB
+IDE card, reaches WindowServer, writes a file and leaves ext2 clean. It also
+works without an explicit `root=` argument: the loader supplies
+`root=lun3:0:0;part1` when booting the native path. Quick 750 and normal
+750CXe tests are `PowerPCNativeCardBootCheckQuick` and
+`PowerPCNativeCardBootCheck`. QEMU does not reproduce SmartFirmware's entry
+MSR or physical UART behavior, so the current card image attempts all of
+these stages in one physical boot. Passing `stop` in `bootargs` stops after
+the three allocations on the same card; `ofdump` remains an optional tree
+dump. RTAS and removing the remaining fixed kernel device addresses can
+follow the first native kernel boot.
+
+The one current image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`,
+SHA-256 `198ef2096243943241acb2613e81e6493b5c4c52d894c043d6a7f1898f3709e8`.
+The `serenity.elf` extracted from its FFS partition matches the rebuilt
+loader. This is the only SD card image to write for the combined hardware
+attempt.
 
 ### 3. Take over the MMU
 
