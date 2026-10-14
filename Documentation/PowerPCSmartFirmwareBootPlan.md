@@ -122,8 +122,9 @@ through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
 and DR around the call. It prints the firmware kind, the call mode, the entry
 MSR, the PVR, the console path, `bootpath` and `bootargs`, then dumps the whole
 device tree (every node and property, values cut at 128 bytes). On firmware
-without `/chosen` `qemu,boot-kernel` it is intended to call `exit` and return
-to the SmartFirmware prompt, before any `claim` or MMU change. In QEMU, the
+without `/chosen` `qemu,boot-kernel` it calls `exit` before any `claim` or MMU
+change. On the physical Pegasos 2, SmartFirmware restarts after that call;
+it does not return directly to the existing prompt. In QEMU, the
 `serenity-loader-firmware-dump` and `serenity-loader-real-mode-calls` boot
 arguments exercise the dump and the trampoline; the boot then continues
 normally. The card image with this loader is
@@ -136,8 +137,12 @@ returned by `getprop` even though it supplied a 128-byte buffer. Its output
 is now bounded by the supplied capacity and still reports the full property
 length. A host regression reproduced the excessive output before the fix and
 passed afterward; both QEMU loader targets pass. The card image above has
-been updated with the fixed loader. A second physical run is needed to verify
-that the tree ends and control returns to the prompt.
+been updated with the fixed loader. The second physical run printed a bounded
+`rom` property (`0x00020000` bytes total), continued through the Radeon
+`assigned-addresses`, printed `firmware tree end` and the stop message, then
+SmartFirmware printed `Program terminated!` and restarted. This completes the
+read-only survey checkpoint. The firmware restart is the observed behavior of
+the `exit` client service here; it did not indicate a kernel crash.
 
 The first capture established SmartFirmware 1.2 (`Pegasos2,1.2`), entry MSR
 `0x00003030`, CPU PVR `0x00083311`, console path `/failsafe`, and boot path
@@ -146,8 +151,10 @@ The first capture established SmartFirmware 1.2 (`Pegasos2,1.2`), entry MSR
 `0x01800000`–`0x0fc00000`. The south PCI bridge reports I/O window
 `0xfe000000` and interrupt acknowledge `0xf1000cb4`; the other PCI bridge
 reports I/O window `0xf8000000`. An ISA serial node exists at I/O port
-`0x2f8`, and the Radeon has PCI ID `1002:5964`. These are observations for
-phase 2, not yet passed to the kernel.
+`0x2f8`, and the Radeon has PCI ID `1002:5964`. Its firmware-assigned BARs
+are framebuffer `0xc0000000` (256 MiB), I/O `0xf8001000` (256 bytes),
+register aperture `0xd0000000` (64 KiB), and ROM `0xd0020000` (128 KiB).
+These are observations for phase 2, not yet passed to the kernel.
 
 ### 2. Capture the firmware contract, then quiesce
 
