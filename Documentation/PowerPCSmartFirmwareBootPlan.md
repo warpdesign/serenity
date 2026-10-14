@@ -7,11 +7,11 @@ DVI, SmartFirmware from around 2005) from SmartFirmware to the SerenityOS
 desktop, with the root filesystem on its IDE disk. QEMU's Virtual Open Firmware
 (VOF) path must keep working unchanged.
 
-The machine is debugged over a serial cable from a Mac, as during the Haiku
-port. Its disk is an SD card in an IDE-to-SD adapter, the same card Haiku
-booted from. Network (TFTP) boot is not assumed to work, so every test boots
-from that card. The card's whole content may be replaced; it can be rewritten
-for Haiku afterwards.
+The Pegasos II is debugged over a serial cable connected to a separate host
+computer running a terminal, as during the Haiku port. Its disk is an SD card
+in an IDE-to-SD adapter, the same card Haiku booted from. Network (TFTP) boot
+is not assumed to work, so every test boots from that card. The card's whole
+content may be replaced; it can be rewritten for Haiku afterwards.
 
 The Haiku PowerPC port has already booted this machine
 ([Haiku-PowerPC](https://github.com/warpdesign/Haiku-PowerPC), branch
@@ -33,7 +33,7 @@ loader.
 | Console | Firmware `stdout` until kernel entry. | `stdout` may be the screen; the serial port must be found and used natively. |
 | Device addresses | Kernel uses QEMU constants: PCI I/O base `0xfe000000`, COM2 at `0x2f8` (`Pegasos2/HardwareAddresses.h`) for debug output, PIC, RTC and i8042. | Must come from the firmware tree. |
 | RTAS | Not passed to the kernel, so RTAS shutdown/reboot is unused. | Instantiate RTAS before `quiesce` and pass it on. |
-| Image size | 26.8 MB: `.ksyms` 8 MB (mostly padding), `.text` 7 MB, `.rela.dyn` 5.4 MB. Stripping saves nothing. | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
+| Image size | 6.1 MB with the kernel gzip-compressed (26.8 MB uncompressed: `.ksyms` 8 MB mostly padding, `.text` 7 MB, `.rela.dyn` 5.4 MB). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
 The kernel itself does not call Open Firmware after entry. PCI bridge windows,
 the MV64361 base, memory ranges and the timebase are already read from the
@@ -60,12 +60,31 @@ Plan:
    find the ext2 partition through the RDB. Teach `LibPartition` to read RDB
    (it reads MBR, EBR and GPT today), and test it in QEMU with the same card
    image on the VT8231 IDE controller before using the physical card.
-3. **Load time:** shrink the image before relying on disk boot: size `.ksyms`
-   to its contents, and consider compressing the embedded kernel with a small
-   inflater in the loader.
+3. **Load time:** `serenity.elf` is the loader plus the kernel ELF, which is
+   embedded gzip-compressed and inflated by the loader (with a CRC-32 check)
+   before it is loaded. That brings the file from 26.8 MB to 6.1 MB, close to
+   MorphOS's self-decompressing 1.7 MB `boot.img`; the userland lives on the
+   ext2 root partition. xz would save another 3 MB if disk reads are still too
+   slow, at the cost of a larger decoder and slower inflation on the G3.
 
 Keep an image of the card as it was before the first write, so Haiku can be
 restored.
+
+## Serial console
+
+With no keyboard attached, SmartFirmware's console is the serial port, so the
+firmware banner and everything the loader writes through firmware `stdout`
+reach the host terminal. That stops at `quiesce`. From then on the loader and kernel
+write to the UART directly:
+
+- Find the UART the firmware console uses before `quiesce`, and keep its
+  configuration (speed, format, FIFO). Only poll the line status register and
+  write the transmit register, so the host terminal settings never have to change.
+- Switch the loader's own output to the native UART before `quiesce` and print
+  a marker on both paths, so a silent board can be told apart from a lost
+  serial setup.
+- Pass the UART address to the kernel, whose `serial_debug` output must use the
+  same port from its first message.
 
 ## Phases
 

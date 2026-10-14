@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/Loader/Inflate.h>
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
 #include <Kernel/Arch/powerpc/Loader/KernelMappings.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
@@ -21,8 +22,9 @@ struct FirmwareCall {
     u32 cells[5];
 };
 
-extern "C" u8 _binary_kernel_elf_start[];
-extern "C" u8 _binary_kernel_elf_end[];
+// The kernel ELF is embedded gzip-compressed to keep the image SmartFirmware reads from disk small.
+extern "C" u8 _binary_kernel_elf_gz_start[];
+extern "C" u8 _binary_kernel_elf_gz_end[];
 extern "C" u32 powerpc_loader_high_marker();
 extern "C" void powerpc_loader_enable_translation(u32 sdr1);
 extern "C" void powerpc_loader_disable_translation();
@@ -52,6 +54,17 @@ static u32 claim_pages(FirmwareEntry firmware, u32 size, u32 alignment)
     if (firmware(&call) != 0)
         return 0;
     return call.cells[3];
+}
+
+// Claims memory at an explicit address. QEMU's Virtual Open Firmware claims only the sum of the loader's
+// segment sizes, which falls short of its bss and stack, so memory directly after the loader must not
+// come from an address-unspecified claim.
+static u32 claim_pages_at(FirmwareEntry firmware, u32 address, u32 size)
+{
+    FirmwareCall call { "claim", 3, 1, { address, size, 0, 0 } };
+    if (firmware(&call) != 0 || call.cells[3] != address)
+        return 0;
+    return address;
 }
 
 static int get_property(FirmwareEntry firmware, u32 node, char const* name, void* buffer, u32 size)
@@ -244,9 +257,22 @@ extern "C" void loader_main(FirmwareEntry firmware)
     if (firmware(&stdout_call) != 0 || stdout_call.cells[4] != sizeof(stdout))
         return;
 
+    u32 compressed_size = _binary_kernel_elf_gz_end - _binary_kernel_elf_gz_start;
+    u32 kernel_elf_size = Kernel::PowerPC::Loader::gzip_uncompressed_size(_binary_kernel_elf_gz_start, compressed_size);
+    u32 above_loader = (reinterpret_cast<FlatPtr>(__stack_end) + 0xfffffu) & ~0xfffffu;
+    u32 kernel_elf_physical = kernel_elf_size == 0 ? 0 : claim_pages_at(firmware, above_loader, (kernel_elf_size + 4095u) & ~4095u);
+    if (kernel_elf_physical == 0 || kernel_elf_physical == 0xffffffffu
+        || !Kernel::PowerPC::Loader::gzip_inflate(_binary_kernel_elf_gz_start, compressed_size,
+            reinterpret_cast<u8*>(kernel_elf_physical), kernel_elf_size)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel image decompression failed\r\n");
+        return;
+    }
+    u8 const* kernel_elf = reinterpret_cast<u8 const*>(kernel_elf_physical);
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel image decompressed ");
+    write_hex(firmware, stdout, kernel_elf_size);
+
     Kernel::PowerPC::Loader::KernelImagePlan plan;
-    if (!Kernel::PowerPC::Loader::plan_kernel_image(_binary_kernel_elf_start,
-            _binary_kernel_elf_end - _binary_kernel_elf_start, plan)) {
+    if (!Kernel::PowerPC::Loader::plan_kernel_image(kernel_elf, kernel_elf_size, plan)) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel ELF invalid\r\n");
         return;
     }
@@ -261,8 +287,8 @@ extern "C" void loader_main(FirmwareEntry firmware)
     if (physical_base == 0 || physical_base == 0xffffffffu
         || (physical_base & (2 * 1024 * 1024 - 1)) != 0
         || physical_base > 0xffffffffu - span
-        || !Kernel::PowerPC::Loader::load_kernel_image(_binary_kernel_elf_start,
-            _binary_kernel_elf_end - _binary_kernel_elf_start, plan,
+        || !Kernel::PowerPC::Loader::load_kernel_image(kernel_elf,
+            kernel_elf_size, plan,
             reinterpret_cast<u8*>(physical_base), span)) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel segment load failed\r\n");
         return;
@@ -274,8 +300,8 @@ extern "C" void loader_main(FirmwareEntry firmware)
     u64 runtime_base = static_cast<u64>(KERNEL_MAPPING_BASE) + physical_base - plan.first_virtual_offset;
     u32 relocation_count = 0;
     if (runtime_base > 0xffffffffu
-        || !Kernel::PowerPC::Loader::relocate_kernel_image(_binary_kernel_elf_start,
-            _binary_kernel_elf_end - _binary_kernel_elf_start, plan,
+        || !Kernel::PowerPC::Loader::relocate_kernel_image(kernel_elf,
+            kernel_elf_size, plan,
             reinterpret_cast<u8*>(physical_base), span, static_cast<u32>(runtime_base), relocation_count)) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel relocation failed\r\n");
         return;
@@ -293,8 +319,8 @@ extern "C" void loader_main(FirmwareEntry firmware)
     u32 table_physical = claim_pages(firmware, table_size, table_size);
     Kernel::PowerPC::Loader::KernelMappings mappings;
     if (table_physical == 0 || table_physical == 0xffffffffu
-        || !Kernel::PowerPC::Loader::map_kernel_image(_binary_kernel_elf_start,
-            _binary_kernel_elf_end - _binary_kernel_elf_start, plan,
+        || !Kernel::PowerPC::Loader::map_kernel_image(kernel_elf,
+            kernel_elf_size, plan,
             physical_base, static_cast<u32>(runtime_base), table_physical, table_size, mappings)) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: kernel mappings failed\r\n");
         return;

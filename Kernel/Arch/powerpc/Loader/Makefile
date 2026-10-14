@@ -40,7 +40,10 @@ $(BUILD_DIR)/boot.o: boot.S | $(BUILD_DIR)
 $(BUILD_DIR)/mmu_probe.o: MMUProbe.S | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/firmware.o: firmware.cpp KernelImagePlan.h KernelMappings.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+$(BUILD_DIR)/inflate.o: Inflate.cpp Inflate.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/firmware.o: firmware.cpp Inflate.h KernelImagePlan.h KernelMappings.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(BUILD_DIR)/kernel_image_plan.o: KernelImagePlan.cpp KernelImagePlan.h ../../../../Userland/Libraries/LibELF/ELFABI.h ../../../../Userland/Libraries/LibELF/Relocation.h $(BUILD_DIR)/AK/Debug.h $(BUILD_DIR)/Kernel/Debug.h | $(BUILD_DIR)
@@ -73,14 +76,15 @@ $(BUILD_DIR)/runtime_assertions.o: ../Boot/RuntimeAssertions.cpp $(BUILD_DIR)/AK
 $(BUILD_DIR)/runtime.o: ../Boot/Runtime.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/kernel.elf: $(KERNEL_ELF) | $(BUILD_DIR)
-	cp $< $@
+# The loader inflates the kernel at boot; -n keeps the payload independent of the kernel's timestamp.
+$(BUILD_DIR)/kernel.elf.gz: $(KERNEL_ELF) | $(BUILD_DIR)
+	gzip -9 -n -c $< > $@
 
-$(BUILD_DIR)/kernel_payload.o: $(BUILD_DIR)/kernel.elf
-	cd $(BUILD_DIR) && $(OBJCOPY) -I binary -O elf32-powerpc -B powerpc --rename-section .data=.rodata.kernel,alloc,load,readonly,data,contents kernel.elf kernel_payload.o
+$(BUILD_DIR)/kernel_payload.o: $(BUILD_DIR)/kernel.elf.gz
+	cd $(BUILD_DIR) && $(OBJCOPY) -I binary -O elf32-powerpc -B powerpc --rename-section .data=.rodata.kernel,alloc,load,readonly,data,contents kernel.elf.gz kernel_payload.o
 
-$(BUILD_DIR)/serenity-powerpc-loader.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/open_firmware_pci_ranges.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld
-	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/open_firmware_pci_ranges.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o -o $@
+$(BUILD_DIR)/serenity-powerpc-loader.elf: $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/inflate.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/open_firmware_pci_ranges.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o linker.ld
+	$(LD) $(LDFLAGS) $(BUILD_DIR)/boot.o $(BUILD_DIR)/mmu_probe.o $(BUILD_DIR)/inflate.o $(BUILD_DIR)/firmware.o $(BUILD_DIR)/kernel_image_plan.o $(BUILD_DIR)/relocation.o $(BUILD_DIR)/kernel_mappings.o $(BUILD_DIR)/hash_page_table.o $(BUILD_DIR)/tlb.o $(BUILD_DIR)/boot_handoff.o $(BUILD_DIR)/open_firmware_memory_map.o $(BUILD_DIR)/open_firmware_pci_ranges.o $(BUILD_DIR)/kernel_payload.o $(BUILD_DIR)/runtime.o $(BUILD_DIR)/runtime_assertions.o -o $@
 
 check-quick: all
 	python3 ../../../../Tests/Kernel/PowerPC/test_loader.py --qemu $(QEMU) --loader $(BUILD_DIR)/serenity-powerpc-loader.elf --kernel-elf $(KERNEL_ELF) --loader-dir . --cross-compile $(CROSS_COMPILE)

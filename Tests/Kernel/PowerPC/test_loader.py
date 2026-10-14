@@ -249,6 +249,19 @@ def main():
             if expected_marker not in output or b"kernel relocations applied" in output:
                 raise SystemExit(f"PowerPC loader accepted {name}:\n{output.decode(errors='replace')}")
 
+        # A damaged read of the loader from disk must stop at the payload's CRC check.
+        loader = bytearray(args.loader.read_bytes())
+        payload = loader.find(b"\x1f\x8b\x08\x00")
+        if payload < 0:
+            raise SystemExit("The loader has no embedded gzip kernel payload")
+        loader[payload + (len(loader) - payload) // 2] ^= 0x40
+        damaged_loader = work / "damaged-payload.elf"
+        damaged_loader.write_bytes(loader)
+        output = boot_and_capture(args.qemu, damaged_loader, args.memory, args.cpu,
+                                  b"SerenityOS PowerPC loader: kernel image decompression failed")
+        if b"kernel ELF32 validated" in output:
+            raise SystemExit("PowerPC loader accepted a damaged kernel payload")
+
         source = args.kernel_elf.read_bytes()
         wrong_endian = bytearray(source)
         wrong_endian[5] = 1  # EI_DATA: little-endian kernel on big-endian PPC.
@@ -290,7 +303,7 @@ def main():
         bad_target = bytearray(source)
         bad_target[rela_file:rela_file + 4] = (0xFFFFFFFC).to_bytes(4, "big")
         check_rejected("invalid-relocation-target", bad_target, b"SerenityOS PowerPC loader: kernel relocation failed")
-    print("Pegasos 2 corrupt kernel ELF and relocation layouts rejected")
+    print("Pegasos 2 damaged kernel payload, corrupt kernel ELF and relocation layouts rejected")
 
 
 if __name__ == "__main__":

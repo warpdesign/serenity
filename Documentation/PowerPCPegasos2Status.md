@@ -13,7 +13,9 @@ probe and is historical.
 
 - The Open Firmware loader starts the PowerPC kernel with hashed page-table
   mappings, exceptions, interrupts, timers, PCI, virtio storage, graphics,
-  input, networking, and entropy.
+  input, networking, and entropy. It embeds the kernel gzip-compressed and
+  inflates it with a CRC-32 check, so the loader file is 6.1 MB instead of
+  26.8 MB.
 - The 32-bit big-endian userland boots WindowServer, Taskbar, Terminal, and
   other desktop utilities. Browser renders a local HTML page.
 - DHCP, DNS resolution, and the Pegasos 2 RTC pass the Browser smoke check.
