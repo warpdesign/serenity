@@ -182,6 +182,46 @@ void RadeonDisplayConnector::program_pll(PLLDividers const& dividers, size_t hor
     write_pll_masked(PLLRegister::VideoClockControl, VideoClockControl::SourcePixelPLL, ~VideoClockControl::SourceMask);
 }
 
+void RadeonDisplayConnector::program_digital_output(u32 horizontal_sync, u32 vertical_sync)
+{
+    // A DVI monitor on the internal TMDS transmitter is driven through the flat panel unit. Only reconfigure it
+    // if the video BIOS enabled it; external transmitters and LVDS panels are not handled.
+    auto flat_panel_control = read32(Register::FlatPanelGeneralControl);
+    constexpr u32 internal_dvi_enabled = FlatPanelGeneralControl::PanelOn | FlatPanelGeneralControl::TMDSEnable;
+    if ((flat_panel_control & internal_dvi_enabled) != internal_dvi_enabled)
+        return;
+
+    // The panel sync positions and polarities always come from these registers.
+    write32(Register::FlatPanelHorizontalSyncStartWidth, horizontal_sync);
+    write32(Register::FlatPanelVerticalSyncStartWidth, vertical_sync);
+
+    // Take the timing straight from CRTC 1 instead of the shadow registers the BIOS used for its text mode.
+    flat_panel_control &= ~(FlatPanelGeneralControl::RMXSyncControlEnable | FlatPanelGeneralControl::DFPSyncSelect
+        | FlatPanelGeneralControl::CRTSyncSelect | FlatPanelGeneralControl::CRTCLock8Dot | FlatPanelGeneralControl::UseShadowEnable
+        | FlatPanelGeneralControl::CRTCUseShadowVerticalEnd | FlatPanelGeneralControl::CRTSyncAlternate | FlatPanelGeneralControl::SourceCRTC2);
+    flat_panel_control |= FlatPanelGeneralControl::CRTCDontShadowVerticalParameters | FlatPanelGeneralControl::CRTCDontShadowHorizontalEnd
+        | FlatPanelGeneralControl::PanelFormat24Bit | internal_dvi_enabled;
+    write32(Register::FlatPanelGeneralControl, flat_panel_control);
+
+    // An external DVI monitor scales on its own, so stop the RMX unit stretching the BIOS's text mode.
+    // The TMDS PLL is left as the BIOS programmed it: RV280 reads one of its bits back inverted, and the
+    // BIOS value covers pixel clocks below 150 MHz.
+    write32_masked(Register::FlatPanelHorizontalStretch, 0, ~(FlatPanelStretch::Enable | FlatPanelStretch::Blend));
+    write32_masked(Register::FlatPanelVerticalStretch, 0, ~(FlatPanelStretch::Enable | FlatPanelStretch::Blend));
+    dmesgln("Radeon: Driving the DVI output from CRTC 1");
+}
+
+void RadeonDisplayConnector::log_output_routing(StringView when)
+{
+    // Output routing is chosen by the video BIOS and cannot be checked in QEMU, so record it for real hardware.
+    dmesgln("Radeon: Output registers {}: CRTC_GEN_CNTL={:#08x} CRTC_EXT_CNTL={:#08x} DAC_CNTL={:#08x} FP_GEN_CNTL={:#08x} FP2_GEN_CNTL={:#08x} "
+            "FP_HORZ_STRETCH={:#08x} FP_VERT_STRETCH={:#08x} TMDS_TRANSMITTER_CNTL={:#08x} TMDS_PLL_CNTL={:#08x} LVDS_GEN_CNTL={:#08x}",
+        when, read32(Register::CRTCGeneralControl), read32(Register::CRTCExtendedControl), read32(Register::DACControl),
+        read32(Register::FlatPanelGeneralControl), read32(Register::FlatPanel2GeneralControl),
+        read32(Register::FlatPanelHorizontalStretch), read32(Register::FlatPanelVerticalStretch),
+        read32(Register::TMDSTransmitterControl), read32(Register::TMDSPLLControl), read32(Register::LVDSGeneralControl));
+}
+
 void RadeonDisplayConnector::load_identity_palette()
 {
     // The palette also acts as the gamma table in 32-bit modes; the video BIOS left VGA text colours in it.
@@ -224,7 +264,9 @@ ErrorOr<void> RadeonDisplayConnector::set_mode_setting(ModeSetting const& mode_s
     extended_control &= ~(CRTCExtendedControl::HSyncDisable | CRTCExtendedControl::VSyncDisable | CRTCExtendedControl::DisplayDisable);
     write32(Register::CRTCExtendedControl, extended_control);
 
-    // Sync delay for 32-bit pixels on an analog output.
+    log_output_routing("before mode set"sv);
+
+    // Sync delay for 32-bit pixels; analog and digital outputs use the same value at this depth.
     constexpr size_t horizontal_sync_fudge = 5;
     auto horizontal_total = mode_setting.horizontal_total();
     auto horizontal_sync_start = mode_setting.horizontal_sync_start() - 8 + horizontal_sync_fudge;
@@ -239,17 +281,17 @@ ErrorOr<void> RadeonDisplayConnector::set_mode_setting(ModeSetting const& mode_s
         ((horizontal_total / 8 - 1) & CRTCTiming::HorizontalTotalMask)
             | (((width / 8 - 1) << CRTCTiming::HorizontalDisplayShift) & CRTCTiming::HorizontalDisplayMask));
     // Both syncs are negative for the VESA modes used here.
-    write32(Register::CRTCHorizontalSyncStartWidth,
-        (horizontal_sync_start & CRTCTiming::HorizontalSyncStartMask)
-            | (horizontal_sync_width << CRTCTiming::HorizontalSyncWidthShift)
-            | CRTCTiming::HorizontalSyncNegative);
+    u32 const horizontal_sync = (horizontal_sync_start & CRTCTiming::HorizontalSyncStartMask)
+        | (horizontal_sync_width << CRTCTiming::HorizontalSyncWidthShift)
+        | CRTCTiming::HorizontalSyncNegative;
+    u32 const vertical_sync = ((mode_setting.vertical_sync_start() - 1) & CRTCTiming::VerticalSyncStartMask)
+        | (vertical_sync_width << CRTCTiming::VerticalSyncWidthShift)
+        | CRTCTiming::VerticalSyncNegative;
+    write32(Register::CRTCHorizontalSyncStartWidth, horizontal_sync);
     write32(Register::CRTCVerticalTotalDisplay,
         ((mode_setting.vertical_total() - 1) & CRTCTiming::VerticalTotalMask)
             | (((height - 1) << CRTCTiming::VerticalDisplayShift) & CRTCTiming::VerticalDisplayMask));
-    write32(Register::CRTCVerticalSyncStartWidth,
-        ((mode_setting.vertical_sync_start() - 1) & CRTCTiming::VerticalSyncStartMask)
-            | (vertical_sync_width << CRTCTiming::VerticalSyncWidthShift)
-            | CRTCTiming::VerticalSyncNegative);
+    write32(Register::CRTCVerticalSyncStartWidth, vertical_sync);
     write32(Register::CRTCOffsetControl, 0);
     write32(Register::CRTCPitch, pitch | (pitch << 16));
     write32(Register::CRTCOffset, 0);
@@ -263,8 +305,10 @@ ErrorOr<void> RadeonDisplayConnector::set_mode_setting(ModeSetting const& mode_s
     }
     write32(Register::SurfaceControl, surface_control);
 
+    program_digital_output(horizontal_sync, vertical_sync);
     program_pll(dividers, horizontal_total);
     load_identity_palette();
+    log_output_routing("after mode set"sv);
 
     m_framebuffer_console->set_resolution(width, height, mode_setting.horizontal_stride);
     m_current_mode_setting = mode_setting;

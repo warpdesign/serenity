@@ -13,7 +13,7 @@
 
 namespace Kernel::Radeon {
 
-// Drives CRTC 1 of an R100/R200-family Radeon in a 32-bit mode, keeping the output routing set up by the video BIOS.
+// Drives CRTC 1 of an R100/R200-family Radeon in a 32-bit mode on the outputs the video BIOS enabled (VGA, or DVI on the internal TMDS transmitter).
 class RadeonDisplayConnector final : public DisplayConnector {
     friend class Kernel::Device;
 
@@ -50,6 +50,8 @@ private:
 
     ErrorOr<PLLDividers> calculate_pll_dividers(u32 pixel_clock_in_khz) const;
     void program_pll(PLLDividers const&, size_t horizontal_total);
+    void program_digital_output(u32 horizontal_sync, u32 vertical_sync);
+    void log_output_routing(StringView when);
     void load_identity_palette();
 
     Family const m_family;

@@ -41,6 +41,15 @@ static constexpr u32 OverlayClear = 0x0230;
 static constexpr u32 OverlayWindowLeftRight = 0x0234;
 static constexpr u32 OverlayWindowTopBottom = 0x0238;
 static constexpr u32 CRTCMoreControl = 0x027c;
+static constexpr u32 FlatPanelGeneralControl = 0x0284;
+static constexpr u32 FlatPanel2GeneralControl = 0x0288;
+static constexpr u32 FlatPanelHorizontalStretch = 0x028c;
+static constexpr u32 FlatPanelVerticalStretch = 0x0290;
+static constexpr u32 TMDSTransmitterControl = 0x02a4;
+static constexpr u32 TMDSPLLControl = 0x02a8;
+static constexpr u32 FlatPanelHorizontalSyncStartWidth = 0x02c4;
+static constexpr u32 FlatPanelVerticalSyncStartWidth = 0x02c8;
+static constexpr u32 LVDSGeneralControl = 0x02d0;
 static constexpr u32 Overlay0ScaleControl = 0x0420;
 static constexpr u32 SubpictureControl = 0x0540;
 static constexpr u32 SurfaceControl = 0x0b00;
@@ -62,6 +71,29 @@ static constexpr u32 ExtendedCRTCountEnable = 1 << 6;
 static constexpr u32 HSyncDisable = 1 << 8;
 static constexpr u32 VSyncDisable = 1 << 9;
 static constexpr u32 DisplayDisable = 1 << 10;
+}
+
+// The internal TMDS transmitter that drives a DVI monitor.
+namespace FlatPanelGeneralControl {
+static constexpr u32 PanelOn = 1 << 0;
+static constexpr u32 TMDSEnable = 1 << 2;
+static constexpr u32 PanelFormat24Bit = 1 << 3;
+static constexpr u32 SourceCRTC2 = 1 << 13;
+static constexpr u32 CRTCDontShadowVerticalParameters = 1 << 16;
+static constexpr u32 CRTCDontShadowHorizontalEnd = 1 << 17;
+static constexpr u32 CRTCUseShadowVerticalEnd = 1 << 18;
+static constexpr u32 RMXSyncControlEnable = 1 << 20;
+static constexpr u32 DFPSyncSelect = 1 << 21;
+static constexpr u32 CRTCLock8Dot = 1 << 22;
+static constexpr u32 CRTSyncSelect = 1 << 23;
+static constexpr u32 UseShadowEnable = 1 << 24;
+static constexpr u32 CRTSyncAlternate = 1 << 26;
+}
+
+// The RMX scaler between CRTC 1 and the flat panel outputs.
+namespace FlatPanelStretch {
+static constexpr u32 Enable = 1 << 25;
+static constexpr u32 Blend = 1 << 26;
 }
 
 namespace CRTCTiming {
