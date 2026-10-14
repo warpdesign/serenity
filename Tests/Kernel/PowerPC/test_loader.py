@@ -23,7 +23,7 @@ def boot_and_capture(qemu: str, loader: Path, memory: int, cpu: str | None, term
             "-M", "pegasos2",
             "-m", str(memory),
             "-kernel", str(loader),
-            "-append", "serenity-loader-stop-before-kernel" + (f" {append_arguments}" if append_arguments else ""),
+            "-append", "halt" + (f" {append_arguments}" if append_arguments else ""),
             "-display", "none",
             "-serial", "none",
             "-monitor", f"unix:{monitor},server,nowait",
@@ -58,7 +58,7 @@ def check_native_handoff(qemu: str, loader: Path, memory: int, cpu: str | None):
     with tempfile.TemporaryDirectory(prefix="serenity-powerpc-native-handoff-") as directory:
         serial = Path(directory) / "serial.log"
         command = [qemu, "-M", "pegasos2", "-m", str(memory), "-kernel", str(loader),
-                   "-append", "nativeboot serenity-loader-real-mode-calls serenity-loader-stop-before-kernel",
+                   "-append", "native realmode halt",
                    "-display", "none", "-serial", f"file:{serial}", "-monitor", "none", "-no-reboot"]
         if cpu:
             command.extend(("-cpu", cpu))
@@ -128,7 +128,7 @@ def main():
 
         claim_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
                                         b"SerenityOS PowerPC loader: native allocation preparation passed",
-                                        append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe")
+                                        append_arguments="realmode claimram")
         for marker in (b"real-mode client calls", b"native allocation preparation starting",
                        b"kernel ELF staging", b"kernel image decompressed",
                        b"kernel load span", b"kernel relocations applied",
@@ -143,7 +143,7 @@ def main():
 
         dump_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
                                        b"SerenityOS PowerPC loader: native allocation preparation passed",
-                                       append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe ofdump")
+                                       append_arguments="realmode claimram ofdump")
         if b"firmware tree begin" not in dump_output or b"firmware tree end" not in dump_output:
             raise SystemExit("PowerPC loader did not dump the firmware tree when requested")
 

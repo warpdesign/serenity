@@ -51,7 +51,7 @@ def boot_and_write(args, card, work):
             args.qemu, "-M", "pegasos2", "-cpu", args.cpu, "-m", str(args.memory),
             "-vga", "none", "-device", "virtio-gpu-pci", "-device", "virtio-keyboard-pci",
             "-device", "virtio-mouse-pci", "-kernel", str(args.loader), "-append",
-            "nativeboot serenity-loader-real-mode-calls" if args.nativeboot else "root=lun3:0:0;part1",
+            "native realmode" if args.nativeboot else "root=lun3:0:0;part1",
             "-drive", f"if=ide,format=raw,index=0,file={card}",
             "-object", "rng-random,id=rng0,filename=/dev/urandom", "-device", "virtio-rng-pci,rng=rng0",
             "-display", "none", "-serial", f"file:{serial}",

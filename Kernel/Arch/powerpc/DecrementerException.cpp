@@ -33,7 +33,7 @@ extern "C" [[noreturn]] void powerpc_decrementer_exception_handler(RegisterState
     if (Scheduler::is_initialized()) {
         if (!s_insecure_entropy_initialized) {
             s_insecure_entropy_initialized = true;
-            s_insecure_entropy_enabled = kernel_command_line().contains("insecure_entropy"sv);
+            s_insecure_entropy_enabled = kernel_command_line().contains("weakrng"sv);
             if (s_insecure_entropy_enabled)
                 dmesgln("PowerPC: Insecure interrupt-timing entropy enabled for bring-up");
         }

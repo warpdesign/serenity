@@ -123,9 +123,8 @@ the userland out-of-memory failure.
 ## SmartFirmware probe card
 
 On 2026-10-14 this host rebuilt the 6.1 MB loader and passed
-`PowerPCFirmwareLoaderCheckQuick`. A separate QEMU run with
-`ofdump serenity-loader-real-mode-calls
-serenity-loader-stop-before-kernel` printed the firmware tree start and end
+`PowerPCFirmwareLoaderCheckQuick`. A separate QEMU firmware survey printed
+the firmware tree start and end
 markers and reached `boot handoff validated`; its trace is
 `/tmp/serenity-smartfirmware-vof-20261014.log`.
 
@@ -135,10 +134,15 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`.
+`46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
+
+Short boot arguments are `weakrng` for development entropy, `fullram` for
+the optional installed-RAM map, `halt` to stop after validating the handoff,
+and `ofdump` for the firmware tree. Diagnostic QEMU paths use `realmode`,
+`claimram`, and `native`. `stop` remains the earlier native allocation stop.
 
 The physical 4 KiB claim probe subsequently printed candidate `0x01800000`,
 success and release markers. The current loader now claims three real memory
@@ -221,11 +225,11 @@ plugged in after firmware boot. The i8042 driver exited before probing the
 mouse because failed-keyboard recovery sent another command to the absent
 keyboard. It now disables only that port and continues to the mouse.
 
-No physical RNG is registered. An opt-in `insecure_entropy` boot argument now
+No physical RNG is registered. An opt-in `weakrng` boot argument now
 mixes interrupt timing into the existing Fortuna pool for development boots.
 The RNG wait also releases its spinlock before sleeping, so an interrupt can
 wake it. Interrupt timing is not validated cryptographic entropy, and this
-fallback is disabled by default. Use `boot ide:0 serenity.elf insecure_entropy`
+fallback is disabled by default. Use `boot ide:0 serenity.elf weakrng`
 for the next physical test. The Radeon currently sets a fixed 1024×768 safe
 mode and advertises that as the preferred timing in its generic EDID; native
 1920×1080 selection remains to implement after the desktop starts. The
@@ -258,17 +262,17 @@ and the loader currently uses that smaller property for the kernel map;
 boot reservations and page metadata leave about 183 MiB. The reason the
 upper 256 MiB is absent from `available` is not established. Linux and
 Haiku use `reg` to describe RAM after the firmware handoff. The loader now
-supports `serenity-loader-use-installed-memory` as an opt-in boot argument:
+supports `fullram` as an opt-in boot argument:
 it continues to claim the kernel and HPT from `available`, then hands the
 full `reg` range to the kernel after firmware quiesce. Try the 32 MiB
 framebuffer fix first with the default conservative map; the same SD image
 can test the full installed range by adding that argument. Physical testing
 must establish that the extra RAM is safe on this board.
 The user authorized updating the existing card image. Its FFS `serenity.elf`
-was replaced once with the rebuilt loader containing the AC'97 fix, Radeon
-budget cap, and optional installed-RAM map. Extraction from FFS matched the
+now contains the AC'97 fix, Radeon budget cap, optional installed-RAM map,
+and short boot arguments. Extraction from FFS matched the
 loader byte for byte. The root partition was not rewritten. The image SHA-256
-is `1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`;
+is `46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`;
 physical results for these changes are pending.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is

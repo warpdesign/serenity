@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/Loader/AvailableMemoryClaim.h>
+#include <Kernel/Arch/powerpc/Loader/BootArguments.h>
 #include <Kernel/Arch/powerpc/Loader/FirmwarePropertyValue.h>
 #include <Kernel/Arch/powerpc/Loader/Inflate.h>
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
@@ -252,6 +253,11 @@ static bool command_line_contains(char const* needle)
     return false;
 }
 
+static bool has_flag(char const* argument)
+{
+    return Kernel::PowerPC::Loader::boot_argument_present(s_command_line, argument);
+}
+
 static bool append_native_root(u32& count)
 {
     if (command_line_contains("root="))
@@ -268,7 +274,7 @@ static bool append_native_root(u32& count)
 
 static bool should_stop_before_kernel()
 {
-    return command_line_contains("serenity-loader-stop-before-kernel");
+    return has_flag("halt");
 }
 
 static void write_native_uart_character(u8 value)
@@ -628,15 +634,15 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     u32 qemu_boot_kernel[2];
     bool is_qemu = get_property(firmware, chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) > 0;
     u32 command_line_length = prepare_command_line(firmware, chosen);
-    if ((!is_qemu || command_line_contains("nativeboot")) && !append_native_root(command_line_length))
+    bool native_boot = has_flag("native");
+    if ((!is_qemu || native_boot) && !append_native_root(command_line_length))
         return;
-    s_firmware_real_mode = firmware_requires_real_mode(firmware) || command_line_contains("serenity-loader-real-mode-calls");
+    s_firmware_real_mode = firmware_requires_real_mode(firmware) || has_flag("realmode");
 
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
-    if (command_line_contains("ofdump"))
+    if (has_flag("ofdump"))
         dump_firmware_tree(firmware, stdout);
-    bool use_available_claims = !is_qemu || command_line_contains("serenity-loader-claim-probe")
-        || command_line_contains("nativeboot");
+    bool use_available_claims = !is_qemu || has_flag("claimram") || native_boot;
     if (use_available_claims) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: native allocation preparation starting\r\n");
         if (!prepare_available_claims(firmware, stdout))
@@ -729,7 +735,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
 
     if (use_available_claims) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: native allocation preparation passed\r\n");
-        if ((!is_qemu && command_line_contains("stop")) || (is_qemu && !command_line_contains("nativeboot"))) {
+        if ((!is_qemu && has_flag("stop")) || (is_qemu && !native_boot)) {
             if (!is_qemu) {
                 FirmwareCall exit_call { "exit", 0, 0, {} };
                 firmware(&exit_call);
@@ -778,7 +784,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     }
     write_console(firmware, stdout, "SerenityOS PowerPC loader: high kernel alias passed\r\n");
 
-    bool use_installed_memory = !is_qemu && command_line_contains("serenity-loader-use-installed-memory");
+    bool use_installed_memory = !is_qemu && has_flag("fullram");
     u32 memory_range_count = use_installed_memory ? s_memory_range_count : s_available_range_count;
     BootMemoryRange const* memory_ranges = use_installed_memory ? s_memory_ranges : s_available_ranges;
     u32 root = 0;

@@ -80,7 +80,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 
 - Kernel log: `-serial file:serial.log`; the kernel always appends `serial_debug`.
 - Loader output goes through the firmware: add `-d trace:vof_write,trace:vof_claim -D vof.log`.
-  `-append serenity-loader-stop-before-kernel` stops after the boot handoff is validated.
+  `-append halt` stops after the boot handoff is validated.
 - Silent hang: `info registers` on the monitor (`-monitor unix:mon.sock,server=on,wait=off`,
   `printf 'info registers\n' | nc -U mon.sock`). `NIP fff00700` means a Program exception with no
   handler; the loop overwrites SRR0, so use `-d int -D int.log` to see the first exception
@@ -143,7 +143,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 
 - 2026-10-14: SmartFirmware probe loader (real-mode client-call trampoline, banner, full device tree
   dump, `exit` on non-QEMU firmware). QEMU test: `-append "ofdump
-  serenity-loader-real-mode-calls serenity-loader-stop-before-kernel" -d trace:vof_write -D vof.log`.
+  realmode halt" -d trace:vof_write -D vof.log`.
   The survey card was retired. The one current SD card image is
   `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
 
@@ -229,7 +229,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   and two RDB partitions, mounted ext2, and started `/init`. It then logged
   `Entropy starvation...`; the screen had a static white mark on black.
   There is no physical RNG source registered. The next image offers an
-  opt-in `insecure_entropy` kernel boot argument, mixing interrupt timing
+  opt-in `weakrng` kernel boot argument, mixing interrupt timing
   for development only. PowerPC external IRQ timing is collected by default,
   as on x86. `KernelRng::wait_for_entropy()` now uses the predicate-based
   wait queue, releasing the RNG lock while sleeping without losing wakeups.
@@ -252,7 +252,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   This audio change was later included in the updated SD image. No QEMU run
   was made; physical audio behavior is pending.
 
-- 2026-10-15: The next physical boot confirmed `insecure_entropy` became
+- 2026-10-15: The next physical boot confirmed the interrupt-timing entropy option became
   ready and the attached PS/2 mouse initialized. RTAS, both UHCI controllers,
   Radeon DVI at 1024×768, IDE/RDB/ext2, and `/init` worked. The dynamic
   loader then failed with `MM: Unable to commit 3 pages, have only 1` and
@@ -263,23 +263,26 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   logs uncommitted pages before/after allocation. Host and native quick/normal
   regressions cover the cap and the observed OOM. `/memory/reg` reports
   512 MiB installed but `/memory/available` reports only 244 MiB; the loader
-  uses the latter for the kernel by default. `serenity-loader-use-installed-memory`
+  uses the latter for the kernel by default. `fullram`
   selects the full `reg` range after firmware quiesce while keeping loader
   claims inside `available`. Linux and Haiku use `reg` for physical RAM.
-  The user authorized updating the existing card image once. Its FFS
-  `serenity.elf` now contains the Radeon, audio, and optional full-RAM changes;
+  The user authorized updating the existing card image. Its FFS
+  `serenity.elf` now contains the Radeon, audio, optional full-RAM, and short
+  boot-argument changes;
   extraction matched the rebuilt loader. Root ext2 was not rewritten. The
   image SHA-256 is
-  `1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`.
+  `46520c747d775ec1c059f466251c7d5393fe07eeb523996ab7f6dc300ee01425`.
   No QEMU run was made; physical desktop progress remains pending.
 
 Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card, then boot with `boot ide:0 serenity.elf insecure_entropy`.
+to the SD card, then boot with `boot ide:0 serenity.elf weakrng`.
+Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
+`claimram`, and `native`.
 Capture the serial output through `Entering WindowServer main loop` or the
 next failure, including the new Radeon framebuffer mapping and AC'97 rate
 lines. The default RAM map remains conservative. If that boot reaches a
 stable desktop, the same SD card can separately test the upper RAM with
-`boot ide:0 serenity.elf insecure_entropy serenity-loader-use-installed-memory`.
+`boot ide:0 serenity.elf weakrng fullram`.
 Check that the loader prints `using installed RAM from /memory/reg` and the
 kernel lists physical RAM ending at `0x1fffffff`. Plug the USB keyboard in
 after firmware boot. The monitor should still report 1024×768/60 until native

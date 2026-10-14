@@ -54,6 +54,8 @@ def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         if require_userland and "Entering WindowServer main loop" not in log:
             raise AssertionError("WindowServer did not start after limiting the framebuffer mapping")
     if require_installed_memory:
+        if not re.search(r"SerenityOS PowerPC loader: bootargs [^\n]*\bfullram\b", log):
+            raise AssertionError("the fullram boot argument was not passed")
         if "SerenityOS PowerPC loader: using installed RAM from /memory/reg" not in log:
             raise AssertionError("the loader did not select installed RAM")
         regions = re.findall(r"MM: Physical region: P([0-9a-f]+) - P([0-9a-f]+)", log)
@@ -113,6 +115,7 @@ Running first user process: /sbin/init
         "Running first user process:")
     check_boot(desktop_memory_boot, True, require_desktop_memory=True)
     installed_memory_boot = desktop_memory_boot.replace("Running first user process:",
+        "SerenityOS PowerPC loader: bootargs weakrng fullram\n"
         "SerenityOS PowerPC loader: using installed RAM from /memory/reg\n"
         "MM: Physical region: P0000000006401000 - P000000001fffffff (size 0x19bff000)\n"
         "Running first user process:")

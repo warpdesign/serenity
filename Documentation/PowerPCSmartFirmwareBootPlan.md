@@ -82,11 +82,11 @@ controllers, Radeon DVI mode set at 1024×768/60, IDE adapter detection, RDB
 partition discovery, ext2 root mount, and `/init`. It then logged `Entropy
 starvation...` and displayed a static white mark on black. No physical RNG is
 registered in the port. The next image offers an explicit
-`insecure_entropy` boot argument for development only; it mixes interrupt
+`weakrng` boot argument for development only; it mixes interrupt
 timing into the kernel pool while the periodic fallback stays disabled by
 default. External interrupt timing is collected as it is on x86. The RNG
 wait uses a predicate-based queue, releasing its lock while sleeping without
-losing wakeups. Use `boot ide:0 serenity.elf insecure_entropy` for the next
+losing wakeups. Use `boot ide:0 serenity.elf weakrng` for the next
 physical test; the [Pegasos II firmware guide](https://www.nxp.com/docs/en/application-note/AN2738.pdf)
 documents this argument syntax.
 The Pegasos has a PS/2 mouse but no PS/2 keyboard. Failed-keyboard recovery
@@ -111,7 +111,7 @@ an equally sized RAM buffer for fake console writes. The compiled Radeon
 change caps its mapping at 32 MiB and logs the remaining commitment budget.
 `/memory/reg` reports 512 MiB installed, while `/memory/available` lists
 244 MiB. The kernel's default map uses `available`. The loader now accepts
-`serenity-loader-use-installed-memory` to use `reg` for the kernel map
+`fullram` to use `reg` for the kernel map
 after quiesce, while keeping its firmware claims in `available`. Linux and
 Haiku use `reg` for physical RAM. Both paths can be tested with one SD image;
 the full-RAM path has not been validated on the board.
@@ -178,7 +178,7 @@ write to the UART directly:
 ## Phases
 
 Each phase ends at a point that can be checked over serial. The loader's
-`serenity-loader-stop-before-kernel` boot argument already provides one stop
+`halt` boot argument already provides one stop
 point; add more as needed.
 
 ### 1. Loader runs and talks
@@ -202,7 +202,7 @@ tree is printed only when `ofdump` is supplied in
 `bootargs`; the physical survey already captured it. The original survey
 loader called `exit` before kernel allocation or MMU changes. On the physical
 Pegasos 2, SmartFirmware restarted after that call. In QEMU, the
-`ofdump` and `serenity-loader-real-mode-calls` boot
+`ofdump` and `realmode` boot
 arguments exercise the dump and the trampoline; the boot then continues
 normally. The earlier survey image has been retired; the one current SD card
 image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.

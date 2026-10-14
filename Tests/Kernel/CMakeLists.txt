@@ -93,6 +93,19 @@ add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
     find_program(POWERPC_HOST_CXX NAMES c++ clang++ REQUIRED)
+    set(powerpc_loader_boot_arguments_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestLoaderBootArguments.cpp")
+    set(powerpc_loader_boot_arguments_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-loader-boot-arguments")
+    add_custom_target(PowerPCLoaderBootArgumentsCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_loader_boot_arguments_source}" -o "${powerpc_loader_boot_arguments_executable}"
+        COMMAND "${powerpc_loader_boot_arguments_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCLoaderBootArgumentsCheck
+        COMMAND "${powerpc_loader_boot_arguments_executable}"
+        DEPENDS PowerPCLoaderBootArgumentsCheckQuick
+        VERBATIM
+    )
     set(powerpc_rtas_contract_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRTASPCIContract.cpp")
     set(powerpc_rtas_contract_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-RTAS-PCI-contract")
     add_custom_target(PowerPCRtasPCIContractCheckQuick
