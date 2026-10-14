@@ -249,20 +249,41 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   bit for read/write, waits for read completion, and rejects invalid DAC
   rates after three attempts. The host VIA codec-command quick/normal
   contract targets pass; native quick/normal audio log targets reject 1040 Hz.
-  The user is still copying/testing the current SD image: **do not
-  rewrite `pegasos2-sdcard.img` or its checksum yet**. The loader build
-  contains the audio change, but the card image does not. No QEMU run was
-  made; physical audio behavior is pending.
+  This audio change was later included in the updated SD image. No QEMU run
+  was made; physical audio behavior is pending.
 
-Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `c0637453aef68892a5ff72355d67c25d48df9993fd4791de2b89c22034bef693`),
-boot with `boot ide:0 serenity.elf insecure_entropy`,
-and capture the serial output from `PowerPC: Insecure interrupt-timing entropy
-enabled for bring-up` through `Entering WindowServer main loop` or the next
-failure. Check for `PowerPC: Insecure interrupt-timing entropy pool ready`,
-`I8042: Continuing with second port after keyboard probe failure`, and
-`PS2MouseDevice` messages. Plug the USB keyboard in after firmware boot. The
-monitor should still report 1024×768/60 until native mode selection is added.
+- 2026-10-15: The next physical boot confirmed `insecure_entropy` became
+  ready and the attached PS/2 mouse initialized. RTAS, both UHCI controllers,
+  Radeon DVI at 1024×768, IDE/RDB/ext2, and `/init` worked. The dynamic
+  loader then failed with `MM: Unable to commit 3 pages, have only 1` and
+  `mmap writable: Out of memory`. The physical usable-memory regions total
+  about 183 MiB. Radeon BAR0 exposes 128 MiB; the shared framebuffer commits
+  one RAM page per mapped framebuffer page for fake console writes. The
+  compiled Radeon change caps the mapping at 32 MiB (enough for 1080p) and
+  logs uncommitted pages before/after allocation. Host and native quick/normal
+  regressions cover the cap and the observed OOM. `/memory/reg` reports
+  512 MiB installed but `/memory/available` reports only 244 MiB; the loader
+  uses the latter for the kernel by default. `serenity-loader-use-installed-memory`
+  selects the full `reg` range after firmware quiesce while keeping loader
+  claims inside `available`. Linux and Haiku use `reg` for physical RAM.
+  The user authorized updating the existing card image once. Its FFS
+  `serenity.elf` now contains the Radeon, audio, and optional full-RAM changes;
+  extraction matched the rebuilt loader. Root ext2 was not rewritten. The
+  image SHA-256 is
+  `1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`.
+  No QEMU run was made; physical desktop progress remains pending.
+
+Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+to the SD card, then boot with `boot ide:0 serenity.elf insecure_entropy`.
+Capture the serial output through `Entering WindowServer main loop` or the
+next failure, including the new Radeon framebuffer mapping and AC'97 rate
+lines. The default RAM map remains conservative. If that boot reaches a
+stable desktop, the same SD card can separately test the upper RAM with
+`boot ide:0 serenity.elf insecure_entropy serenity-loader-use-installed-memory`.
+Check that the loader prints `using installed RAM from /memory/reg` and the
+kernel lists physical RAM ending at `0x1fffffff`. Plug the USB keyboard in
+after firmware boot. The monitor should still report 1024×768/60 until native
+mode selection is added.
 Do not build separate cards for each checkpoint or run QEMU verification
 until the user requests it.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from

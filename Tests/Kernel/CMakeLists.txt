@@ -119,6 +119,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCVIAAC97CodecContractCheckQuick
         VERBATIM
     )
+    set(powerpc_radeon_budget_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRadeonFramebufferBudget.cpp")
+    set(powerpc_radeon_budget_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-Radeon-framebuffer-budget")
+    add_custom_target(PowerPCRadeonFramebufferBudgetCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_radeon_budget_source}" -o "${powerpc_radeon_budget_executable}"
+        COMMAND "${powerpc_radeon_budget_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCRadeonFramebufferBudgetCheck
+        COMMAND "${powerpc_radeon_budget_executable}" extended
+        DEPENDS PowerPCRadeonFramebufferBudgetCheckQuick
+        VERBATIM
+    )
     set(powerpc_native_pci_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_pci_boot.py")
     add_custom_target(PowerPCNativePCIHardwareCheckQuick
         COMMAND python3 "${powerpc_native_pci_boot_test}"
@@ -172,6 +185,24 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     add_custom_target(PowerPCNativeVIAAudioCheck
         COMMAND python3 "${powerpc_native_pci_boot_test}" --require-via-audio --normal
         DEPENDS PowerPCNativeVIAAudioCheckQuick
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeDesktopMemoryCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-desktop-memory
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeDesktopMemoryCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-desktop-memory --normal
+        DEPENDS PowerPCNativeDesktopMemoryCheckQuick
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeInstalledMemoryCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-installed-memory
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeInstalledMemoryCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-installed-memory --normal
+        DEPENDS PowerPCNativeInstalledMemoryCheckQuick
         VERBATIM
     )
 

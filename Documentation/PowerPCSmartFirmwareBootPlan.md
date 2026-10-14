@@ -100,8 +100,21 @@ The physical VIA AC'97 driver reported 1040 Hz after the generic audio
 channel requested 44,100 Hz. Linux `via82xx` and Haiku `auvia` mark
 primary-codec commands valid; Serenity omitted that bit. The compiled fix
 sets it for reads and writes, waits for a settled read, and rejects an
-invalid DAC-rate readback. The current SD image remains unchanged while the
-user copies/tests it.
+invalid DAC-rate readback. The updated SD image now includes this fix;
+physical audio behavior is pending.
+
+The next physical boot proved the entropy pool became ready and the PS/2
+mouse initialized, but `/init` then failed with `MM: Unable to commit 3
+pages, have only 1`. The physical memory map supplies about 183 MiB of usable
+RAM. The Radeon BAR advertises 128 MiB, and the shared framebuffer allocates
+an equally sized RAM buffer for fake console writes. The compiled Radeon
+change caps its mapping at 32 MiB and logs the remaining commitment budget.
+`/memory/reg` reports 512 MiB installed, while `/memory/available` lists
+244 MiB. The kernel's default map uses `available`. The loader now accepts
+`serenity-loader-use-installed-memory` to use `reg` for the kernel map
+after quiesce, while keeping its firmware claims in `available`. Linux and
+Haiku use `reg` for physical RAM. Both paths can be tested with one SD image;
+the full-RAM path has not been validated on the board.
 
 ## Boot media
 

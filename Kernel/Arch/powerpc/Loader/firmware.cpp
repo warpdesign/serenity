@@ -38,6 +38,7 @@ extern "C" u8 __stack_end[];
 static BootMemoryRange s_memory_ranges[32];
 static BootMemoryRange s_available_ranges[32];
 static BootMemoryRange s_claimed_ranges[4];
+static u32 s_memory_range_count;
 static u32 s_available_range_count;
 static u32 s_claimed_range_count;
 static u32 s_loader_end;
@@ -326,8 +327,9 @@ static bool prepare_available_claims(FirmwareEntry firmware, u32 stdout)
 {
     u32 root = find_device(firmware, "/");
     if (root == 0 || root == 0xffffffffu
-        || !discover_memory_ranges(firmware, root, "available", s_available_ranges, s_available_range_count)) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: available RAM unavailable\r\n");
+        || !discover_memory_ranges(firmware, root, "available", s_available_ranges, s_available_range_count)
+        || !discover_memory_ranges(firmware, root, "reg", s_memory_ranges, s_memory_range_count)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: RAM properties unavailable\r\n");
         return false;
     }
     s_loader_end = (reinterpret_cast<FlatPtr>(__stack_end) + 4095u) & ~4095u;
@@ -776,9 +778,12 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     }
     write_console(firmware, stdout, "SerenityOS PowerPC loader: high kernel alias passed\r\n");
 
-    u32 memory_range_count = s_available_range_count;
-    BootMemoryRange const* memory_ranges = s_available_ranges;
+    bool use_installed_memory = !is_qemu && command_line_contains("serenity-loader-use-installed-memory");
+    u32 memory_range_count = use_installed_memory ? s_memory_range_count : s_available_range_count;
+    BootMemoryRange const* memory_ranges = use_installed_memory ? s_memory_ranges : s_available_ranges;
     u32 root = 0;
+    if (use_installed_memory)
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: using installed RAM from /memory/reg\r\n");
     if (!use_available_claims) {
         root = find_device(firmware, "/");
         if (root == 0 || root == 0xffffffffu

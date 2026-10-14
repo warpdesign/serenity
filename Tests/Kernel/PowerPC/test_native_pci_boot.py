@@ -11,7 +11,8 @@ from pathlib import Path
 
 def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         require_uhci_progress: bool = False, require_entropy_progress: bool = False,
-        require_ps2_mouse: bool = False, require_via_audio: bool = False) -> None:
+        require_ps2_mouse: bool = False, require_via_audio: bool = False,
+        require_desktop_memory: bool = False, require_installed_memory: bool = False) -> None:
     if require_rtas and "PCI: Pegasos 2 using RTAS PCI configuration" not in log:
         raise AssertionError("RTAS PCI configuration did not succeed")
     if ("PCI: Pegasos 2 using RTAS PCI configuration" not in log
@@ -44,6 +45,20 @@ def check_boot(log: str, require_userland: bool, require_rtas: bool = False,
         audio_rate = re.search(r"VIA AC'97:.*PCM output ready at (\d+) Hz", log)
         if audio_rate is None or not 42000 <= int(audio_rate.group(1)) <= 46000:
             raise AssertionError("VIA AC'97 did not report a usable 44.1 kHz output rate")
+    if require_desktop_memory:
+        budget = re.search(r"Radeon: framebuffer mapping (\d+) KiB from (\d+) KiB aperture; uncommitted pages (\d+) -> (\d+)", log)
+        if budget is None or int(budget.group(1)) > 32768 or int(budget.group(4)) < 4096:
+            raise AssertionError("Radeon did not leave a usable physical-memory budget")
+        if "MM: Unable to commit" in log:
+            raise AssertionError("userland exhausted the physical-page commitment budget")
+        if require_userland and "Entering WindowServer main loop" not in log:
+            raise AssertionError("WindowServer did not start after limiting the framebuffer mapping")
+    if require_installed_memory:
+        if "SerenityOS PowerPC loader: using installed RAM from /memory/reg" not in log:
+            raise AssertionError("the loader did not select installed RAM")
+        regions = re.findall(r"MM: Physical region: P([0-9a-f]+) - P([0-9a-f]+)", log)
+        if not any(int(end, 16) >= 0x1fffffff for _, end in regions):
+            raise AssertionError("the kernel did not receive the full 512 MiB RAM range")
     if require_userland and "Running first user process:" not in log:
         raise AssertionError("the kernel did not start userland")
 
@@ -93,6 +108,28 @@ Running first user process: /sbin/init
     audio_boot = recovered.replace("Running first user process:",
         "VIA AC'97: PCI [0000:00:0c:05]: PCM output ready at 44100 Hz\nRunning first user process:")
     check_boot(audio_boot, True, require_via_audio=True)
+    desktop_memory_boot = entropy_ready_boot.replace("Running first user process:",
+        "Radeon: framebuffer mapping 32768 KiB from 131072 KiB aperture; uncommitted pages 38000 -> 29808\n"
+        "Running first user process:")
+    check_boot(desktop_memory_boot, True, require_desktop_memory=True)
+    installed_memory_boot = desktop_memory_boot.replace("Running first user process:",
+        "SerenityOS PowerPC loader: using installed RAM from /memory/reg\n"
+        "MM: Physical region: P0000000006401000 - P000000001fffffff (size 0x19bff000)\n"
+        "Running first user process:")
+    check_boot(installed_memory_boot, True, require_desktop_memory=True, require_installed_memory=True)
+    try:
+        check_boot(desktop_memory_boot, True, require_installed_memory=True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("the reduced physical memory map must fail the installed-RAM check")
+    try:
+        check_boot(desktop_memory_boot.replace("Radeon: framebuffer mapping 32768 KiB", "Radeon: framebuffer mapping 131072 KiB")
+            + "MM: Unable to commit 3 pages, have only 1\n", True, require_desktop_memory=True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("the observed framebuffer-related OOM must fail")
     try:
         check_boot(audio_boot.replace("44100 Hz", "1040 Hz"), True, require_via_audio=True)
     except AssertionError:
@@ -133,6 +170,8 @@ def main() -> None:
     parser.add_argument("--require-entropy-progress", action="store_true", help="require opt-in PowerPC entropy readiness")
     parser.add_argument("--require-ps2-mouse", action="store_true", help="require PS/2 mouse startup after a missing keyboard")
     parser.add_argument("--require-via-audio", action="store_true", help="require a usable VIA AC'97 output rate")
+    parser.add_argument("--require-desktop-memory", action="store_true", help="require Radeon to leave RAM for userland")
+    parser.add_argument("--require-installed-memory", action="store_true", help="require the optional full installed-RAM handoff")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
@@ -143,7 +182,7 @@ def main() -> None:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
     check_boot(Path(path).read_text(errors="replace"), args.normal, args.require_rtas,
         args.require_uhci_progress, args.require_entropy_progress, args.require_ps2_mouse,
-        args.require_via_audio)
+        args.require_via_audio, args.require_desktop_memory, args.require_installed_memory)
 
 
 if __name__ == "__main__":

@@ -114,6 +114,11 @@ observed 1040 Hz codec readback and require a rate near 44.1 kHz.
 `PowerPCVIAAC97CodecContractCheckQuick` and
 `PowerPCVIAAC97CodecContractCheck` verify the VIA command words on the host;
 both pass without starting QEMU.
+`PowerPCRadeonFramebufferBudgetCheckQuick` and
+`PowerPCRadeonFramebufferBudgetCheck` check the framebuffer mapping cap on
+the host. `PowerPCNativeDesktopMemoryCheckQuick` and
+`PowerPCNativeDesktopMemoryCheck` check the physical memory budget and reject
+the userland out-of-memory failure.
 
 ## SmartFirmware probe card
 
@@ -130,7 +135,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`c0637453aef68892a5ff72355d67c25d48df9993fd4791de2b89c22034bef693`.
+`1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -232,11 +237,39 @@ that rate but read back 1040 Hz. Linux `via82xx` and Haiku `auvia` both set
 the primary-codec-valid bit in AC'97 read and write commands; Serenity had
 omitted it. The compiled driver now sets the bit, allows a read to settle,
 and rejects an invalid DAC-rate readback after three attempts. The native
-audio log regression rejects the observed 1040 Hz. The user is still
-copying/testing the current SD image, so that image and checksum have not
-been changed. The rebuilt loader contains the audio change, but its FFS
-copy does not yet. The host VIA codec-command contract check passes. Physical
-audio behavior remains unverified; no QEMU run was made.
+audio log regression rejects the observed 1040 Hz. This fix was later
+included in the updated SD image. The host VIA codec-command contract check
+passes. Physical audio behavior remains unverified; no QEMU run was made.
+
+The user's next physical boot confirmed that the insecure timing pool became
+ready and the PS/2 mouse initialized. Both UHCI controllers, Radeon DVI,
+RDB disk, ext2 root, and `/init` also worked. `/init` then failed to map a
+writable page for its dynamic loader: `MM: Unable to commit 3 pages, have
+only 1`. Its memory map has about 183 MiB of usable RAM, while the Radeon
+reports a 128 MiB framebuffer BAR. The shared framebuffer implementation
+commits one RAM page for every mapped BAR page to support fake writes in
+console mode; mapping all 128 MiB consumed most of the physical-page budget.
+The Radeon driver now maps only the first 32 MiB of the aperture, enough for
+the current 1024×768 mode and a future 1920×1080 scanout. It logs the
+uncommitted-page count before and after the connector allocation. The
+512 MiB installed RAM appears in `/memory/reg`. SmartFirmware's
+`/memory/available` instead reports 16 MiB plus 228 MiB (244 MiB total),
+and the loader currently uses that smaller property for the kernel map;
+boot reservations and page metadata leave about 183 MiB. The reason the
+upper 256 MiB is absent from `available` is not established. Linux and
+Haiku use `reg` to describe RAM after the firmware handoff. The loader now
+supports `serenity-loader-use-installed-memory` as an opt-in boot argument:
+it continues to claim the kernel and HPT from `available`, then hands the
+full `reg` range to the kernel after firmware quiesce. Try the 32 MiB
+framebuffer fix first with the default conservative map; the same SD image
+can test the full installed range by adding that argument. Physical testing
+must establish that the extra RAM is safe on this board.
+The user authorized updating the existing card image. Its FFS `serenity.elf`
+was replaced once with the rebuilt loader containing the AC'97 fix, Radeon
+budget cap, and optional installed-RAM map. Extraction from FFS matched the
+loader byte for byte. The root partition was not rewritten. The image SHA-256
+is `1816b92923da92dda0c41e6e0f13203f2c26e70e5d45c30c811e0af140b1f8b4`;
+physical results for these changes are pending.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

@@ -9,8 +9,10 @@
 #include <Kernel/Bus/PCI/BarMapping.h>
 #include <Kernel/Bus/PCI/IDs.h>
 #include <Kernel/Devices/GPU/ATI/RadeonDisplayConnector.h>
+#include <Kernel/Devices/GPU/ATI/RadeonFramebufferBudget.h>
 #include <Kernel/Devices/GPU/ATI/RadeonGraphicsAdapter.h>
 #include <Kernel/Library/IOWindow.h>
+#include <Kernel/Memory/MemoryManager.h>
 #include <Kernel/Memory/TypedMapping.h>
 
 namespace Kernel {
@@ -150,11 +152,16 @@ ErrorOr<void> RadeonGraphicsAdapter::initialize_adapter(PCI::DeviceIdentifier co
     if (video_memory_size != 0)
         framebuffer_size = min<size_t>(framebuffer_size, video_memory_size);
     dmesgln("Radeon: {} {} framebuffer {} ({} KiB)", identifier.address(), identifier.hardware_id(), framebuffer_address, framebuffer_size / KiB);
+    auto mapped_framebuffer_size = static_cast<size_t>(Radeon::framebuffer_mapping_bytes(framebuffer_size));
+    auto uncommitted_before = MM.get_system_memory_info().physical_pages_uncommitted;
 
     auto pll_limits = read_pll_limits(identifier);
     // QEMU's emulated card (subsystem vendor 0x1af4) only implements the Rage 128-style aperture swap.
     auto aperture_swap = identifier.subsystem_vendor_id().value() == PCI::VendorID::VirtIO ? Radeon::ApertureSwap::ConfigControl : Radeon::ApertureSwap::SurfaceControl;
-    auto connector = TRY(Radeon::RadeonDisplayConnector::create(family, aperture_swap, framebuffer_address, framebuffer_size, move(registers), pll_limits));
+    auto connector = TRY(Radeon::RadeonDisplayConnector::create(family, aperture_swap, framebuffer_address, mapped_framebuffer_size, move(registers), pll_limits));
+    dmesgln("Radeon: framebuffer mapping {} KiB from {} KiB aperture; uncommitted pages {} -> {}",
+        mapped_framebuffer_size / KiB, framebuffer_size / KiB, uncommitted_before,
+        MM.get_system_memory_info().physical_pages_uncommitted);
     m_display_connector = connector;
     TRY(m_display_connector->set_safe_mode_setting());
     return {};
