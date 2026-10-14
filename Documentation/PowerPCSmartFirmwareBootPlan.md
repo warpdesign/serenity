@@ -33,7 +33,7 @@ loader.
 | Console | Firmware `stdout` until kernel entry. | `stdout` may be the screen; the serial port must be found and used natively. |
 | Device addresses | Kernel uses QEMU constants: PCI I/O base `0xfe000000`, COM2 at `0x2f8` (`Pegasos2/HardwareAddresses.h`) for debug output, PIC, RTC and i8042. | Must come from the firmware tree. |
 | RTAS | Not passed to the kernel, so RTAS shutdown/reboot is unused. | Instantiate RTAS before `quiesce` and pass it on. |
-| Image size | 6.1 MB with the kernel gzip-compressed (26.8 MB uncompressed: `.ksyms` 8 MB mostly padding, `.text` 7 MB, `.rela.dyn` 5.4 MB). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
+| Image size | 6.1 MB with KUBSAN and the kernel gzip-compressed (2.4 MB without KUBSAN). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
 The kernel itself does not call Open Firmware after entry. PCI bridge windows,
 the MV64361 base, memory ranges and the timebase are already read from the
@@ -62,10 +62,21 @@ Plan:
    image on the VT8231 IDE controller before using the physical card.
 3. **Load time:** `serenity.elf` is the loader plus the kernel ELF, which is
    embedded gzip-compressed and inflated by the loader (with a CRC-32 check)
-   before it is loaded. That brings the file from 26.8 MB to 6.1 MB, close to
-   MorphOS's self-decompressing 1.7 MB `boot.img`; the userland lives on the
-   ext2 root partition. xz would save another 3 MB if disk reads are still too
-   slow, at the cost of a larger decoder and slower inflation on the G3.
+   before it is loaded; the userland lives on the ext2 root partition. Its size
+   depends on the kernel's undefined behaviour sanitizer (KUBSAN), which adds
+   checks to most code and a relocated descriptor for each check:
+
+   | Image | KUBSAN | Kernel ELF | `serenity.elf` |
+   | --- | --- | --- | --- |
+   | Debug (used during the port) | on | 26.8 MB | 6.1 MB |
+   | Release | off | 14.8 MB | 2.4 MB |
+
+   KUBSAN stays on while the port is being developed, accepting the larger and
+   slower-to-load image. A first public release will build both a debug image
+   and a release image, the latter configured with
+   `-DENABLE_KERNEL_UNDEFINED_SANITIZER=OFF` in a separate build directory.
+   xz would bring the debug image to about 3 MB if loading it becomes the
+   bottleneck, at the cost of a larger decoder.
 
 Keep an image of the card as it was before the first write, so Haiku can be
 restored.

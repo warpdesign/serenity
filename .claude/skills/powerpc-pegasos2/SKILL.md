@@ -32,7 +32,15 @@ still compiles: `cmake --build Build/x86_64 --target Kernel`.
 ## Images and running
 
 The loader `Build/powerpc/Kernel/Arch/powerpc/Loader/image/serenity-powerpc-loader.elf` contains the
-gzip-compressed kernel (6 MB). Disk images are made by the test scripts in `Tests/Kernel/PowerPC/`;
+gzip-compressed kernel (6.1 MB).
+
+Debug and release images: development uses the default debug configuration, with the kernel's
+undefined behaviour sanitizer (KUBSAN) on, accepting the 6.1 MB image. KUBSAN accounts for nearly
+half the kernel code and 90% of its relocations; a release build in a separate build directory
+configured with `-DENABLE_KERNEL_UNDEFINED_SANITIZER=OFF` gives a 2.4 MB `serenity.elf`. Both are
+to be produced for a first public release; don't turn KUBSAN off in `Build/powerpc`.
+
+Disk images are made by the test scripts in `Tests/Kernel/PowerPC/`;
 pass `--output-dir DIR` to `test_desktop.py` or `test_pixel_paint.py` to keep `root.ext2`:
 
 ```sh
@@ -124,7 +132,9 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   LBA48); upstream Ext2 superblock backup bug fixed; R100/R200 Radeon driver (QEMU rv100);
   hardware tools and System Monitor in the image; UHCI/USB HID big-endian fixes.
 - 2026-10-14: Radeon internal DVI output; SmartFirmware boot plan; kernel embedded gzip-compressed
-  in the loader (26.8 MB to 6.1 MB, CRC-checked).
+  in the loader (26.8 MB to 6.1 MB, CRC-checked). Measured KUBSAN's cost (2.4 MB image without it)
+  and decided to keep it on until a first release, which will ship debug and release images; fixed
+  the kernel build with KUBSAN disabled.
 
 Next, in the plan's order: SmartFirmware phase 1 (real-mode client calls, banner over serial), the
 SD card image recipe (RDB with an FFS boot partition and an ext2 root), RDB support in LibPartition.
