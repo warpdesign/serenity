@@ -101,6 +101,9 @@ recorded 2026-10-15 PCI failure is rejected by that checker.
 `PowerPCNativeRTASHardwareCheckQuick` and `PowerPCNativeRTASHardwareCheck`
 additionally require the physical boot to use RTAS rather than the guarded
 direct-config fallback.
+`PowerPCNativeUHCIBootCheckQuick` and `PowerPCNativeUHCIBootCheck` require the
+first UHCI controller to complete initialization or report a bounded timeout
+before storage and, for the normal target, userland startup.
 
 ## SmartFirmware probe card
 
@@ -117,7 +120,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`75e33dd0f9af33d77c5333148c7e4b58c79083cdec8238ed4497d699455e0bc8`.
+`07a057c9ac2a652a00f2864ec46260ed1a1024f62f04258685dec7d0c3d2aa03`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -177,6 +180,18 @@ as normal cacheable RAM for both PCI and power-service calls. This is a
 plausible cause of the `ffff:ffff` result, but only the next physical boot can
 confirm it. The RTAS-specific native hardware check will distinguish success
 from a boot that used direct PCI fallback.
+
+The user then booted the preceding fallback image, not the new cacheable-RTAS
+image. RTAS left both return cells at `ffffffff`; direct configuration found
+the south bridge (`1106:8231`) and IDE (`1106:0571`), routed two PCI lines,
+and enumerated all south-bridge functions. The AGP display still read
+`ffff:ffff` through that direct path. Serial output stopped after the first
+UHCI controller's `Interrupt line: 9` message. UHCI did not enable PCI I/O
+decoding and had unbounded waits in stop, reset, and start. The next build
+enables I/O decoding and bus mastering and bounds those waits; a nonresponding controller can
+then report an error and let IDE discovery continue. The native serial-log
+regression rejects the observed UHCI stop before storage discovery. The new
+cacheable-RTAS path and this UHCI change have not run on physical hardware.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

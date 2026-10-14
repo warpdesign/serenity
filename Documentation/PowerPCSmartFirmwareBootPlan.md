@@ -68,6 +68,15 @@ RAM. Serenity was mapping its physical RAM argument page with cache-inhibited,
 guarded I/O attributes. The next build uses normal RAM attributes for both
 PCI and power-service RTAS calls. The physical outcome is still pending.
 
+The user subsequently booted the preceding image. Its RTAS result cells
+remained `ffffffff`, but direct PCI fallback identified and enumerated the
+VT8231, IDE, USB, audio, and Ethernet functions. Direct AGP display access
+still returned `ffff:ffff`. Serial output stopped during UHCI initialization
+after `Interrupt line: 9`; the user confirmed it did not continue. The UHCI
+driver now enables I/O decoding and bus mastering and times out its stop, reset, and start
+polls, so an unresponsive controller cannot indefinitely block IDE probing.
+The cacheable RTAS mapping and UHCI fix are both awaiting a physical boot.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB

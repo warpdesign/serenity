@@ -125,6 +125,15 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCNativeRTASHardwareCheckQuick
         VERBATIM
     )
+    add_custom_target(PowerPCNativeUHCIBootCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-uhci-progress
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeUHCIBootCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-uhci-progress --normal
+        DEPENDS PowerPCNativeUHCIBootCheckQuick
+        VERBATIM
+    )
 
     string(REGEX REPLACE "gcc$" "" powerpc_test_cross_compile "${CMAKE_C_COMPILER}")
     set(powerpc_kmalloc_hpt_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_kernel_entry.py")

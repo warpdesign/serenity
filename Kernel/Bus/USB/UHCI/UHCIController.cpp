@@ -49,6 +49,7 @@ static constexpr u8 UHCI_USBINTR_SHORT_PACKET_INTR_ENABLE = 0x08;
 
 static constexpr u16 UHCI_FRAMELIST_FRAME_COUNT = 1024; // Each entry is 4 bytes in our allocated page
 static constexpr u16 UHCI_FRAMELIST_FRAME_INVALID = 0x0001;
+static constexpr u32 UHCI_TRANSITION_TIMEOUT_POLLS = 10000;
 
 // Port stuff
 static constexpr u8 UHCI_ROOT_PORT_COUNT = 2;
@@ -82,14 +83,15 @@ ErrorOr<void> UHCIController::initialize()
     dmesgln_pci(*this, "I/O base {}", m_registers_io_window);
     dmesgln_pci(*this, "Interrupt line: {}", interrupt_number());
 
+    PCI::enable_io_space(device_identifier());
+    PCI::enable_bus_mastering(device_identifier());
     // This controller uses a polling task and does not register an IRQ
     // handler. Keep its PCI INTx output disabled while sharing the line.
     disable_pin_based_interrupts();
 
-    TRY(spawn_async_poll_process());
-
     TRY(reset());
-    return start();
+    TRY(start());
+    return spawn_async_poll_process();
 }
 
 UNMAP_AFTER_INIT UHCIController::UHCIController(PCI::DeviceIdentifier const& pci_device_identifier, NonnullOwnPtr<IOWindow> registers_io_window)
@@ -107,11 +109,17 @@ ErrorOr<void> UHCIController::reset()
 
     write_usbcmd(UHCI_USBCMD_HOST_CONTROLLER_RESET);
 
-    // FIXME: Timeout
-    for (;;) {
-        if (read_usbcmd() & UHCI_USBCMD_HOST_CONTROLLER_RESET)
-            continue;
-        break;
+    bool reset_completed = false;
+    for (u32 poll = 0; poll < UHCI_TRANSITION_TIMEOUT_POLLS; ++poll) {
+        if (!(read_usbcmd() & UHCI_USBCMD_HOST_CONTROLLER_RESET)) {
+            reset_completed = true;
+            break;
+        }
+        microseconds_delay(10);
+    }
+    if (!reset_completed) {
+        dmesgln_pci(*this, "Controller reset timed out, USBCMD={:#06x}, USBSTS={:#06x}", read_usbcmd(), read_usbsts());
+        return ETIMEDOUT;
     }
 
     // Let's allocate the physical page for the Frame List (which is 4KiB aligned)
@@ -253,21 +261,29 @@ TransferDescriptor* UHCIController::allocate_transfer_descriptor()
 ErrorOr<void> UHCIController::stop()
 {
     write_usbcmd(read_usbcmd() & ~UHCI_USBCMD_RUN);
-    // FIXME: Timeout
-    for (;;) {
+    for (u32 poll = 0; poll < UHCI_TRANSITION_TIMEOUT_POLLS; ++poll) {
         if (read_usbsts() & UHCI_USBSTS_HOST_CONTROLLER_HALTED)
-            break;
+            return {};
+        microseconds_delay(10);
     }
-    return {};
+    dmesgln_pci(*this, "Controller stop timed out, USBCMD={:#06x}, USBSTS={:#06x}", read_usbcmd(), read_usbsts());
+    return ETIMEDOUT;
 }
 
 ErrorOr<void> UHCIController::start()
 {
     write_usbcmd(read_usbcmd() | UHCI_USBCMD_RUN);
-    // FIXME: Timeout
-    for (;;) {
-        if (!(read_usbsts() & UHCI_USBSTS_HOST_CONTROLLER_HALTED))
+    bool started = false;
+    for (u32 poll = 0; poll < UHCI_TRANSITION_TIMEOUT_POLLS; ++poll) {
+        if (!(read_usbsts() & UHCI_USBSTS_HOST_CONTROLLER_HALTED)) {
+            started = true;
             break;
+        }
+        microseconds_delay(10);
+    }
+    if (!started) {
+        dmesgln_pci(*this, "Controller start timed out, USBCMD={:#06x}, USBSTS={:#06x}", read_usbcmd(), read_usbsts());
+        return ETIMEDOUT;
     }
     dbgln("UHCI: Started");
 

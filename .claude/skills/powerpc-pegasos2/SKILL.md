@@ -211,8 +211,20 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   RTAS PCI success, separate from the fallback-tolerant native PCI check.
   No QEMU run was made; physical confirmation is pending.
 
+- 2026-10-15: The user booted the earlier fallback image, not the cacheable
+  RTAS image. RTAS status/value both remained `ffffffff`. Direct PCI fallback
+  identified the VT8231 and IDE, routed two PCI lines, and enumerated all
+  south-bridge functions. The direct AGP display probe returned `ffff:ffff`.
+  Serial output stopped after UHCI `Interrupt line: 9`; the user confirmed a
+  hang. UHCI did not enable PCI I/O decoding and used unbounded hardware
+  waits. The next build enables decode and bus mastering, and adds bounded stop/reset/start
+  polls, allowing storage discovery after a USB failure. The native boot-log
+  regression self-test now rejects a log stopped at UHCI. Neither this fix nor
+  the cacheable RTAS mapping has been tested on physical hardware. No QEMU
+  run was made.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `75e33dd0f9af33d77c5333148c7e4b58c79083cdec8238ed4497d699455e0bc8`),
+to the SD card (SHA-256 `07a057c9ac2a652a00f2864ec46260ed1a1024f62f04258685dec7d0c3d2aa03`),
 boot with `boot ide:0 serenity.elf`,
 and capture the serial output from `native RTAS PCI ready` through storage
 discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,
