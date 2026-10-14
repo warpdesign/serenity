@@ -49,17 +49,18 @@ partition holds the OS.
 
 Plan:
 
-1. **Card layout:** an RDB table with partition 0, a small Amiga FFS
-   partition holding `serenity.elf`, followed by an ext2 root partition. A
-   host-side recipe builds the whole card image (for example with amitools'
-   `rdbtool`/`xdftool` for the RDB and FFS parts, and `mke2fs` for the root),
-   and a second command replaces only `serenity.elf` for quick iterations.
+1. **Card layout (done):** an RDB table with partition 0, a 32 MiB Amiga FFS
+   (`DOS\3`) partition holding `serenity.elf`, followed by an ext2 root
+   partition (`LNX\0`, not mounted by AmigaOS). `Meta/PowerPC/make-pegasos-card.py
+   card` builds the whole image from the loader and an ext2 root image, and
+   `boot-only` replaces only `serenity.elf` on an existing card. amitools'
+   `rdbtool` and `xdftool` accept the result.
 2. **Loader:** boot it with `boot ide:0 serenity.elf`. This is enough for
    phases 1 to 4.
-3. **Root filesystem:** the adapter holds a single card, so the kernel must
-   find the ext2 partition through the RDB. Teach `LibPartition` to read RDB
-   (it reads MBR, EBR and GPT today), and test it in QEMU with the same card
-   image on the VT8231 IDE controller before using the physical card.
+3. **Root filesystem (done):** the adapter holds a single card, so the kernel
+   finds the ext2 partition through the RDB. `LibPartition` reads RDB, and
+   `PowerPCRDBCardBootCheck` boots the card image on the VT8231 IDE controller
+   with `root=lun3:0:0;part1`.
 3. **Load time:** `serenity.elf` is the loader plus the kernel ELF, which is
    embedded gzip-compressed and inflated by the loader (with a CRC-32 check)
    before it is loaded; the userland lives on the ext2 root partition. Its size

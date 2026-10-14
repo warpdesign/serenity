@@ -37,6 +37,10 @@ probe and is historical.
   PIO and LBA48. The desktop boots with its root filesystem as the only disk,
   attached to the IDE primary master, and writes leave a clean ext2 image.
   Interrupt-driven completion and bus-master DMA are not implemented yet.
+- LibPartition reads Amiga RDB partition tables. `Meta/PowerPC/make-pegasos-card.py`
+  builds the SD card layout planned for SmartFirmware: an RDB with an FFS boot
+  partition holding the loader and an ext2 root partition. Booted on the IDE
+  disk with `root=lun3:0:0;part1`, the desktop runs from the ext2 partition.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
   output routing left by the video BIOS, and programs the pixel PLL from the
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
@@ -70,6 +74,7 @@ cmake --build Build/powerpc --target PowerPCVIAAudioCheck
 cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCPS2InputCheck
 cmake --build Build/powerpc --target PowerPCIDEBootCheck
+cmake --build Build/powerpc --target PowerPCRDBCardBootCheck
 cmake --build Build/powerpc --target PowerPCRadeonDesktopCheck
 ```
 

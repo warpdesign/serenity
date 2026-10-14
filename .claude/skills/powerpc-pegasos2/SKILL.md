@@ -73,7 +73,7 @@ Variants:
 Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 `PowerPCFirmwareLoaderCheck`, `PowerPCWindowServerCheck`, `PowerPCDesktopCheck`,
 `PowerPCDesktopProgramsCheck`, `PowerPCPixelPaintCheck`, `PowerPCBrowserCheck`, `PowerPCVIAAudioCheck`,
-`PowerPCIDEBootCheck`, `PowerPCPS2InputCheck`, `PowerPCUSBInputCheck`, `PowerPCRadeonDesktopCheck`,
+`PowerPCIDEBootCheck`, `PowerPCRDBCardBootCheck`, `PowerPCPS2InputCheck`, `PowerPCUSBInputCheck`, `PowerPCRadeonDesktopCheck`,
 `PowerPCKmallocHPTCheck`. Run with `cmake --build Build/powerpc --target <name> -- -j18`.
 
 ## Debugging techniques
@@ -104,6 +104,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 | `symbolize-tbprof.py` | Turns a profile into per-library and per-function costs (kernel and userland). |
 | `pixelpaint-latency.py` | Boots a PixelPaint image headless and times cursor, paint and burst latency. |
 | `amiga-disk.py` | Read-only RDB partition listing and OFS/FFS (incl. DOS\6/\7) listing and extraction. |
+| `make-pegasos-card.py` | Builds the SD card image (RDB, FFS boot partition with `serenity.elf`, ext2 root), or rewrites only the boot partition. Boot it in QEMU with `-drive if=ide,...` and `root=lun3:0:0;part1`; copy it to the card with `dd`. amitools (`pip install amitools`: `rdbtool`, `xdftool`) independently checks the result. |
 | `test-loader-inflate.cpp` | Runs the loader's gzip decoder on the host against the real kernel. |
 
 ## Gotchas found so far
@@ -122,6 +123,9 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   files world-readable in image recipes.
 - Apps that `unveil` a missing executable (Calendar → CalendarSettings, System Monitor → Escalator,
   NetworkSettings) exit at startup; image recipes must include those executables.
+- Upstream `EBRPartitionTable` used to accept any readable sector 0, which hid every later partition
+  table format; it now requires an MBR signature and an extended partition. `GUIDPartitionTable`
+  still reads its fields as native integers, so GPT disks are misread on PowerPC.
 - xHCI does not work on big-endian (about 600 bit-fields in its register and DMA structures); it
   declines the controller instead of crashing. EHCI is a stub upstream.
 
@@ -134,9 +138,10 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 - 2026-10-14: Radeon internal DVI output; SmartFirmware boot plan; kernel embedded gzip-compressed
   in the loader (26.8 MB to 6.1 MB, CRC-checked). Measured KUBSAN's cost (2.4 MB image without it)
   and decided to keep it on until a first release, which will ship debug and release images; fixed
-  the kernel build with KUBSAN disabled.
+  the kernel build with KUBSAN disabled. RDB partition tables in LibPartition, the SD card image
+  tool, and a QEMU check booting the card layout; fixed EBR detection hiding other table formats.
 
-Next, in the plan's order: SmartFirmware phase 1 (real-mode client calls, banner over serial), the
-SD card image recipe (RDB with an FFS boot partition and an ext2 root), RDB support in LibPartition.
+Next, in the plan's order: a SmartFirmware probe loader (real-mode client calls, banner and firmware
+tree dump over serial, then stop) to boot from the card on the physical machine.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.
