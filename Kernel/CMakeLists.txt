@@ -913,8 +913,9 @@ if (ENABLE_KERNEL_UNDEFINED_SANITIZER)
     if (ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize-recover=undefined")
     endif()
-    add_compile_definitions(ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY=$<BOOL:${ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY}>)
 endif()
+# Defined either way, since the kernel is built with -Werror=undef.
+add_compile_definitions(ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY=$<AND:$<BOOL:${ENABLE_KERNEL_UNDEFINED_SANITIZER}>,$<BOOL:${ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY}>>)
 
 if (ENABLE_KERNEL_ADDRESS_SANITIZER)
     add_compile_options(-fsanitize=kernel-address)
