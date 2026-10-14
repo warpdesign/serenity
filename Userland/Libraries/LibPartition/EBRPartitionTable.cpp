@@ -43,7 +43,9 @@ void EBRPartitionTable::search_extended_partition(MBRPartitionTable& checked_ebr
 EBRPartitionTable::EBRPartitionTable(PartitionableDevice device)
     : MBRPartitionTable(move(device))
 {
-    if (!is_header_valid())
+    // Only a valid MBR with an extended partition describes logical partitions; otherwise another table
+    // format (GPT, RDB) must get a chance to parse the disk.
+    if (!is_header_valid() || header().mbr_signature != 0xaa55 || !contains_ebr())
         return;
     m_valid = true;
 
