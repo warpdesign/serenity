@@ -114,7 +114,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`a7eb780c7d71d70cb57b59ec504cca6e742a3f3e62721da8d7a3b627844d2e35`.
+`a6de695c744a84bf3c2a007d1e52b144c676bc1f4d45697cabe435dd55f08d4f`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -153,8 +153,17 @@ been called. The loader now checks the reservation while that array is mapped;
 later PCI and power-service users validate the copied RTAS fields without
 reading the stale memory-map pointer. A regression in `TestBootInfo.cpp`
 checks that late RTAS lookup works with the reservation pointer unavailable.
-The canonical card's FFS loader has been updated and matches the rebuilt ELF
-byte for byte. The physical RTAS PCI path still needs its first hardware call.
+The card's FFS loader for that boot matched the rebuilt ELF byte for byte.
+
+The following physical boot passed the late handoff check and did make its
+first RTAS PCI read, but the south bridge ID came back `ffff:ffff`. The kernel
+again found no storage device. The returned ID alone cannot distinguish an
+RTAS service error from an empty config address. The next build logs the RTAS
+status and result. If RTAS cannot identify the VT8231, it tries the MV64361
+direct-config path and continues only if that path identifies both the VT8231
+and VIA IDE controller. Firmware BARs remain untouched in either native path.
+This guarded fallback is compiled and its serial-log checker self-test passes;
+the physical result is pending. No QEMU boot was run.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

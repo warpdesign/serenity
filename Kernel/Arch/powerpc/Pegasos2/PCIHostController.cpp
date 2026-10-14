@@ -78,9 +78,11 @@ Optional<u32> PCIHostController::read_rtas_config(PCI::BusNumber bus, PCI::Devic
     powerpc_rtas_enter(m_rtas->arguments_physical, m_rtas->entry_physical,
         real_return, reinterpret_cast<FlatPtr>(powerpc_rtas_return_virtual));
     asm volatile("sync" : : : "memory");
-    if (arguments->values[2] != 0)
+    m_last_rtas_status = arguments->values[2];
+    m_last_rtas_value = arguments->values[3];
+    if (m_last_rtas_status != 0)
         return {};
-    return arguments->values[3];
+    return m_last_rtas_value;
 }
 
 bool PCIHostController::write_rtas_config(PCI::BusNumber bus, PCI::DeviceNumber device,

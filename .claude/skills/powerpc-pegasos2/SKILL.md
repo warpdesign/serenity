@@ -193,12 +193,21 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   Physical PCI identification remains the next checkpoint. Do not run QEMU
   verification unless the user asks to resume it.
 
+- 2026-10-15: The next physical boot passed the stale-pointer fix and reached
+  the RTAS PCI read, but got south bridge ID `ffff:ffff`; no PCI devices were
+  registered and storage remained at zero. The next build records the RTAS
+  service status/value and probes native MV64361 config as a fallback. It
+  proceeds through that path only if the VT8231 and VIA IDE IDs match
+  `1106:8231` and `1106:0571`. Firmware BARs are preserved on both native
+  paths. Physical outcome is pending; no QEMU boot was run.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `a7eb780c7d71d70cb57b59ec504cca6e742a3f3e62721da8d7a3b627844d2e35`),
+to the SD card (SHA-256 `a6de695c744a84bf3c2a007d1e52b144c676bc1f4d45697cabe435dd55f08d4f`),
 boot with `boot ide:0 serenity.elf`,
 and capture the serial output from `native RTAS PCI ready` through storage
 discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,
-`PCI: Pegasos 2 RTAS IDE`, and `StorageManagement: Detected`. Do not build
+`PCI: Pegasos 2 direct fallback`, `PCI: Pegasos 2 native IDE`, and
+`StorageManagement: Detected`. Do not build
 separate cards for each checkpoint or run QEMU verification until the user
 requests it.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from

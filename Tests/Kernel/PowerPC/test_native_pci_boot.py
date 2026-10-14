@@ -10,10 +10,11 @@ from pathlib import Path
 
 
 def check_boot(log: str, require_userland: bool) -> None:
-    if "PCI: Pegasos 2 RTAS south bridge 1106:8231" not in log:
-        raise AssertionError("RTAS did not identify the VT8231 south bridge")
-    if "PCI: Pegasos 2 RTAS IDE 1106:0571" not in log:
-        raise AssertionError("RTAS did not identify the VIA IDE controller")
+    if ("PCI: Pegasos 2 using RTAS PCI configuration" not in log
+            and "PCI: Pegasos 2 direct fallback south 1106:8231, IDE 1106:0571" not in log):
+        raise AssertionError("neither PCI configuration path identified the VT8231 and VIA IDE")
+    if "PCI: Pegasos 2 native IDE 1106:0571" not in log:
+        raise AssertionError("PCI enumeration did not identify the VIA IDE controller")
     detected = re.search(r"StorageManagement: Detected (\d+) storage devices", log)
     if detected is None or int(detected.group(1)) < 1:
         raise AssertionError("the IDE controller did not provide a storage device")
@@ -34,13 +35,16 @@ KERNEL PANIC! :^(
         pass
     else:
         raise AssertionError("the previous physical failure must be rejected")
-    recovered = """PCI: Pegasos 2 RTAS south bridge 1106:8231; preserving firmware BARs
-PCI: Pegasos 2 RTAS IDE 1106:0571, display 1002:5964
+    recovered = """PCI: Pegasos 2 using RTAS PCI configuration
+PCI: Pegasos 2 native IDE 1106:0571, display 1002:5964; preserving firmware BARs
 StorageManagement: Detected 1 storage devices
 Running first user process: /sbin/init
 """
     check_boot(recovered, False)
     check_boot(recovered, True)
+    fallback = recovered.replace("PCI: Pegasos 2 using RTAS PCI configuration",
+        "PCI: Pegasos 2 direct fallback south 1106:8231, IDE 1106:0571")
+    check_boot(fallback, True)
 
 
 def main() -> None:

@@ -53,6 +53,13 @@ mapped. The next image validates that reservation in the loader, then uses
 only the copied RTAS fields after kernel memory initialization. The next
 physical log should show the RTAS south-bridge and IDE PCI identifiers.
 
+The next physical log reached the RTAS read but got `ffff:ffff` for the
+VT8231, so PCI registration still stopped. The next build records the RTAS
+service status and result, then checks direct MV64361 config access as a
+fallback. It accepts that fallback only if both the south bridge and IDE PCI
+IDs match the captured firmware tree. Neither native path reassigns the
+firmware BARs.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB

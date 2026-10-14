@@ -19,6 +19,8 @@ public:
     static ErrorOr<NonnullOwnPtr<PCIHostController>> create(PhysicalAddress registers_base, PowerPCPCIHostBridgeInfo const&, Optional<PowerPCRtasInfo> const&);
     ErrorOr<void> assign_unconfigured_resources(PowerPCPCIHostBridgeInfo const&);
     size_t assign_unconfigured_interrupt_lines(PowerPCPCIHostBridgeInfo const&, Array<u8, 4> const& pirq_lines);
+    u32 last_rtas_status() const { return m_last_rtas_status; }
+    u32 last_rtas_value() const { return m_last_rtas_value; }
 
 private:
     PCIHostController(PCI::Domain const&, Memory::TypedMapping<volatile u32[]>, u16 address_offset,
@@ -40,6 +42,8 @@ private:
     u16 m_address_offset;
     Optional<PowerPCRtasInfo> m_rtas;
     Memory::TypedMapping<volatile PowerPCRtasArguments> m_rtas_arguments;
+    u32 m_last_rtas_status { 0xffffffffu };
+    u32 m_last_rtas_value { 0xffffffffu };
 };
 
 }

@@ -36,6 +36,7 @@ UNMAP_AFTER_INIT void initialize()
     auto rtas = PowerPC::boot_rtas_info_after_handoff(g_boot_info);
     if (rtas.has_value() && (rtas->read_pci_config_token == 0 || rtas->write_pci_config_token == 0))
         rtas.clear();
+    bool native_firmware = rtas.has_value();
     if (!registers_base.has_value() || !bridges.has_value()) {
         dmesgln("PCI: Pegasos 2 firmware bridge information unavailable");
         g_pci_access_io_probe_failed.set();
@@ -52,17 +53,40 @@ UNMAP_AFTER_INIT void initialize()
 
     auto south_controller = south.release_value();
     auto agp_controller = agp.release_value();
-    if (rtas.has_value()) {
+    if (native_firmware) {
         auto bus = (*bridges)[0].start_bus;
         auto vendor = south_controller->read16_field(bus, 12, 0, 0);
         auto device = south_controller->read16_field(bus, 12, 0, 2);
-        dmesgln("PCI: Pegasos 2 RTAS south bridge {:04x}:{:04x}; preserving firmware BARs", vendor, device);
+        dmesgln("PCI: Pegasos 2 RTAS south bridge {:04x}:{:04x}, status {:08x}, value {:08x}",
+            vendor, device, south_controller->last_rtas_status(), south_controller->last_rtas_value());
         if (vendor != 0x1106 || device != 0x8231) {
-            g_pci_access_io_probe_failed.set();
-            return;
+            Optional<PowerPCRtasInfo> no_rtas;
+            auto direct_south = PowerPC::Pegasos2::PCIHostController::create(
+                PhysicalAddress { registers_base.value() }, (*bridges)[0], no_rtas);
+            auto direct_agp = PowerPC::Pegasos2::PCIHostController::create(
+                PhysicalAddress { registers_base.value() }, (*bridges)[1], no_rtas);
+            if (direct_south.is_error() || direct_agp.is_error()) {
+                dmesgln("PCI: Failed to map direct Pegasos 2 PCI controllers");
+                g_pci_access_io_probe_failed.set();
+                return;
+            }
+            south_controller = direct_south.release_value();
+            agp_controller = direct_agp.release_value();
+            vendor = south_controller->read16_field(bus, 12, 0, 0);
+            device = south_controller->read16_field(bus, 12, 0, 2);
+            auto ide_vendor = south_controller->read16_field(bus, 12, 1, 0);
+            auto ide_device = south_controller->read16_field(bus, 12, 1, 2);
+            dmesgln("PCI: Pegasos 2 direct fallback south {:04x}:{:04x}, IDE {:04x}:{:04x}",
+                vendor, device, ide_vendor, ide_device);
+            if (vendor != 0x1106 || device != 0x8231 || ide_vendor != 0x1106 || ide_device != 0x0571) {
+                g_pci_access_io_probe_failed.set();
+                return;
+            }
+        } else {
+            dmesgln("PCI: Pegasos 2 using RTAS PCI configuration");
         }
         auto agp_bus = (*bridges)[1].start_bus;
-        dmesgln("PCI: Pegasos 2 RTAS IDE {:04x}:{:04x}, display {:04x}:{:04x}",
+        dmesgln("PCI: Pegasos 2 native IDE {:04x}:{:04x}, display {:04x}:{:04x}; preserving firmware BARs",
             south_controller->read16_field(bus, 12, 1, 0), south_controller->read16_field(bus, 12, 1, 2),
             agp_controller->read16_field(agp_bus, 8, 0, 0), agp_controller->read16_field(agp_bus, 8, 0, 2));
     } else {
