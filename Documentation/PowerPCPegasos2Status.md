@@ -104,6 +104,11 @@ direct-config fallback.
 `PowerPCNativeUHCIBootCheckQuick` and `PowerPCNativeUHCIBootCheck` require the
 first UHCI controller to complete initialization or report a bounded timeout
 before storage and, for the normal target, userland startup.
+`PowerPCNativeEntropyBootCheckQuick` and `PowerPCNativeEntropyBootCheck`
+check the explicitly enabled bring-up entropy pool and, for the normal target,
+WindowServer startup. `PowerPCNativePS2MouseCheckQuick` and
+`PowerPCNativePS2MouseCheck` check that a missing PS/2 keyboard does not
+prevent the attached PS/2 mouse from initializing.
 
 ## SmartFirmware probe card
 
@@ -120,7 +125,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`07a057c9ac2a652a00f2864ec46260ed1a1024f62f04258685dec7d0c3d2aa03`.
+`c0637453aef68892a5ff72355d67c25d48df9993fd4791de2b89c22034bef693`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -192,6 +197,37 @@ enables I/O decoding and bus mastering and bounds those waits; a nonresponding c
 then report an error and let IDE discovery continue. The native serial-log
 regression rejects the observed UHCI stop before storage discovery. The new
 cacheable-RTAS path and this UHCI change have not run on physical hardware.
+
+The next physical boot confirmed both fixes. RTAS returned status zero and
+identified the VT8231 (`1106:8231`), VIA IDE (`1106:0571`), and Radeon
+(`1002:5964`). Both UHCI controllers started. The Radeon drove DVI at
+1024×768, 60 Hz; the SD adapter and both RDB partitions were found; ext2
+mounted; and `/init` started. The final serial lines were `Entropy
+starvation...` and a later ext2 sync. The display showed a black screen with
+a static white mark, so the desktop had not appeared.
+
+The physical board has a PS/2 mouse but no PS/2 keyboard; its USB keyboard is
+plugged in after firmware boot. The i8042 driver exited before probing the
+mouse because failed-keyboard recovery sent another command to the absent
+keyboard. It now disables only that port and continues to the mouse.
+
+No physical RNG is registered. An opt-in `insecure_entropy` boot argument now
+mixes interrupt timing into the existing Fortuna pool for development boots.
+The RNG wait also releases its spinlock before sleeping, so an interrupt can
+wake it. Interrupt timing is not validated cryptographic entropy, and this
+fallback is disabled by default. Use `boot ide:0 serenity.elf insecure_entropy`
+for the next physical test. The Radeon currently sets a fixed 1024×768 safe
+mode and advertises that as the preferred timing in its generic EDID; native
+1920×1080 selection remains to implement after the desktop starts. The
+physical VIA Ethernet `1106:3065` has no driver yet, and AC'97 reported
+1040 Hz output on this board; both remain open.
+
+The periodic timing fallback is opt-in. PowerPC external interrupt timing is
+also mixed into the RNG by default, matching the existing x86 interrupt
+source. The RNG wait now uses the predicate-based wait queue, which rechecks
+readiness while holding the RNG lock and cannot miss a wake between checking
+and sleeping. [NXP's Pegasos II firmware guide](https://www.nxp.com/docs/en/application-note/AN2738.pdf)
+documents passing a kernel argument after the boot filename.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

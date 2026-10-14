@@ -134,6 +134,24 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCNativeUHCIBootCheckQuick
         VERBATIM
     )
+    add_custom_target(PowerPCNativeEntropyBootCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-entropy-progress
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeEntropyBootCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-entropy-progress --normal
+        DEPENDS PowerPCNativeEntropyBootCheckQuick
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativePS2MouseCheckQuick
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-ps2-mouse
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativePS2MouseCheck
+        COMMAND python3 "${powerpc_native_pci_boot_test}" --require-ps2-mouse --normal
+        DEPENDS PowerPCNativePS2MouseCheckQuick
+        VERBATIM
+    )
 
     string(REGEX REPLACE "gcc$" "" powerpc_test_cross_compile "${CMAKE_C_COMPILER}")
     set(powerpc_kmalloc_hpt_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_kernel_entry.py")

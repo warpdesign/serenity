@@ -15,10 +15,13 @@
 #include <Kernel/Interrupts/GenericInterruptHandler.h>
 #include <Kernel/Interrupts/SharedIRQHandler.h>
 #include <Kernel/Interrupts/UnhandledInterruptHandler.h>
+#include <Kernel/Security/Random.h>
+#include <Kernel/Tasks/Scheduler.h>
 
 namespace Kernel {
 
 static Array<GenericInterruptHandler*, GENERIC_INTERRUPT_HANDLERS_COUNT> s_interrupt_handlers;
+static EntropySource s_external_interrupt_entropy { EntropySource::Static::Interrupts };
 
 extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState*);
 
@@ -34,6 +37,8 @@ extern "C" [[noreturn]] void powerpc_external_exception_handler(RegisterState* r
             auto irq = controller->pending_interrupt();
             if (!irq.has_value())
                 break;
+            if (Scheduler::is_initialized())
+                s_external_interrupt_entropy.add_random_event(irq->value());
             auto& handler = get_interrupt_handler(irq.value());
             handler.increment_call_count();
             handler.handle_interrupt();

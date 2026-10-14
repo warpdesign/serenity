@@ -32,7 +32,7 @@ loader.
 | Firmware lifetime | Captures the needed firmware properties, then calls `quiesce` before MMU takeover. | Confirmed by kernel execution after the physical `quiesce` call. |
 | Console | Uses firmware `stdout` before `quiesce`, then polls the native UART without changing its line settings. | Physical kernel messages arrived on the native serial console. |
 | Device addresses | Validates that the firmware's PCI I/O and MV64361 bases match the kernel's current Pegasos 2 constants. | Remove the remaining constants after the first native boot. |
-| RTAS | The next loader instantiates RTAS before `quiesce`, reserves its runtime and passes its PCI and power tokens to the kernel. | First physical RTAS PCI config access and device enumeration. |
+| RTAS | The loader instantiates RTAS before `quiesce` and the kernel reads physical PCI IDs through it. | Power-service calls and long-running PCI use on physical hardware. |
 | Image size | 6.1 MB with KUBSAN and the kernel gzip-compressed (2.4 MB without KUBSAN). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
 The kernel itself does not call Open Firmware after entry. PCI bridge windows,
@@ -76,6 +76,25 @@ after `Interrupt line: 9`; the user confirmed it did not continue. The UHCI
 driver now enables I/O decoding and bus mastering and times out its stop, reset, and start
 polls, so an unresponsive controller cannot indefinitely block IDE probing.
 The cacheable RTAS mapping and UHCI fix are both awaiting a physical boot.
+
+That physical boot succeeded through RTAS PCI enumeration, both UHCI
+controllers, Radeon DVI mode set at 1024×768/60, IDE adapter detection, RDB
+partition discovery, ext2 root mount, and `/init`. It then logged `Entropy
+starvation...` and displayed a static white mark on black. No physical RNG is
+registered in the port. The next image offers an explicit
+`insecure_entropy` boot argument for development only; it mixes interrupt
+timing into the kernel pool while the periodic fallback stays disabled by
+default. External interrupt timing is collected as it is on x86. The RNG
+wait uses a predicate-based queue, releasing its lock while sleeping without
+losing wakeups. Use `boot ide:0 serenity.elf insecure_entropy` for the next
+physical test; the [Pegasos II firmware guide](https://www.nxp.com/docs/en/application-note/AN2738.pdf)
+documents this argument syntax.
+The Pegasos has a PS/2 mouse but no PS/2 keyboard. Failed-keyboard recovery
+previously exited before the mouse probe; it now disables the empty keyboard
+port and continues. The user plugs the USB keyboard in after firmware boot.
+The Radeon driver currently uses a fixed safe 1024×768 mode and synthetic
+EDID with 1024×768 preferred; the monitor's native 1920×1080 mode is still
+an open display task.
 
 ## Boot media
 

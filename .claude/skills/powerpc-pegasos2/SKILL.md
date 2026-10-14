@@ -223,14 +223,35 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   the cacheable RTAS mapping has been tested on physical hardware. No QEMU
   run was made.
 
+- 2026-10-15: The latest physical boot passed RTAS PCI (status zero),
+  enumerated the Radeon 9200 SE and both host bridges, initialized both
+  UHCI controllers, drove DVI at 1024×768/60, found the IDE-to-SD adapter
+  and two RDB partitions, mounted ext2, and started `/init`. It then logged
+  `Entropy starvation...`; the screen had a static white mark on black.
+  There is no physical RNG source registered. The next image offers an
+  opt-in `insecure_entropy` kernel boot argument, mixing interrupt timing
+  for development only. PowerPC external IRQ timing is collected by default,
+  as on x86. `KernelRng::wait_for_entropy()` now uses the predicate-based
+  wait queue, releasing the RNG lock while sleeping without losing wakeups.
+  The board has
+  a PS/2 mouse but no PS/2 keyboard. i8042 previously sent another command
+  to the absent keyboard in its failure path and exited before probing the
+  mouse; it now disables that port and continues. The USB keyboard is
+  plugged in after firmware boot. The Radeon safe mode and synthetic EDID
+  prefer 1024×768; the monitor's native 1920×1080 remains open. Physical
+  Ethernet `1106:3065` is unsupported and AC'97 reported 1040 Hz. No QEMU
+  boot was run. The new entropy and mouse changes await physical validation.
+
 Next: write only the single current `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card (SHA-256 `07a057c9ac2a652a00f2864ec46260ed1a1024f62f04258685dec7d0c3d2aa03`),
-boot with `boot ide:0 serenity.elf`,
-and capture the serial output from `native RTAS PCI ready` through storage
-discovery. The key diagnostic lines are `PCI: Pegasos 2 RTAS south bridge`,
-`PCI: Pegasos 2 direct fallback`, `PCI: Pegasos 2 native IDE`, and
-`StorageManagement: Detected`. Do not build
-separate cards for each checkpoint or run QEMU verification until the user
-requests it.
+to the SD card (SHA-256 `c0637453aef68892a5ff72355d67c25d48df9993fd4791de2b89c22034bef693`),
+boot with `boot ide:0 serenity.elf insecure_entropy`,
+and capture the serial output from `PowerPC: Insecure interrupt-timing entropy
+enabled for bring-up` through `Entering WindowServer main loop` or the next
+failure. Check for `PowerPC: Insecure interrupt-timing entropy pool ready`,
+`I8042: Continuing with second port after keyboard probe failure`, and
+`PS2MouseDevice` messages. Plug the USB keyboard in after firmware boot. The
+monitor should still report 1024×768/60 until native mode selection is added.
+Do not build separate cards for each checkpoint or run QEMU verification
+until the user requests it.
 The physical machine is a Pegasos II with a G3 750CXe, a Radeon 9200 SE over DVI, SmartFirmware from
 about 2005, an IDE-to-SD adapter, and a serial console on the host; there is no network boot.

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2020, Peter Elliott <pelliott@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Peter Elliott <pelliott@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -9,11 +9,14 @@
 
 #include <AK/Assertions.h>
 #include <AK/ByteBuffer.h>
+#include <AK/OwnPtr.h>
 #include <AK/Types.h>
 #include <Kernel/Arch/Processor.h>
+#include <Kernel/Forward.h>
 #include <Kernel/Library/StdLib.h>
 #include <Kernel/Locking/Mutex.h>
 #include <Kernel/Tasks/DeprecatedWaitQueue.h>
+#include <Kernel/Time/TimeManagement.h>
 #include <LibCrypto/Cipher/AES.h>
 #include <LibCrypto/Cipher/Cipher.h>
 #include <LibCrypto/Hash/SHA2.h>
@@ -125,6 +128,7 @@ class KernelRng : public FortunaPRNG<Crypto::Cipher::AESCipher, Crypto::Hash::SH
 
 public:
     KernelRng();
+    ~KernelRng();
     static KernelRng& the();
 
     void wait_for_entropy();
@@ -132,7 +136,7 @@ public:
     void wake_if_ready();
 
 private:
-    DeprecatedWaitQueue m_seed_queue;
+    OwnPtr<WaitQueue> m_seed_queue;
 };
 
 class EntropySource {
@@ -163,8 +167,6 @@ public:
     void add_random_event(T const& event_data)
     {
         auto& kernel_rng = KernelRng::the();
-        SpinlockLocker lock(kernel_rng.get_lock());
-
         u64 timestamp = 0;
         auto maybe_cycle_count = Processor::read_cycle_count();
         if (maybe_cycle_count.has_value())
@@ -172,10 +174,12 @@ public:
         else
             timestamp = static_cast<u64>(TimeManagement::now().milliseconds_since_epoch());
 
-        // We don't lock this because on the off chance a pool is corrupted, entropy isn't lost.
-        Event<T> event = { timestamp, m_source, event_data };
-        kernel_rng.add_random_event(event, m_pool);
-        m_pool++;
+        {
+            SpinlockLocker lock(kernel_rng.get_lock());
+            Event<T> event = { timestamp, m_source, event_data };
+            kernel_rng.add_random_event(event, m_pool);
+            m_pool++;
+        }
         kernel_rng.wake_if_ready();
     }
 

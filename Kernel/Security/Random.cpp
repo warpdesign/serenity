@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2020, Peter Elliott <pelliott@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2020-2026, Peter Elliott <pelliott@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -18,6 +18,7 @@
 #include <Kernel/Devices/Generic/RandomDevice.h>
 #include <Kernel/Sections.h>
 #include <Kernel/Security/Random.h>
+#include <Kernel/Tasks/WaitQueue.h>
 #include <Kernel/Time/TimeManagement.h>
 
 namespace Kernel {
@@ -32,6 +33,8 @@ KernelRng& KernelRng::the()
 
 UNMAP_AFTER_INIT KernelRng::KernelRng()
 {
+    m_seed_queue = adopt_own_if_nonnull(new (nothrow) WaitQueue);
+    VERIFY(m_seed_queue);
 #if ARCH(X86_64)
     if (Processor::current().has_feature(CPUFeature::RDSEED)) {
         dmesgln("KernelRng: Using RDSEED as entropy source");
@@ -113,21 +116,31 @@ UNMAP_AFTER_INIT KernelRng::KernelRng()
 #endif
 }
 
+KernelRng::~KernelRng() = default;
+
 void KernelRng::wait_for_entropy()
 {
-    SpinlockLocker lock(get_lock());
-    if (!is_ready()) {
-        dbgln("Entropy starvation...");
-        m_seed_queue.wait_forever("KernelRng"sv);
+    {
+        SpinlockLocker lock(get_lock());
+        if (is_ready())
+            return;
     }
+    dbgln("Entropy starvation...");
+    (void)m_seed_queue->wait_until([this] {
+        SpinlockLocker lock(get_lock());
+        return is_ready();
+    });
 }
 
 void KernelRng::wake_if_ready()
 {
-    VERIFY(get_lock().is_locked());
-    if (is_ready()) {
-        m_seed_queue.wake_all();
+    bool ready;
+    {
+        SpinlockLocker lock(get_lock());
+        ready = is_ready();
     }
+    if (ready)
+        m_seed_queue->notify_all();
 }
 
 size_t EntropySource::next_source { static_cast<size_t>(EntropySource::Static::MaxHardcodedSourceIndex) };

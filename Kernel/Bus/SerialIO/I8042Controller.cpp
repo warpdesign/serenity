@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, the SerenityOS developers.
+ * Copyright (c) 2020-2026, the SerenityOS developers.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -217,14 +217,15 @@ UNMAP_AFTER_INIT ErrorOr<void> I8042Controller::detect_devices(EnableKeyboardFir
             configuration |= I8042ConfigurationFlag::FirstPS2PortClock;
             m_first_ps2_port.device = nullptr;
             m_first_ps2_port.device_type = {};
-            SpinlockLocker lock(m_lock);
-            // NOTE: Before setting the actual scan code set, stop packet streaming entirely.
-            TRY(do_send_command(I8042PortIndex::FirstPort, I8042Command::DisablePacketStreaming));
-            TRY(do_wait_then_write(I8042Port::Buffer, I8042Command::SetScanCodeSet));
-            TRY(do_wait_then_write(I8042Port::Buffer, 0x2));
-
-            TRY(do_wait_then_write(I8042Port::Command, I8042Command::WriteConfiguration));
-            TRY(do_wait_then_write(I8042Port::Buffer, configuration));
+            {
+                SpinlockLocker lock(m_lock);
+                // A failed probe may mean that no keyboard is attached. Do not
+                // send another device command before checking the mouse port.
+                TRY(do_wait_then_write(I8042Port::Command, I8042Command::DisableFirstPS2Port));
+                TRY(do_wait_then_write(I8042Port::Command, I8042Command::WriteConfiguration));
+                TRY(do_wait_then_write(I8042Port::Buffer, configuration));
+            }
+            dbgln("I8042: Continuing with second port after keyboard probe failure");
         } else {
             m_first_ps2_port.device = error_or_device.release_value();
         }
