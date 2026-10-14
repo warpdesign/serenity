@@ -275,10 +275,15 @@ loader byte for byte. The root partition was not rewritten. The image SHA-256
 is `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
 
 The next physical boot reached the desktop with `weakrng` and the default
-244 MiB firmware-available map. The user saw a bluish desktop and slow
-startup/repainting. The attached serial capture begins when `/init` starts
-at 10.126 s. WindowServer entered its main loop at 24.275 s, the user session
-started at 34.330 s, and Taskbar and Terminal started loading at about 44 s.
+244 MiB firmware-available map. The user photographed a bluish desktop and
+slow startup/repainting. The terminal's configured black `#000000` background
+appears saturated blue, while the default desktop's dark gray `#505050` is
+also blue. A big-endian opaque black ARGB pixel has bytes `ff 00 00 00`;
+without aperture swapping, the Radeon interprets the alpha byte as blue.
+This directly matches the image. The attached serial capture begins when
+`/init` starts at 10.126 s. WindowServer entered its main loop at 24.275 s,
+the user session started at 34.330 s, and Taskbar and Terminal started loading
+at about 44 s.
 The IDE driver uses polled PIO transfers; no timing breakdown yet separates
 disk I/O, process loading, and framebuffer updates. The first appearance of
 the pointer before Taskbar is consistent with this staged startup.

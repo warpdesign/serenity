@@ -277,7 +277,10 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 - 2026-10-15: Physical boot with `weakrng` reached the desktop. Serial timing:
   `/init` 10.126 s, WindowServer main loop 24.275 s, user login 34.330 s,
   Taskbar and Terminal began loading around 44 s. The display was bluish,
-  and repainting was slow. The physical RV280 path set `SURF_TRANSLATION_DIS`
+  and repainting was slow. The photo shows the configured black Terminal
+  background as saturated blue, consistent with unswapped big-endian opaque
+  pixels putting alpha `0xff` in the blue channel. The physical RV280 path
+  set `SURF_TRANSLATION_DIS`
   along with the 32-bit aperture byte-swap bit. Linux radeonfb notes that
   translation disable also disables the swapper on later chips. The rebuilt
   driver clears stale surface descriptors, enables both aperture swap bits
