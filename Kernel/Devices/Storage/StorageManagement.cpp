@@ -30,6 +30,7 @@
 #include <LibPartition/EBRPartitionTable.h>
 #include <LibPartition/GUIDPartitionTable.h>
 #include <LibPartition/MBRPartitionTable.h>
+#include <LibPartition/RDBPartitionTable.h>
 
 namespace Kernel {
 
@@ -214,6 +215,10 @@ ErrorOr<NonnullOwnPtr<Partition::PartitionTable>> StorageManagement::try_to_init
     if (!ebr_table_or_error.is_error()) {
         return ebr_table_or_error.release_value();
     }
+    // Amiga disks, as booted by the Pegasos SmartFirmware, carry no valid MBR.
+    auto rdb_table_or_error = Partition::RDBPartitionTable::try_to_initialize(device);
+    if (!rdb_table_or_error.is_error())
+        return rdb_table_or_error.release_value();
     return TRY(Partition::GUIDPartitionTable::try_to_initialize(device));
 }
 

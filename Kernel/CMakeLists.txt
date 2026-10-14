@@ -789,6 +789,7 @@ set(PARTITION_SOURCES
     ../Userland/Libraries/LibPartition/MBRPartitionTable.cpp
     ../Userland/Libraries/LibPartition/PartitionableDevice.cpp
     ../Userland/Libraries/LibPartition/PartitionTable.cpp
+    ../Userland/Libraries/LibPartition/RDBPartitionTable.cpp
 )
 
 add_compile_options(-Wno-unknown-warning-option -Wvla -Wnull-dereference)

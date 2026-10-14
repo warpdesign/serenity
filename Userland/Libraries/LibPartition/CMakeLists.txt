@@ -5,6 +5,7 @@ set(SOURCES
     MBRPartitionTable.cpp
     PartitionableDevice.cpp
     PartitionTable.cpp
+    RDBPartitionTable.cpp
 )
 
 serenity_lib(LibPartition partition)
