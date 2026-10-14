@@ -121,12 +121,12 @@ started. The loader reads
 through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
 and DR around the call. It prints the firmware kind, the call mode, the entry
 MSR, the PVR, the console path, `bootpath` and `bootargs`. The complete device
-tree is printed only when `serenity-loader-firmware-dump` is supplied in
+tree is printed only when `ofdump` is supplied in
 `bootargs`; the physical survey already captured it. On firmware without
 `/chosen` `qemu,boot-kernel` it calls `exit` before kernel allocation or MMU
 change. On the physical Pegasos 2, SmartFirmware restarts after that call;
 it does not return directly to the existing prompt. In QEMU, the
-`serenity-loader-firmware-dump` and `serenity-loader-real-mode-calls` boot
+`ofdump` and `serenity-loader-real-mode-calls` boot
 arguments exercise the dump and the trampoline; the boot then continues
 normally. The earlier survey image has been retired; the one current SD card
 image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
@@ -187,7 +187,7 @@ no claim-probe marker or error. That matches the earlier survey-only loader;
 the card image used for that boot has not been identified. The one current
 image skips the dump by default and prints `exact RAM claim probe starting`
 before reading `available`. Its SHA-256 is
-`d0eaa7c1ab82018df04a82ced1cc1d04282f83bde4c0a6036a98f12d0f682bbf`.
+`a8e01109aba1ac46bd469c90618196ffb223f16ac4091185ad312a445d7c0cb0`.
 The FFS `serenity.elf` was extracted and run in QEMU: it printed the start,
 candidate, success and release markers without a tree dump. It still calls
 `exit` before any MMU change or kernel entry, so the expected final firmware

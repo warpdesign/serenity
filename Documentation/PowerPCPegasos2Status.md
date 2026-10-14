@@ -43,7 +43,7 @@ probe and is historical.
   disk with `root=lun3:0:0;part1`, the desktop runs from the ext2 partition.
 - The loader can survey native Open Firmware: it prints the firmware identity,
   entry MSR, PVR, console and boot properties, and dumps the device tree when
-  `serenity-loader-firmware-dump` is requested. On firmware other than QEMU's
+  `ofdump` is requested. On firmware other than QEMU's
   VOF it calls `exit` before kernel allocation or MMU changes. The first
   physical run found a dump-length bug at the
   Radeon ROM property; the second run completed the tree dump and reached the
@@ -93,7 +93,7 @@ crash is recorded in the kmalloc investigation document.
 
 On 2026-10-14 this host rebuilt the 6.1 MB loader and passed
 `PowerPCFirmwareLoaderCheckQuick`. A separate QEMU run with
-`serenity-loader-firmware-dump serenity-loader-real-mode-calls
+`ofdump serenity-loader-real-mode-calls
 serenity-loader-stop-before-kernel` printed the firmware tree start and end
 markers and reached `boot handoff validated`; its trace is
 `/tmp/serenity-smartfirmware-vof-20261014.log`.

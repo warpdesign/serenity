@@ -142,7 +142,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   tool, and a QEMU check booting the card layout; fixed EBR detection hiding other table formats.
 
 - 2026-10-14: SmartFirmware probe loader (real-mode client-call trampoline, banner, full device tree
-  dump, `exit` on non-QEMU firmware). QEMU test: `-append "serenity-loader-firmware-dump
+  dump, `exit` on non-QEMU firmware). QEMU test: `-append "ofdump
   serenity-loader-real-mode-calls serenity-loader-stop-before-kernel" -d trace:vof_write -D vof.log`.
   The survey card was retired. The one current SD card image is
   `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
@@ -158,7 +158,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   the stop message, which matches the earlier survey-only loader. The exact
   card image used is unconfirmed. Obsolete generated card images were removed;
   the one current image prints `exact RAM claim probe starting` and makes the
-  tree dump opt-in via `serenity-loader-firmware-dump`.
+  tree dump opt-in via `ofdump`.
 
 Next: boot the claim-probe card on the physical Pegasos 2 with `boot ide:0 serenity.elf` and
 capture the `claim probe candidate`, `succeeded`, and `released` lines. The prior physical map

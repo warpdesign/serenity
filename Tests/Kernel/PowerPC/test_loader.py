@@ -112,7 +112,7 @@ def main():
 
         dump_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
                                        b"SerenityOS PowerPC loader: claim probe released",
-                                       append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe serenity-loader-firmware-dump")
+                                       append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe ofdump")
         if b"firmware tree begin" not in dump_output or b"firmware tree end" not in dump_output:
             raise SystemExit("PowerPC loader did not dump the firmware tree when requested")
 

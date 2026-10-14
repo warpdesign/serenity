@@ -460,7 +460,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     s_firmware_real_mode = firmware_requires_real_mode(firmware) || command_line_contains("serenity-loader-real-mode-calls");
 
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
-    if (command_line_contains("serenity-loader-firmware-dump"))
+    if (command_line_contains("ofdump"))
         dump_firmware_tree(firmware, stdout);
     if (!is_qemu || command_line_contains("serenity-loader-claim-probe")) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: exact RAM claim probe starting\r\n");
