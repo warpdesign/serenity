@@ -1,6 +1,6 @@
 # SerenityOS on PowerPC Pegasos 2: current status
 
-Status checked on 2026-10-12.
+Status checked on 2026-10-14.
 
 The goal is to port SerenityOS to the Pegasos 2, a 32-bit PowerPC G3/G4
 machine. The port currently boots and runs a graphical SerenityOS desktop on
@@ -41,6 +41,10 @@ probe and is historical.
   builds the SD card layout planned for SmartFirmware: an RDB with an FFS boot
   partition holding the loader and an ext2 root partition. Booted on the IDE
   disk with `root=lun3:0:0;part1`, the desktop runs from the ext2 partition.
+- The loader can survey native Open Firmware: it prints the firmware identity,
+  entry MSR, PVR, console and boot properties, then dumps the device tree. On
+  firmware other than QEMU's VOF it calls `exit` before claiming memory or
+  changing the MMU. The first physical SmartFirmware run is still pending.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
   output routing left by the video BIOS, and programs the pixel PLL from the
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
@@ -71,7 +75,6 @@ cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCBrowserCheck
 cmake --build Build/powerpc --target PowerPCPixelPaintCheck
 cmake --build Build/powerpc --target PowerPCVIAAudioCheck
-cmake --build Build/powerpc --target PowerPCDesktopProgramsCheck
 cmake --build Build/powerpc --target PowerPCPS2InputCheck
 cmake --build Build/powerpc --target PowerPCIDEBootCheck
 cmake --build Build/powerpc --target PowerPCRDBCardBootCheck
@@ -82,6 +85,31 @@ Each target has a `Quick` variant for a shorter run. The Browser target
 tests local rendering and network configuration; it does not replay a live
 Google search. The user's interactive sequence for the earlier allocator
 crash is recorded in the kmalloc investigation document.
+
+## SmartFirmware probe card
+
+On 2026-10-14 this host rebuilt the 6.1 MB loader and passed
+`PowerPCFirmwareLoaderCheckQuick`. A separate QEMU run with
+`serenity-loader-firmware-dump serenity-loader-real-mode-calls
+serenity-loader-stop-before-kernel` printed the firmware tree start and end
+markers and reached `boot handoff validated`; its trace is
+`/tmp/serenity-smartfirmware-vof-20261014.log`.
+
+`PowerPCRDBCardBootCheckQuick` also passed: QEMU direct-loaded the loader,
+booted the desktop from the card's ext2 partition on IDE, wrote a 108,894-byte
+file, and left a clean filesystem. That test does not exercise SmartFirmware
+loading `serenity.elf` from FFS. The local card image is
+`Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img` (929 MiB).
+The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
+and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
+FFS matched the rebuilt loader byte for byte.
+
+The next evidence needed is a serial capture from the physical Pegasos 2,
+starting with its firmware banner and `boot ide:0 serenity.elf` command and
+continuing through the loader's firmware tree dump and return to the prompt.
+Record the exact last line if output stops early. The hardware plan and
+remaining loader work are in
+[PowerPCSmartFirmwareBootPlan.md](PowerPCSmartFirmwareBootPlan.md).
 
 ## PixelPaint bring-up
 
