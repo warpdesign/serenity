@@ -40,14 +40,20 @@ probe and is historical.
   expansion ROM's PLL table or radeonfb's defaults. QEMU's `ati-vga,model=rv100`
   shows the desktop with correct colours. QEMU only implements the Rage 128
   `CONFIG_CNTL` aperture swap, so the driver uses it for that device and
-  `SURFACE_CNTL` on real cards. The Radeon 9200 SE in the physical Pegasos 2 has
-  not run this driver yet.
+  `SURFACE_CNTL` on real cards. If the video BIOS enabled the internal TMDS
+  transmitter, the driver also drives that DVI output from CRTC 1 without RMX
+  scaling, as Haiku does; external TMDS transmitters and LVDS panels are not
+  handled. Each mode set logs the output routing registers. QEMU has no DVI
+  output, and the Radeon 9200 SE in the physical Pegasos 2 has not run this
+  driver yet.
 - The HPT virtual alias is reserved in the kernel region tree so kmalloc
   expansion cannot overlap it. The diagnosis and red/green evidence are in
   [PowerPCKmallocCrashInvestigation.md](PowerPCKmallocCrashInvestigation.md).
 
 These statements are backed by the PowerPC QEMU test targets below. Real
-Pegasos 2 hardware has not been validated by these tests.
+Pegasos 2 hardware has not been validated by these tests; the plan for booting
+it from SmartFirmware is in
+[PowerPCSmartFirmwareBootPlan.md](PowerPCSmartFirmwareBootPlan.md).
 
 ## Verification targets
 
