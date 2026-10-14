@@ -42,9 +42,10 @@ probe and is historical.
   partition holding the loader and an ext2 root partition. Booted on the IDE
   disk with `root=lun3:0:0;part1`, the desktop runs from the ext2 partition.
 - The loader can survey native Open Firmware: it prints the firmware identity,
-  entry MSR, PVR, console and boot properties, then dumps the device tree. On
-  firmware other than QEMU's VOF it calls `exit` before claiming memory or
-  changing the MMU. The first physical run found a dump-length bug at the
+  entry MSR, PVR, console and boot properties, and dumps the device tree when
+  `serenity-loader-firmware-dump` is requested. On firmware other than QEMU's
+  VOF it calls `exit` before kernel allocation or MMU changes. The first
+  physical run found a dump-length bug at the
   Radeon ROM property; the second run completed the tree dump and reached the
   stop message. SmartFirmware then restarted after the `exit` call.
 - An R100/R200-family Radeon driver sets 1024x768x32 on CRTC 1, keeping the
@@ -100,20 +101,24 @@ markers and reached `boot handoff validated`; its trace is
 `PowerPCRDBCardBootCheckQuick` also passed: QEMU direct-loaded the loader,
 booted the desktop from the card's ext2 partition on IDE, wrote a 108,894-byte
 file, and left a clean filesystem. That test does not exercise SmartFirmware
-loading `serenity.elf` from FFS. The local card image is
-`Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img` (929 MiB).
+loading `serenity.elf` from FFS. The one current local card image is
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
 
-The next physical image is
-`Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`.
-It preserves the RDB and ext2 root, with a new loader that selects a page
+It preserves the RDB and ext2 root, with a loader that selects a page
 from `/memory@0/available`, asks SmartFirmware to claim that exact physical
 address, and releases it before `exit`. Both quick and normal loader checks
 pass, including a QEMU run through the forced real-mode client-call path.
 The FFS `serenity.elf` in this image matches the rebuilt loader byte for byte.
-No MMU or kernel handoff is attempted on native firmware yet.
+The loader does not print the full device tree unless explicitly requested
+in `bootargs`, and prints `exact RAM claim probe starting` before the claim.
+The most recent physical log contained neither claim markers nor errors
+between `firmware tree end` and the stop message. It matches the earlier
+survey-only loader; the exact card image used there is unconfirmed. The
+obsolete generated card images were removed to avoid confusion. No MMU or
+kernel handoff is attempted on native firmware yet.
 
 The first physical serial capture confirmed SmartFirmware 1.2, real-mode
 client calls, PVR `0x00083311`, 512 MiB RAM and the PCI/IDE device tree. It

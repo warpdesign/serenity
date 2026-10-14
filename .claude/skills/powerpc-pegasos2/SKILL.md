@@ -144,15 +144,21 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 - 2026-10-14: SmartFirmware probe loader (real-mode client-call trampoline, banner, full device tree
   dump, `exit` on non-QEMU firmware). QEMU test: `-append "serenity-loader-firmware-dump
   serenity-loader-real-mode-calls serenity-loader-stop-before-kernel" -d trace:vof_write -D vof.log`.
-  The probe card is `Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
+  The survey card was retired. The one current SD card image is
+  `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
 
 - 2026-10-14: The physical G3 Pegasos 2 completed the firmware tree dump after
   bounding a large Radeon `rom` property to 128 displayed bytes. SmartFirmware
   printed `Program terminated!` and restarted after the loader's `exit` call;
   this is its observed normal termination behavior. The next image,
-  `Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`,
+  `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`,
   claims and releases one 4 KiB page selected from `/memory@0/available`,
   then stops before changing the MMU. QEMU's forced real-mode check passes.
+  The next submitted physical log had no claim markers between tree end and
+  the stop message, which matches the earlier survey-only loader. The exact
+  card image used is unconfirmed. Obsolete generated card images were removed;
+  the one current image prints `exact RAM claim probe starting` and makes the
+  tree dump opt-in via `serenity-loader-firmware-dump`.
 
 Next: boot the claim-probe card on the physical Pegasos 2 with `boot ide:0 serenity.elf` and
 capture the `claim probe candidate`, `succeeded`, and `released` lines. The prior physical map

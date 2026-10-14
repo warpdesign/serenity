@@ -102,10 +102,19 @@ def main():
         claim_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
                                         b"SerenityOS PowerPC loader: claim probe released",
                                         append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe")
-        for marker in (b"real-mode client calls", b"claim probe candidate", b"claim probe succeeded",
+        for marker in (b"real-mode client calls", b"exact RAM claim probe starting",
+                       b"claim probe candidate", b"claim probe succeeded",
                        b"claim probe released"):
             if marker not in claim_output:
                 raise SystemExit(f"PowerPC loader missed {marker!r} in the claim probe")
+        if b"firmware tree begin" in claim_output:
+            raise SystemExit("PowerPC claim probe dumped the full firmware tree without a request")
+
+        dump_output = boot_and_capture(args.qemu, args.loader, args.memory, args.cpu,
+                                       b"SerenityOS PowerPC loader: claim probe released",
+                                       append_arguments="serenity-loader-real-mode-calls serenity-loader-claim-probe serenity-loader-firmware-dump")
+        if b"firmware tree begin" not in dump_output or b"firmware tree end" not in dump_output:
+            raise SystemExit("PowerPC loader did not dump the firmware tree when requested")
 
         source = args.kernel_elf.read_bytes()
 

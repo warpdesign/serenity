@@ -120,15 +120,16 @@ started. The loader reads
 `/options` `real-mode?` and, when it is true, makes every later client call
 through `powerpc_loader_call_firmware_real_mode` in `boot.S`, which clears IR
 and DR around the call. It prints the firmware kind, the call mode, the entry
-MSR, the PVR, the console path, `bootpath` and `bootargs`, then dumps the whole
-device tree (every node and property, values cut at 128 bytes). On firmware
-without `/chosen` `qemu,boot-kernel` it calls `exit` before any `claim` or MMU
+MSR, the PVR, the console path, `bootpath` and `bootargs`. The complete device
+tree is printed only when `serenity-loader-firmware-dump` is supplied in
+`bootargs`; the physical survey already captured it. On firmware without
+`/chosen` `qemu,boot-kernel` it calls `exit` before kernel allocation or MMU
 change. On the physical Pegasos 2, SmartFirmware restarts after that call;
 it does not return directly to the existing prompt. In QEMU, the
 `serenity-loader-firmware-dump` and `serenity-loader-real-mode-calls` boot
 arguments exercise the dump and the trampoline; the boot then continues
-normally. The card image with this loader is
-`Build/powerpc/PowerPCBoot/smartfirmware-probe-20261014/card.img`.
+normally. The earlier survey image has been retired; the one current SD card
+image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
 
 The first Pegasos 2 serial capture reached the ATI display node's large `rom`
 property. The loader kept printing numbers there, so the machine was reset
@@ -163,7 +164,7 @@ These are observations for phase 2, not yet passed to the kernel.
 - Before claiming space for the kernel, run a small exact-address probe. It
   selects a 4 MiB-aligned page from the largest available range above the
   loader, claims 4 KiB at that address, then releases it. The probe card is
-  `Build/powerpc/PowerPCBoot/smartfirmware-claim-probe-20261014/card.img`.
+  `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`.
   QEMU's forced real-mode path selected `0x00800000` and reported successful
   claim and release. On the physical memory map captured above, the expected
   candidate is `0x01800000`; only the hardware run can confirm that claim.
@@ -180,7 +181,15 @@ These are observations for phase 2, not yet passed to the kernel.
 
 Checkpoint: both UART markers, and a dump of the captured `BootInfo`.
 
-The exact-address claim probe is the next physical checkpoint. It still calls
+The exact-address claim probe is the next physical checkpoint. The latest
+physical log went directly from `firmware tree end` to the stop message, with
+no claim-probe marker or error. That matches the earlier survey-only loader;
+the card image used for that boot has not been identified. The one current
+image skips the dump by default and prints `exact RAM claim probe starting`
+before reading `available`. Its SHA-256 is
+`d0eaa7c1ab82018df04a82ced1cc1d04282f83bde4c0a6036a98f12d0f682bbf`.
+The FFS `serenity.elf` was extracted and run in QEMU: it printed the start,
+candidate, success and release markers without a tree dump. It still calls
 `exit` before any MMU change or kernel entry, so the expected final firmware
 behavior is the same restart observed during the survey. The full memory,
 UART, RTAS and `quiesce` handoff in this phase remains to be implemented.
