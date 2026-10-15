@@ -108,6 +108,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 | `pixelpaint-latency.py` | Boots a PixelPaint image headless and times cursor, paint and burst latency. |
 | `amiga-disk.py` | Read-only RDB partition listing and OFS/FFS (incl. DOS\6/\7) listing and extraction. |
 | `make-pegasos-card.py` | Builds the SD card image (RDB, FFS boot partition with `serenity.elf`, ext2 root), or rewrites only the boot partition. Boot it in QEMU with `-drive if=ide,...` and `root=lun3:0:0;part1`; copy it to the card with `dd`. amitools (`pip install amitools`: `rdbtool`, `xdftool`) independently checks the result. |
+| `make-pegasos-root.py` | Builds the SD card's ext2 desktop root from the desktop test recipe; `--boot-benchmark` adds a root service that runs `membench` 60 s after boot and logs to serial. |
 | `test-loader-inflate.cpp` | Runs the loader's gzip decoder on the host against the real kernel. |
 
 ## Gotchas found so far
@@ -340,6 +341,20 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   Upstream SerenityOS master still rearms the interrupt TD without advancing
   its toggle and its setter only ORs the toggle bit. The fix is committed
   locally as `3ee3673b02`; it has not been submitted upstream.
+
+- 2026-10-15: Performance work. `memcpy`, `memmove` and `memset` were byte loops on PowerPC in the
+  kernel, LibC and the dynamic loader, so each WindowServer flush to the uncached Radeon framebuffer
+  was four bus writes per pixel. They are now shared assembly in
+  `Userland/Libraries/LibC/arch/powerpc/memory.S` (aligned words in 32-byte blocks, no `dcbz`,
+  because it faults on cache-inhibited memory). New `membench` utility: RAM, framebuffer (store
+  widths, read back) and raw disk rates, mirrored to the kernel log; `membench --verify` runs in
+  `PowerPCDesktopProgramsCheckQuick`. IDE now uses polled bus-master Ultra DMA, with a cacheable
+  bounce buffer flushed by `dcbf` around transfers. VIA timing is programmed, and the mode is capped
+  at UDMA2 unless the firmware set the 80-wire cable bit. A failed transfer falls back to PIO, and
+  `nodma` disables DMA. QEMU raw reads: 4.6 MB/s PIO, 13-14.5 MB/s DMA. QEMU memory numbers say
+  nothing about real hardware. The card was rebuilt here with both changes and the boot benchmark:
+  `make-pegasos-root.py --boot-benchmark`, then `make-pegasos-card.py card`. Physical results are
+  pending.
 
 Next: write only `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` to the SD
 card and boot with `boot ide:0 serenity.elf weakrng fullram`.

@@ -5,6 +5,7 @@
  */
 
 #include <AK/ByteBuffer.h>
+#include <AK/ByteString.h>
 #include <AK/Function.h>
 #include <AK/Memory.h>
 #include <AK/Platform.h>
@@ -21,6 +22,15 @@
 static void* (*volatile s_memcpy)(void*, void const*, size_t) = memcpy;
 static void* (*volatile s_memmove)(void*, void const*, size_t) = memmove;
 static void* (*volatile s_memset)(void*, int, size_t) = memset;
+
+// Results also go to the kernel debug log, which reaches the serial console on machines without a usable screen.
+template<typename... Parameters>
+static void say(CheckedFormatString<Parameters...>&& format, Parameters const&... parameters)
+{
+    auto line = ByteString::formatted(move(format), parameters...);
+    outln("{}", line);
+    dbgln("membench: {}", line);
+}
 
 static double now_seconds()
 {
@@ -46,7 +56,7 @@ static void report(StringView name, size_t bytes_per_pass, Function<void()> oper
         }
         ++passes;
     } while (now_seconds() - start < min_seconds || passes < 2);
-    outln("{:<44} {:>9.1} MB/s  ({} passes of {} KiB)", name, best / 1e6, passes, bytes_per_pass / 1024);
+    say("{:<44} {:>9.1} MB/s  ({} passes of {} KiB)", name, best / 1e6, passes, bytes_per_pass / 1024);
 }
 
 static void fill_bytes_volatile(u8* destination, size_t size, u8 value)
@@ -167,7 +177,7 @@ static int verify()
         warnln("membench: {} verification failures", failures);
         return 1;
     }
-    outln("membench: memcpy, memset and memmove verified");
+    say("memcpy, memset and memmove verified");
     return 0;
 }
 
@@ -178,7 +188,7 @@ static ErrorOr<void> benchmark_ram(size_t size)
     s_memset(source.data(), 0x5a, size);
     s_memset(destination.data(), 0, size);
 
-    outln("RAM, {} KiB buffers:", size / 1024);
+    say("RAM, {} KiB buffers:", size / 1024);
     report("  memcpy"sv, size, [&] { s_memcpy(destination.data(), source.data(), size); });
     report("  memcpy, source misaligned by 1"sv, size - 8, [&] { s_memcpy(destination.data(), source.data() + 1, size - 8); });
     report("  memset"sv, size, [&] { s_memset(destination.data(), 0, size); });
@@ -204,7 +214,7 @@ static ErrorOr<void> benchmark_framebuffer(StringView path)
     for (size_t i = 0; i < size; ++i)
         pattern[i] = static_cast<u8>(i >> 4);
 
-    outln("Framebuffer {}: {}x{}, pitch {} ({} KiB). The screen is restored afterwards.", path,
+    say("Framebuffer {}: {}x{}, pitch {} ({} KiB). The screen is restored afterwards.", path,
         mode.horizontal_active, mode.vertical_active, mode.horizontal_stride, size / 1024);
     s_memcpy(saved.data(), framebuffer, size);
     report("  read, memcpy to RAM"sv, size, [&] { s_memcpy(pattern.data(), framebuffer, size); });
@@ -237,7 +247,7 @@ static ErrorOr<void> benchmark_disk(StringView path, size_t mebibytes, size_t bl
     }
     double elapsed = now_seconds() - start;
     TRY(Core::System::close(fd));
-    outln("Disk {}: read {} KiB in {} KiB requests in {:.2} s: {:.2} MB/s", path, done / KiB, block_size / KiB, elapsed,
+    say("Disk {}: read {} KiB in {} KiB requests in {:.2} s: {:.2} MB/s", path, done / KiB, block_size / KiB, elapsed,
         elapsed > 0 ? static_cast<double>(done) / elapsed / 1e6 : 0.0);
     return {};
 }
