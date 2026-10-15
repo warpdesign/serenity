@@ -677,7 +677,8 @@ ErrorOr<void> UHCIController::submit_async_interrupt_transfer(NonnullLockRefPtr<
 {
     dbgln_if(UHCI_DEBUG, "UHCI: Received interrupt transfer for address {}. Root Hub is at address {}.", transfer->pipe().device().address(), m_root_hub->device_address());
 
-    if (ms_interval == 0) {
+    if (ms_interval == 0 || transfer->transfer_data_size() == 0
+        || transfer->transfer_data_size() > transfer->pipe().max_packet_size()) {
         return EINVAL;
     }
 
@@ -751,12 +752,28 @@ ErrorOr<void> UHCIController::spawn_async_poll_process()
                     if (handle != nullptr) {
                         poll_interval_ms = min(poll_interval_ms, handle->ms_poll_interval);
                         QueueHead* qh = handle->qh;
-                        for (auto td = qh->get_first_td(); td != nullptr && !td->active(); td = td->next_td()) {
-                            if (td->next_td() == nullptr) { // Finished QH
-                                handle->transfer->invoke_async_callback();
-                                qh->reinitialize(); // Set the QH to be active again
-                            }
+                        auto* td = qh->get_first_td();
+                        if (td->active())
+                            continue;
+
+                        u32 status = td->status();
+                        if (status & TransferDescriptor::StatusBits::NAKReceived) {
+                            qh->reinitialize(false);
+                            continue;
                         }
+                        if (status & TransferDescriptor::StatusBits::ErrorMask) {
+                            u32 error_bits = status & TransferDescriptor::StatusBits::ErrorMask;
+                            if (error_bits != handle->last_error_status)
+                                dmesgln_pci(*this, "Interrupt transfer failed, TD status {:#08x}", status);
+                            handle->last_error_status = error_bits;
+                            qh->reinitialize(false);
+                            continue;
+                        }
+                        handle->last_error_status = 0;
+                        bool received_report = td->actual_packet_length() != 0;
+                        if (received_report)
+                            handle->transfer->invoke_async_callback();
+                        qh->reinitialize(received_report);
                     }
                 }
             }

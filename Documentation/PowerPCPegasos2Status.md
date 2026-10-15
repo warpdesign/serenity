@@ -137,7 +137,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+`54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -275,7 +275,7 @@ The user authorized updating the existing card image. Its FFS `serenity.elf`
 now contains the AC'97 fix, Radeon budget cap, optional installed-RAM map,
 and short boot arguments. Extraction from FFS matched the
 loader byte for byte. The root partition was not rewritten. The image SHA-256
-is `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+is `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
 
 The next physical boot reached the desktop with `weakrng` and the default
 244 MiB firmware-available map. The user photographed a bluish desktop and
@@ -323,9 +323,9 @@ counts a temporary NAK as completion, returns only data-stage bytes, and
 times out rather than spinning forever. A short transfer copies only its
 received bytes. New serial diagnostics distinguish timeout from transfer
 failure, and the native USB keyboard regression rejects the observed log.
-The loader and kernel build pass; physical keyboard enumeration still needs
-confirmation. The current card SHA-256 is
-`3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+The loader and kernel build pass. A later physical boot confirmed keyboard
+enumeration; the current card SHA-256 is
+`54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
 
 Before writing that card, the user launched SystemMonitor on the conservative
 RAM map. At uptime 238.294 s the kernel reported `MM: Unable to commit 1024
@@ -337,6 +337,23 @@ does not explain the failed commitment. The already-built `fullram` boot option
 uses the installed 512 MiB map and needs no card rewrite; test the new card
 with `boot ide:0 serenity.elf weakrng fullram`, then try keyboard hot-plug and
 SystemMonitor. If the full-RAM path fails, boot the same card without `fullram`.
+
+With the keyboard now enumerating, typing was erratic: a Backspace press
+removed one character, but a later press often did nothing; Space and Return
+were also missed. When a key did appear, it was prompt, so this is not
+input latency. The UHCI asynchronous interrupt path reused the same transfer
+descriptor for every report without advancing its DATA0/DATA1 toggle.
+The keyboard HID driver emits events only when its report state changes, so
+a missed release report explains the one-time Backspace behavior. The driver
+now advances the toggle only after a successful nonempty report, preserves
+it on NAK/error, and clears stale TD status and retry state when rearming.
+A host regression checks successive toggle and status values; the kernel
+build passes. The existing card image was updated only in its FFS loader
+partition; extraction matched the rebuilt loader. The fix still needs a
+physical repeat-key test. Boot the new image with `weakrng fullram`, plug in
+the keyboard after reaching the desktop, and test repeated letters, two
+separate Backspaces, Space, and Return. The `fullram` memory result and
+SystemMonitor after it remain to be confirmed explicitly.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

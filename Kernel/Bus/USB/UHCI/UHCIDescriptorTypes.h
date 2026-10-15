@@ -10,6 +10,7 @@
 #include <AK/OwnPtr.h>
 #include <AK/Ptr32.h>
 #include <AK/Types.h>
+#include <Kernel/Bus/USB/UHCI/UHCIInterruptTransfer.h>
 #include <Kernel/Bus/USB/USBTransfer.h>
 
 namespace Kernel::USB {
@@ -89,6 +90,7 @@ struct alignas(16) TransferDescriptor final {
     u32 paddr() const { return m_bookkeeping->paddr; }
     u32 status() const { return AK::convert_between_host_and_little_endian(m_control_status); }
     u32 token() const { return m_token; }
+    bool data_toggle() const { return (token() & uhci_td_data_toggle_mask) != 0; }
     u32 buffer_ptr() const { return m_buffer_ptr; }
     u16 actual_packet_length() const { return (status() + 1) & 0x7ff; }
 
@@ -162,7 +164,7 @@ struct alignas(16) TransferDescriptor final {
 
     void set_data_toggle(bool toggle)
     {
-        m_token = token() | ((toggle ? (1 << 19) : 0));
+        m_token = uhci_token_with_data_toggle(token(), toggle);
     }
 
     void set_packet_id(PacketID pid) { m_token = token() | static_cast<u32>(pid); }
@@ -356,13 +358,17 @@ struct alignas(16) QueueHead {
         m_bookkeeping->in_use = false;
     }
 
-    void reinitialize()
+    void reinitialize(bool advance_data_toggle)
     {
-
-        for (TransferDescriptor* iter = get_first_td(); iter != nullptr; iter = iter->next_td()) {
-            iter->set_active();
-        }
-        attach_transfer_descriptor_chain(get_first_td());
+        auto* td = get_first_td();
+        VERIFY(td);
+        // Interrupt pipes currently submit one packet per transfer. Preserve
+        // the toggle on a NAK/error; advance it after a successful report.
+        VERIFY(!td->next_td());
+        if (advance_data_toggle)
+            td->set_data_toggle(!td->data_toggle());
+        td->set_status(uhci_rearmed_interrupt_status(td->status()));
+        attach_transfer_descriptor_chain(td);
     }
 
 private:
@@ -380,6 +386,7 @@ struct AsyncTransferHandle {
     NonnullLockRefPtr<Transfer> transfer;
     QueueHead* qh;
     u16 ms_poll_interval;
+    u32 last_error_status { 0 };
 };
 
 }

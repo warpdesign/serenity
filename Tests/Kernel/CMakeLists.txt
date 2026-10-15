@@ -93,6 +93,19 @@ add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
     find_program(POWERPC_HOST_CXX NAMES c++ clang++ REQUIRED)
+    set(powerpc_uhci_interrupt_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestUHCIInterruptTransfer.cpp")
+    set(powerpc_uhci_interrupt_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-UHCI-interrupt-transfer")
+    add_custom_target(PowerPCUHCIInterruptTransferCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_uhci_interrupt_source}" -o "${powerpc_uhci_interrupt_executable}"
+        COMMAND "${powerpc_uhci_interrupt_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCUHCIInterruptTransferCheck
+        COMMAND "${powerpc_uhci_interrupt_executable}" extended
+        DEPENDS PowerPCUHCIInterruptTransferCheckQuick
+        VERBATIM
+    )
     set(powerpc_loader_boot_arguments_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestLoaderBootArguments.cpp")
     set(powerpc_loader_boot_arguments_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-loader-boot-arguments")
     add_custom_target(PowerPCLoaderBootArgumentsCheckQuick

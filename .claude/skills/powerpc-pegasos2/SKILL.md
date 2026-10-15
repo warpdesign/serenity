@@ -271,7 +271,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   boot-argument changes;
   extraction matched the rebuilt loader. Root ext2 was not rewritten. The
   image SHA-256 is
-  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+  `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
   No QEMU run was made.
 
 - 2026-10-15: Physical boot with `weakrng` reached the desktop. Serial timing:
@@ -289,7 +289,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   physical color correction was later confirmed. IDE uses polled PIO, but the time
   spent on disk versus painting has not yet been measured. The sole current
   SD image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`; its SHA-256 is
-  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+  `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
   The FFS loader was replaced; ext2 root was unchanged. No QEMU run was made.
 
 - 2026-10-15: User confirmed Radeon colors are fixed. After hot-plugging the
@@ -303,8 +303,9 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   rejects the captured descriptor failure. The rebuilt loader was extracted
   from the card image and matched byte for byte; root ext2 was unchanged.
   The single current SD image SHA-256 is
-  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
-  Physical keyboard operation remains unverified; no QEMU run was made.
+  `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
+  Physical keyboard enumeration was later confirmed; typing remained erratic.
+  No QEMU run was made.
   The user also reported Terminal's empty frame lasting at least five seconds
   before its menu/content, followed by wallpaper and taskbar. In the serial
   log Terminal starts at 44.085 s, Shell at 49.668 s, and Shell libraries
@@ -315,20 +316,32 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 - 2026-10-15: SystemMonitor launched under the conservative map and requested
   1024 pages (4 MiB) when only 508 uncommitted pages remained. It aborted at
   `AK/Error.h:252`; the user observed the whole desktop freeze. This is a RAM
-  capacity failure, not evidence that the board's 120–150 MB/s memory-transfer
+  capacity failure, not evidence that the board's reported slow memory-transfer
   speed caused the allocation failure. The current SD image already has the
-  optional `fullram` boot flag and is being copied by the user; do not change
-  the image or checksum during that copy. Test with `weakrng fullram` on the
+  optional `fullram` boot flag. Test with `weakrng fullram` on the
   same card, then plug the USB keyboard and launch SystemMonitor. If the
   full-RAM path fails, reboot without that flag; no rewrite is needed.
 
-Next: after the user's copy of `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-finishes, boot with `boot ide:0 serenity.elf weakrng fullram`.
+- 2026-10-15: The USB keyboard enumerated, but keypresses were erratic.
+  Backspace worked once, then later presses were ignored; Space and Return
+  were often missed. Successful keys appeared promptly. The UHCI async poll
+  path rearmed the same interrupt TD without alternating its DATA0/DATA1
+  toggle, so the keyboard's release reports could be lost and HID's state
+  comparison would suppress later presses. The TD now advances its toggle
+  only after a successful nonempty report; NAK/error retries preserve it and
+  clear stale status. Host quick/normal toggle checks and the kernel build
+  pass. The existing card's FFS loader was updated once and extracted byte
+  for byte; ext2 was unchanged. Current image SHA-256:
+  `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
+  Physical confirmation remains pending. No QEMU run was made.
+
+Next: write only `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` to the SD
+card and boot with `boot ide:0 serenity.elf weakrng fullram`.
 Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, and `native`.
 After the desktop appears, plug the USB keyboard into the same root port 2
-and capture serial lines through `USB HID: Initialized interface` or the
-next failure; test that typing works in Terminal and try SystemMonitor.
+and test separate repeated letters, two Backspaces, Space, and Return in
+Terminal; capture any UHCI transfer-error lines. Try SystemMonitor too.
 The default RAM map remains conservative if `fullram` is omitted.
 Check that the loader prints `using installed RAM from /memory/reg` and the
 kernel lists physical RAM ending at `0x1fffffff`. The monitor should still

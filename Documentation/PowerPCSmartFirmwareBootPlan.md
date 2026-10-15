@@ -137,6 +137,16 @@ control-transfer wait. The physical keyboard test should show
 `USB HID: Initialized interface` with no device-descriptor error. No QEMU
 verification was run.
 
+The following physical boot recognized the USB keyboard, but typing was
+erratic rather than delayed: separate Backspace presses, Space, and Return
+were often ignored. UHCI's asynchronous interrupt queue reused the same
+transfer descriptor without alternating its USB DATA0/DATA1 toggle. The
+current image rearms the TD with the next toggle only after a successful
+report and clears stale completion bits; retries keep the previous toggle.
+The host toggle regression and kernel build pass. On the next physical boot,
+test separate repeated keys and verify that release reports reach HID. The
+same boot can use `fullram` to retest SystemMonitor without another image.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB
