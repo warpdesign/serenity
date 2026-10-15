@@ -707,6 +707,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/Time/Timer.cpp
         Arch/powerpc/VSIDAllocator.cpp
         Bus/SerialIO/I8042Controller.cpp
+        ../Userland/Libraries/LibC/arch/powerpc/memory.S
     )
 endif()
 

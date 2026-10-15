@@ -90,6 +90,7 @@ endif()
 if (SERENITY_ARCH STREQUAL "powerpc")
     list(APPEND SOURCES
         arch/powerpc/Atomic64.cpp
+        arch/powerpc/memory.S
         arch/powerpc/stack_chk_fail_local.cpp
     )
 endif()

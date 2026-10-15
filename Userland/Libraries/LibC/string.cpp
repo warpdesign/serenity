@@ -136,6 +136,8 @@ int timingsafe_memcmp(void const* b1, void const* b2, size_t len)
 }
 
 // https://pubs.opengroup.org/onlinepubs/9699919799/functions/memcpy.html
+// For PowerPC, memcpy, memmove and memset are in ./arch/powerpc/memory.S
+#if !ARCH(POWERPC32)
 void* memcpy(void* dest_ptr, void const* src_ptr, size_t n)
 {
 #if ARCH(X86_64)
@@ -152,6 +154,7 @@ void* memcpy(void* dest_ptr, void const* src_ptr, size_t n)
     return dest_ptr;
 #endif
 }
+#endif
 
 // https://pubs.opengroup.org/onlinepubs/9699919799/functions/memccpy.html
 void* memccpy(void* dest_ptr, void const* src_ptr, int c, size_t n)
@@ -168,8 +171,7 @@ void* memccpy(void* dest_ptr, void const* src_ptr, int c, size_t n)
 
 // https://pubs.opengroup.org/onlinepubs/9699919799/functions/memset.html
 // For x86-64, an optimized ASM implementation is found in ./arch/x86_64/memset.S
-#if ARCH(X86_64)
-#else
+#if !ARCH(X86_64) && !ARCH(POWERPC32)
 void* memset(void* dest_ptr, int c, size_t n)
 {
     u8* pd = (u8*)dest_ptr;
@@ -180,6 +182,7 @@ void* memset(void* dest_ptr, int c, size_t n)
 #endif
 
 // https://pubs.opengroup.org/onlinepubs/9699919799/functions/memmove.html
+#if !ARCH(POWERPC32)
 void* memmove(void* dest, void const* src, size_t n)
 {
     if (dest < src)
@@ -193,6 +196,7 @@ void* memmove(void* dest, void const* src, size_t n)
         *--pd = *--ps;
     return dest;
 }
+#endif
 
 // https://linux.die.net/man/3/memmem (GNU extension)
 void* memmem(void const* haystack, size_t haystack_length, void const* needle, size_t needle_length)

@@ -8,6 +8,8 @@
 
 extern "C" {
 
+// PowerPC uses Userland/Libraries/LibC/arch/powerpc/memory.S.
+#if !ARCH(POWERPC32)
 void* memcpy(void* dest_ptr, void const* src_ptr, size_t n)
 {
 #if ARCH(X86_64)
@@ -103,6 +105,7 @@ void* memset(void* dest_ptr, int c, size_t n)
 
     return dest_ptr;
 }
+#endif
 
 size_t strlen(char const* str)
 {
