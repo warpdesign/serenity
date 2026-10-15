@@ -352,8 +352,15 @@ build passes. The existing card image was updated only in its FFS loader
 partition; extraction matched the rebuilt loader. The fix still needs a
 physical repeat-key test. Boot the new image with `weakrng fullram`, plug in
 the keyboard after reaching the desktop, and test repeated letters, two
-separate Backspaces, Space, and Return. The `fullram` memory result and
-SystemMonitor after it remain to be confirmed explicitly.
+separate Backspaces, Space, and Return. The user subsequently confirmed that
+SystemMonitor runs with `fullram`. Physical typing after the DATA0/DATA1 fix
+remains unverified.
+
+As of 2026-10-15, [upstream SerenityOS UHCI](https://github.com/SerenityOS/serenity/blob/master/Kernel/Bus/USB/UHCI/UHCIController.cpp)
+also rearms the same interrupt TD without advancing its toggle. Its
+[descriptor implementation](https://github.com/SerenityOS/serenity/blob/master/Kernel/Bus/USB/UHCI/UHCIDescriptorTypes.h)
+only ORs the toggle bit when setting it. This fix is committed in the Pegasos
+branch and has not been submitted upstream.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

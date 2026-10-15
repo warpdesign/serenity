@@ -114,7 +114,8 @@ change caps its mapping at 32 MiB and logs the remaining commitment budget.
 `fullram` to use `reg` for the kernel map
 after quiesce, while keeping its firmware claims in `available`. Linux and
 Haiku use `reg` for physical RAM. Both paths can be tested with one SD image;
-the full-RAM path has not been validated on the board.
+the user subsequently confirmed that `fullram` lets SystemMonitor run on the
+board.
 
 The next physical boot reached the desktop with the conservative RAM map.
 The display looked bluish and startup was slow: `/init` at 10.126 s,
@@ -145,7 +146,8 @@ current image rearms the TD with the next toggle only after a successful
 report and clears stale completion bits; retries keep the previous toggle.
 The host toggle regression and kernel build pass. On the next physical boot,
 test separate repeated keys and verify that release reports reach HID. The
-same boot can use `fullram` to retest SystemMonitor without another image.
+The user confirmed SystemMonitor runs with `fullram`; the new keyboard toggle
+fix still needs physical typing confirmation. The same card can test both.
 
 ## Boot media
 

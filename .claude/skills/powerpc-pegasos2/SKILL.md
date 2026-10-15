@@ -318,9 +318,9 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   `AK/Error.h:252`; the user observed the whole desktop freeze. This is a RAM
   capacity failure, not evidence that the board's reported slow memory-transfer
   speed caused the allocation failure. The current SD image already has the
-  optional `fullram` boot flag. Test with `weakrng fullram` on the
-  same card, then plug the USB keyboard and launch SystemMonitor. If the
-  full-RAM path fails, reboot without that flag; no rewrite is needed.
+  optional `fullram` boot flag. The user later confirmed that SystemMonitor
+  runs with `weakrng fullram` on the same card. The default path without
+  `fullram` remains limited to the smaller firmware-available map.
 
 - 2026-10-15: The USB keyboard enumerated, but keypresses were erratic.
   Backspace worked once, then later presses were ignored; Space and Return
@@ -334,6 +334,9 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   for byte; ext2 was unchanged. Current image SHA-256:
   `54dfbe2d4a073b00c00dede91b0a23d4bfdfc0e9c02a379c5bfd081db3e167d6`.
   Physical confirmation remains pending. No QEMU run was made.
+  Upstream SerenityOS master still rearms the interrupt TD without advancing
+  its toggle and its setter only ORs the toggle bit. The fix is committed
+  locally as `3ee3673b02`; it has not been submitted upstream.
 
 Next: write only `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` to the SD
 card and boot with `boot ide:0 serenity.elf weakrng fullram`.
@@ -341,7 +344,8 @@ Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, and `native`.
 After the desktop appears, plug the USB keyboard into the same root port 2
 and test separate repeated letters, two Backspaces, Space, and Return in
-Terminal; capture any UHCI transfer-error lines. Try SystemMonitor too.
+Terminal; capture any UHCI transfer-error lines. SystemMonitor already runs
+with `fullram`.
 The default RAM map remains conservative if `fullram` is omitted.
 Check that the loader prints `using installed RAM from /memory/reg` and the
 kernel lists physical RAM ending at `0x1fffffff`. The monitor should still
