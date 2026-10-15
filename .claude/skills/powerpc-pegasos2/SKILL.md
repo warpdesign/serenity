@@ -11,6 +11,9 @@ the desktop in QEMU's `pegasos2` machine. Current state and history:
 - `Documentation/PowerPCPegasos2Status.md`: what works, every QEMU check target.
 - `Documentation/PowerPCSmartFirmwareBootPlan.md`: the plan for the physical machine (next work).
 - `Documentation/PowerPCPegasos2.md`: early bring-up record (historical).
+- `Documentation/UpstreamBugBacklog.md`: confirmed architecture-independent
+  bugs also present in upstream SerenityOS, for separate upstream fixes. Add
+  future findings there after checking current upstream source.
 
 Commits are authored "Nicolas Ramz <nicolas.ramz@gmail.com>" with no co-author trailer.
 
