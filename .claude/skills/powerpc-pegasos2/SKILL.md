@@ -312,15 +312,24 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   CPU access is uncached; neither has been timed separately yet. Do not treat
   the staged startup as one graphics stall without measurements.
 
-Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
-to the SD card, then boot with `boot ide:0 serenity.elf weakrng`.
+- 2026-10-15: SystemMonitor launched under the conservative map and requested
+  1024 pages (4 MiB) when only 508 uncommitted pages remained. It aborted at
+  `AK/Error.h:252`; the user observed the whole desktop freeze. This is a RAM
+  capacity failure, not evidence that the board's 120–150 MB/s memory-transfer
+  speed caused the allocation failure. The current SD image already has the
+  optional `fullram` boot flag and is being copied by the user; do not change
+  the image or checksum during that copy. Test with `weakrng fullram` on the
+  same card, then plug the USB keyboard and launch SystemMonitor. If the
+  full-RAM path fails, reboot without that flag; no rewrite is needed.
+
+Next: after the user's copy of `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+finishes, boot with `boot ide:0 serenity.elf weakrng fullram`.
 Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, and `native`.
 After the desktop appears, plug the USB keyboard into the same root port 2
 and capture serial lines through `USB HID: Initialized interface` or the
-next failure; test that typing works in Terminal. The default RAM map remains
-conservative. The same SD card can separately test the upper RAM with
-`boot ide:0 serenity.elf weakrng fullram` after the keyboard check.
+next failure; test that typing works in Terminal and try SystemMonitor.
+The default RAM map remains conservative if `fullram` is omitted.
 Check that the loader prints `using installed RAM from /memory/reg` and the
 kernel lists physical RAM ending at `0x1fffffff`. The monitor should still
 report 1024×768/60 until native

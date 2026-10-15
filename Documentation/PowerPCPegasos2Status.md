@@ -327,6 +327,17 @@ The loader and kernel build pass; physical keyboard enumeration still needs
 confirmation. The current card SHA-256 is
 `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
 
+Before writing that card, the user launched SystemMonitor on the conservative
+RAM map. At uptime 238.294 s the kernel reported `MM: Unable to commit 1024
+pages, have only 508`: a 4 MiB request with under 2 MiB uncommitted. The
+app then failed `release_value_but_fixme_should_propagate_errors()` at
+`AK/Error.h:252`. This confirms an out-of-memory abort, although the log alone
+does not prove why the rest of the desktop appeared frozen. Memory bandwidth
+does not explain the failed commitment. The already-built `fullram` boot option
+uses the installed 512 MiB map and needs no card rewrite; test the new card
+with `boot ide:0 serenity.elf weakrng fullram`, then try keyboard hot-plug and
+SystemMonitor. If the full-RAM path fails, boot the same card without `fullram`.
+
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt
 source. The RNG wait now uses the predicate-based wait queue, which rechecks
