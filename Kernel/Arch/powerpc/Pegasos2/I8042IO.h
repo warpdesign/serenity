@@ -8,7 +8,7 @@
 
 #include <AK/Error.h>
 #include <AK/Types.h>
-#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
 #include <Kernel/Memory/TypedMapping.h>
 
 namespace Kernel {
@@ -18,7 +18,7 @@ class I8042IO {
 public:
     static ErrorOr<I8042IO> create()
     {
-        return I8042IO { TRY(Memory::map_typed<volatile u8[]>(PhysicalAddress { PEGASOS2_PCI_IO_PHYSICAL_BASE }, 0x1000, Memory::Region::Access::ReadWrite)) };
+        return I8042IO { TRY(Memory::map_typed<volatile u8[]>(PowerPC::Pegasos2::legacy_io_physical_base(), 0x1000, Memory::Region::Access::ReadWrite)) };
     }
 
     u8 read(u8 port)

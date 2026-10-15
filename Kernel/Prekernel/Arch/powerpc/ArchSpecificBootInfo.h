@@ -23,6 +23,8 @@ struct ArchSpecificBootInfo {
     u32 hpt_group_count { 0 };
     u32 timebase_frequency_hz { 0 };
     u32 mv64361_registers_physical_base { 0 };
+    // Physical address of ISA I/O port 0 in the south bridge's PCI I/O window.
+    u32 legacy_io_physical_base { 0 };
     u32 pci_host_bridge_count { 0 };
     PowerPCPCIHostBridgeInfo pci_host_bridges[POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT] {};
     PowerPCRtasInfo rtas {};

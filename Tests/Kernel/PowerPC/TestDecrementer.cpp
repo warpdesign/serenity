@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/Pegasos2/LegacyPIC.h>
 #include <Kernel/Arch/powerpc/Time/Timebase.h>
 
@@ -25,8 +26,8 @@ extern "C" int powerpc_decrementer_exception_roundtrip(unsigned int timebase_fre
 
     // The boot probe has no device interrupt dispatcher yet. Mask the 8259s
     // while enabling EE for the CPU-local decrementer, then restore them.
-    Pegasos2::LegacyPIC pic { reinterpret_cast<volatile u8*>(Pegasos2::LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(Pegasos2::LegacyPIC::intack_physical_base + Pegasos2::LegacyPIC::intack_offset) };
+    Pegasos2::LegacyPIC pic { reinterpret_cast<volatile u8*>(PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     auto master_mask = pic.master_mask();
     auto slave_mask = pic.slave_mask();
     pic.set_masks(0xff, 0xff);

@@ -31,7 +31,7 @@ loader.
 | MMU | Turns translation off after `quiesce`; the HPT setup replaces the firmware BATs with identity RAM and PCI I/O mappings before enabling translation. | Confirmed through kernel scheduler startup on the physical CPU. |
 | Firmware lifetime | Captures the needed firmware properties, then calls `quiesce` before MMU takeover. | Confirmed by kernel execution after the physical `quiesce` call. |
 | Console | Uses firmware `stdout` before `quiesce`, then polls the native UART without changing its line settings. | Physical kernel messages arrived on the native serial console. |
-| Device addresses | Validates that the firmware's PCI I/O and MV64361 bases match the kernel's current Pegasos 2 constants. | Remove the remaining constants after the first native boot. |
+| Device addresses | Takes the PCI I/O window and MV64361 base from the firmware tree; `fixedio` restores the built-in constants. | First physical boot with firmware-provided addresses. |
 | RTAS | The loader instantiates RTAS before `quiesce` and the kernel reads physical PCI IDs through it. | Power-service calls and long-running PCI use on physical hardware. |
 | Image size | 6.1 MB with KUBSAN and the kernel gzip-compressed (2.4 MB without KUBSAN). | SmartFirmware disk reads are slow (Haiku saw pauses of one to two minutes). |
 
@@ -330,6 +330,18 @@ machine.
 - Use RTAS for shutdown and reboot.
 
 Checkpoint: early kernel log over serial, PCI enumeration, timer and interrupts.
+
+Status (2026-10-15): legacy I/O addresses come from the firmware, compiled
+but not yet booted. The loader takes the PCI I/O window from the south
+bridge's I/O range at bus address 0, maps the early-debug DBAT2 on its
+16 MiB block, and passes it as `legacy_io_physical_base` in `BootInfo`. It no
+longer stops when the firmware addresses differ from the kernel's constants.
+The kernel's debug UART, legacy PIC, RTC and i8042 use that base; interrupt
+acknowledge uses the firmware MV64361 base. The PIC logs both addresses as
+`Pegasos 2: legacy I/O ports at ...`. The `fixedio` boot argument restores
+the built-in `0xfe000000`/`0xf1000000` addresses in both the loader and the
+kernel. `PEGASOS2_*` constants remain only as that fallback and in the
+standalone boot-probe tests.
 
 ### 5. Devices on real hardware
 

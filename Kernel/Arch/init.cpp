@@ -63,6 +63,9 @@
 #include <Kernel/Time/TimeManagement.h>
 #include <Kernel/kstdio.h>
 
+#if ARCH(POWERPC32)
+#    include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
+#endif
 #if ARCH(X86_64)
 #    include <Kernel/Arch/x86_64/Hypervisor/VMWareBackdoor.h>
 #    include <Kernel/Arch/x86_64/Interrupts/APIC.h>
@@ -143,6 +146,9 @@ extern "C" [[noreturn]] UNMAP_AFTER_INIT NO_SANITIZE_COVERAGE void init(BootInfo
     if (boot_info.boot_method == BootMethod::FirmwareMemoryMap) {
         g_boot_info = boot_info;
         s_kernel_cmdline = boot_info.cmdline;
+#if ARCH(POWERPC32)
+        PowerPC::Pegasos2::configure_early_debug_uart(g_boot_info);
+#endif
     }
 #if ARCH(X86_64)
     g_boot_info = boot_info;

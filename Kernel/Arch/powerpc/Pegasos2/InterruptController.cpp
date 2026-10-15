@@ -5,6 +5,7 @@
  */
 
 #include <Kernel/Arch/powerpc/Pegasos2/InterruptController.h>
+#include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
 #include <Kernel/Interrupts/GenericInterruptHandler.h>
 
 namespace Kernel::PowerPC::Pegasos2 {
@@ -19,9 +20,11 @@ InterruptController::InterruptController(Memory::TypedMapping<volatile u8[]> io_
 
 ErrorOr<NonnullLockRefPtr<InterruptController>> InterruptController::create()
 {
-    auto io_ports = TRY(Memory::map_typed<volatile u8[]>(PhysicalAddress { LegacyPIC::io_physical_base },
-        LegacyPIC::io_window_size, Memory::Region::Access::ReadWrite));
-    auto intack = TRY(Memory::map_typed<volatile u8>(PhysicalAddress { LegacyPIC::intack_physical_base + LegacyPIC::intack_offset }));
+    auto io_base = legacy_io_physical_base();
+    auto intack_address = interrupt_acknowledge_physical_address();
+    dmesgln("Pegasos 2: legacy I/O ports at {}, interrupt acknowledge at {}", io_base, intack_address);
+    auto io_ports = TRY(Memory::map_typed<volatile u8[]>(io_base, LegacyPIC::io_window_size, Memory::Region::Access::ReadWrite));
+    auto intack = TRY(Memory::map_typed<volatile u8>(intack_address));
     return TRY(adopt_nonnull_lock_ref_or_enomem(new (nothrow) InterruptController(move(io_ports), move(intack))));
 }
 

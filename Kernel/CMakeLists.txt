@@ -687,6 +687,7 @@ elseif("${SERENITY_ARCH}" STREQUAL "powerpc")
         Arch/powerpc/PageDirectoryContext.cpp
         Arch/powerpc/PageDirectoryBackend.cpp
         Arch/powerpc/Pegasos2/InterruptController.cpp
+        Arch/powerpc/Pegasos2/LegacyIO.cpp
         Arch/powerpc/Pegasos2/DebugOutput.cpp
         Arch/powerpc/Pegasos2/PCIConfig.cpp
         Arch/powerpc/Pegasos2/PCIHostController.cpp

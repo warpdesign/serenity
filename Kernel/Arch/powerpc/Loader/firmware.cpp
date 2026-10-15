@@ -31,7 +31,7 @@ extern "C" u8 _binary_kernel_elf_gz_start[];
 extern "C" u8 _binary_kernel_elf_gz_end[];
 extern "C" u32 powerpc_loader_high_marker();
 extern "C" int powerpc_loader_call_firmware_real_mode(void* arguments, FirmwareEntry entry);
-extern "C" void powerpc_loader_enable_translation(u32 sdr1);
+extern "C" void powerpc_loader_enable_translation(u32 sdr1, u32 io_block_physical);
 extern "C" void powerpc_loader_disable_translation();
 extern "C" u8 __loader_start[];
 extern "C" u8 __stack_end[];
@@ -44,6 +44,10 @@ static u32 s_available_range_count;
 static u32 s_claimed_range_count;
 static u32 s_loader_end;
 static u32 s_native_uart_physical_base;
+// Zero with fixedio, so the kernel uses its built-in Pegasos 2 addresses.
+static u32 s_legacy_io_physical_base;
+static u32 s_legacy_io_in_use;
+static u32 s_io_block_physical;
 static bool s_native_uart_output;
 static bool s_native_previous_was_carriage_return;
 static u32 s_native_timebase_frequency;
@@ -428,6 +432,47 @@ static bool instantiate_native_rtas(FirmwareEntry firmware, u32 stdout)
     return true;
 }
 
+// The legacy ISA ports sit at bus address 0 of the south bridge's I/O range and span 64 KiB.
+static u32 find_legacy_io_base(PowerPCPCIHostBridgeInfo const& south)
+{
+    for (u32 index = 0; index < south.range_count; ++index) {
+        auto const& range = south.ranges[index];
+        if (range.space == 1 && range.bus_address == 0 && range.length >= 0x10000
+            && range.host_address != 0 && (range.host_address & 0xffffu) == 0 && range.host_address <= 0xffff0000u)
+            return static_cast<u32>(range.host_address);
+    }
+    return 0;
+}
+
+static bool select_legacy_io(FirmwareEntry firmware, u32 stdout, PowerPCPCIHostBridgeInfo const& south)
+{
+    u32 base = find_legacy_io_base(south);
+    if (has_flag("fixedio")) {
+        if (base != PEGASOS2_PCI_IO_PHYSICAL_BASE) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: fixedio overrides firmware legacy I/O at ");
+            write_hex(firmware, stdout, base);
+        }
+        base = PEGASOS2_PCI_IO_PHYSICAL_BASE;
+        s_legacy_io_physical_base = 0;
+    } else {
+        if (base == 0) {
+            write_console(firmware, stdout, "SerenityOS PowerPC loader: no legacy I/O range on the south PCI bridge\r\n");
+            return false;
+        }
+        s_legacy_io_physical_base = base;
+    }
+    // The early debug DBAT maps one 16 MiB block, which must hold all the legacy ports.
+    if ((base >> 24) != ((base + 0xffffu) >> 24)) {
+        write_console(firmware, stdout, "SerenityOS PowerPC loader: legacy I/O window crosses a 16 MiB block\r\n");
+        return false;
+    }
+    s_legacy_io_in_use = base;
+    s_io_block_physical = base & 0xff000000u;
+    write_console(firmware, stdout, "SerenityOS PowerPC loader: legacy I/O ports at ");
+    write_hex(firmware, stdout, base);
+    return true;
+}
+
 static bool capture_native_firmware(FirmwareEntry firmware, u32 stdout)
 {
     u32 root = find_device(firmware, "/");
@@ -442,24 +487,9 @@ static bool capture_native_firmware(FirmwareEntry firmware, u32 stdout)
         return false;
     }
 
-    constexpr u64 uart_port = 0x2f8;
-    for (u32 index = 0; index < s_native_pci_host_bridges[0].range_count; ++index) {
-        auto const& range = s_native_pci_host_bridges[0].ranges[index];
-        if (range.space != 1 || range.bus_address > uart_port
-            || uart_port - range.bus_address + 8 > range.length)
-            continue;
-        u64 physical = range.host_address + uart_port - range.bus_address;
-        if (physical > 0xffffffffu)
-            continue;
-        s_native_uart_physical_base = static_cast<u32>(physical);
-        break;
-    }
-    // The kernel's current early debug output still uses this Pegasos 2 address.
-    if (s_native_uart_physical_base != PEGASOS2_UART_PHYSICAL_BASE
-        || s_native_mv64361_registers_base != PEGASOS2_MV64361_REGISTERS_PHYSICAL_BASE) {
-        write_console(firmware, stdout, "SerenityOS PowerPC loader: native I/O addresses differ from kernel\r\n");
+    if (!select_legacy_io(firmware, stdout, s_native_pci_host_bridges[0]))
         return false;
-    }
+    s_native_uart_physical_base = s_legacy_io_in_use + 0x2f8;
     write_console(firmware, stdout, "SerenityOS PowerPC loader: native firmware handoff captured\r\n");
     return true;
 }
@@ -770,7 +800,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     u32 expected_upper = entry->upper;
     u32 entry_physical = physical_base + plan.entry_offset - plan.first_virtual_offset;
     u32 expected_entry_word = *reinterpret_cast<volatile u32 const*>(entry_physical);
-    powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1));
+    powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1), s_io_block_physical);
     u32 high_entry_word = *reinterpret_cast<volatile u32 const*>(high_entry);
     u32 high_table_word = *reinterpret_cast<volatile u32 const*>(mappings.table_virtual + table_entry_offset);
     auto high_marker = reinterpret_cast<u32 (*)()>(marker_high);
@@ -836,7 +866,10 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
             write_console(firmware, stdout, "SerenityOS PowerPC loader: firmware PCI bridges unavailable\r\n");
             return;
         }
+        if (!select_legacy_io(firmware, stdout, boot_info.arch_specific.pci_host_bridges[0]))
+            return;
     }
+    boot_info.arch_specific.legacy_io_physical_base = s_legacy_io_physical_base;
     boot_info.arch_specific.pci_host_bridge_count = POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT;
     if (!is_qemu)
         boot_info.arch_specific.rtas = s_native_rtas;
@@ -849,6 +882,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
         || !Kernel::PowerPC::boot_timebase_frequency(boot_info).has_value()
         || !Kernel::PowerPC::boot_mv64361_registers_base(boot_info).has_value()
         || !Kernel::PowerPC::boot_pci_host_bridges(boot_info).has_value()
+        || (s_legacy_io_physical_base != 0 && !Kernel::PowerPC::boot_legacy_io_base(boot_info).has_value())
         || (!is_qemu && !Kernel::PowerPC::boot_rtas_info(boot_info).has_value())) {
         write_console(firmware, stdout, "SerenityOS PowerPC loader: boot handoff invalid\r\n");
         return;
@@ -858,7 +892,7 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     if (should_stop_before_kernel())
         return;
     write_console(firmware, stdout, "SerenityOS PowerPC loader: entering kernel\r\n");
-    powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1));
+    powerpc_loader_enable_translation(mappings.table_physical | ((table_size >> 16) - 1), s_io_block_physical);
     auto kernel_entry = reinterpret_cast<void (*)(Kernel::BootInfo const&)>(static_cast<u32>(runtime_base) + plan.entry_offset);
     kernel_entry(boot_info);
     powerpc_loader_disable_translation();

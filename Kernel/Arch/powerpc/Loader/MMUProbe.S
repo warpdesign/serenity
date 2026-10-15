@@ -8,7 +8,9 @@
 .globl powerpc_loader_enable_translation
 .type powerpc_loader_enable_translation,@function
 powerpc_loader_enable_translation:
-    // r3 is the aligned HPT physical base with the SDR1 size mask.
+    // r3 is the aligned HPT physical base with the SDR1 size mask; r4 is the 16 MiB-aligned
+    // physical block holding the PCI I/O window, or 0 to leave it unmapped.
+    mr 6,4
     li 4,0
     sync
     mtspr 528,4 // IBAT0U
@@ -28,12 +30,13 @@ powerpc_loader_enable_translation:
     mtspr 528,4
     mtspr 536,4
 
-    lis 4,0xfe00
-    ori 4,4,0x2a // Cache-inhibited, guarded PCI I/O window.
+    cmpwi 6,0
+    beq 1f
+    ori 4,6,0x2a // Cache-inhibited, guarded PCI I/O window.
     mtspr 541,4 // DBAT2L
-    lis 4,0xfe00
-    ori 4,4,0x1fe // 16 MiB PCI I/O identity map for early kernel debug.
+    ori 4,6,0x1fe // 16 MiB PCI I/O identity map for early kernel debug.
     mtspr 540,4 // DBAT2U
+1:
 
     lis 4,0x2000
     ori 4,4,12

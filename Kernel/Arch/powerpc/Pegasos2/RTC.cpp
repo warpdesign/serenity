@@ -5,7 +5,7 @@
  */
 
 #include <AK/Optional.h>
-#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
 #include <Kernel/Arch/powerpc/Pegasos2/RTC.h>
 #include <Kernel/Debug.h>
 #include <Kernel/Memory/TypedMapping.h>
@@ -77,7 +77,7 @@ static u8 bcd_to_binary(u8 value)
 void initialize()
 {
     auto mapping_or_error = Memory::map_typed<volatile u8[]>(
-        PhysicalAddress { PEGASOS2_PCI_IO_PHYSICAL_BASE }, 0x1000, Memory::Region::Access::ReadWrite);
+        PowerPC::Pegasos2::legacy_io_physical_base(), 0x1000, Memory::Region::Access::ReadWrite);
     if (mapping_or_error.is_error()) {
         dmesgln("Pegasos 2 RTC: could not map ISA I/O ports: {}", mapping_or_error.error());
         return;

@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/Pegasos2/LegacyPIC.h>
 #include <Kernel/Arch/powerpc/Time/Timebase.h>
 
@@ -17,8 +18,8 @@ extern "C" int powerpc_legacy_pic_irq0_roundtrip(unsigned int timebase_frequency
     if (msr & (0x8000u | 0x4000u | 0x30u))
         return 0;
 
-    LegacyPIC pic { reinterpret_cast<volatile u8*>(LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     pic.initialize();
     if (pic.master_mask() != 0xff || pic.slave_mask() != 0xff
         || pic.enable(2) || pic.enable(16))

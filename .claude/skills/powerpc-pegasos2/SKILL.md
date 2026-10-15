@@ -356,10 +356,19 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   `make-pegasos-root.py --boot-benchmark`, then `make-pegasos-card.py card`. Physical results are
   pending.
 
+- 2026-10-15: Phase 4 legacy I/O. The loader derives the PCI I/O window from the south bridge's I/O
+  range, maps DBAT2 on its 16 MiB block (`powerpc_loader_enable_translation` second argument; 0
+  skips DBAT2), and passes `legacy_io_physical_base` in `BootInfo`. The kernel debug UART, PIC, RTC
+  and i8042 go through `Pegasos2/LegacyIO.h`; `fixedio` restores the constants in loader and kernel.
+  Kernel, loader and boot-probe harness build; no QEMU run (not requested). Only the card's FFS
+  loader was replaced; SHA-256
+  `8237052ebf8ed71361b69264e809e1e64e381be6d998c587d7f1e8a28163cf56`.
+
 Next: write only `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` to the SD
 card and boot with `boot ide:0 serenity.elf weakrng fullram`.
 Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
-`claimram`, and `native`.
+`claimram`, `native`, `nodma`, and `fixedio`. Check the serial log for
+`legacy I/O ports at 0xfe000000`; if the board goes silent after `entering kernel`, retry with `fixedio`.
 After the desktop appears, plug the USB keyboard into the same root port 2
 and test separate repeated letters, two Backspaces, Space, and Return in
 Terminal; capture any UHCI transfer-error lines. SystemMonitor already runs

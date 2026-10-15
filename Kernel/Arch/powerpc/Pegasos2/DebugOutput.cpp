@@ -7,14 +7,21 @@
 #include <AK/Types.h>
 #include <Kernel/Arch/DebugOutput.h>
 #include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
 
 namespace Kernel {
 
+// The Pegasos 2 boot handoff keeps DBAT2 as an identity map of the PCI I/O window.
+static volatile u8* s_uart = reinterpret_cast<volatile u8*>(PEGASOS2_UART_PHYSICAL_BASE);
+
+void PowerPC::Pegasos2::set_debug_uart_physical_address(u32 address)
+{
+    s_uart = reinterpret_cast<volatile u8*>(address);
+}
+
 void debug_output(char character)
 {
-    // The Pegasos 2 boot handoff must keep DBAT2 as an identity map of the
-    // PCI I/O window until a permanent MMIO mapping is installed.
-    auto* uart = reinterpret_cast<volatile u8*>(PEGASOS2_UART_PHYSICAL_BASE);
+    auto* uart = s_uart;
     static bool initialized;
     static bool previous_was_carriage_return;
     auto write_register = [&](u32 index, u8 value) {

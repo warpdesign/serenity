@@ -51,6 +51,22 @@ Optional<ReadonlySpan<PowerPCPCIHostBridgeInfo>> boot_pci_host_bridges(BootInfo 
     return ReadonlySpan<PowerPCPCIHostBridgeInfo> { arch.pci_host_bridges, arch.pci_host_bridge_count };
 }
 
+// The base must be where the south bridge's I/O range maps ISA port 0, covering the 64 KiB legacy ports.
+Optional<u32> boot_legacy_io_base(BootInfo const& boot_info)
+{
+    auto bridges = boot_pci_host_bridges(boot_info);
+    auto base = boot_info.arch_specific.legacy_io_physical_base;
+    if (!bridges.has_value() || base == 0 || (base & 0xffffu) != 0 || base > 0xffff0000u)
+        return {};
+    auto const& south = (*bridges)[0];
+    for (u32 index = 0; index < south.range_count; ++index) {
+        auto const& range = south.ranges[index];
+        if (range.space == 1 && range.bus_address == 0 && range.host_address == base && range.length >= 0x10000)
+            return base;
+    }
+    return {};
+}
+
 Optional<PowerPCRtasInfo> boot_rtas_info_after_handoff(BootInfo const& boot_info)
 {
     if (boot_info.boot_method != BootMethod::FirmwareMemoryMap)

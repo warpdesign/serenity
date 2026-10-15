@@ -6,6 +6,7 @@
 
 #include <Kernel/Arch/powerpc/ExceptionState.h>
 #include <Kernel/Arch/powerpc/Boot/ProbeAddresses.h>
+#include <Kernel/Arch/powerpc/Pegasos2/HardwareAddresses.h>
 #include <Kernel/Arch/powerpc/Pegasos2/LegacyPIC.h>
 #include <Kernel/Arch/powerpc/Time/Timebase.h>
 
@@ -27,9 +28,9 @@ extern "C" void powerpc_external_irq_probe_dispatch(PowerPCExceptionState const*
 {
     using Kernel::PowerPC::Pegasos2::LegacyPIC;
     bool high = powerpc_probe_use_high_irq_handler != 0;
-    LegacyPIC pic { reinterpret_cast<volatile u8*>(high ? POWERPC_HPT_PIC_IO_ADDRESS : LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(high ? POWERPC_HPT_INTACK_ADDRESS + LegacyPIC::intack_offset
-                                             : LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(high ? POWERPC_HPT_PIC_IO_ADDRESS : PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(high ? POWERPC_HPT_INTACK_ADDRESS + PEGASOS2_INTACK_OFFSET
+                                             : PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     auto irq = pic.acknowledge();
     if (irq.has_value()) {
         s_dispatch_caller_pc = reinterpret_cast<u32>(__builtin_return_address(0));
@@ -57,8 +58,8 @@ extern "C" void powerpc_irq_probe_reset()
 extern "C" int powerpc_irq_prepare_user_probe()
 {
     using Kernel::PowerPC::Pegasos2::LegacyPIC;
-    LegacyPIC pic { reinterpret_cast<volatile u8*>(LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     pic.initialize();
     pic.write_port(0x43, 0x34);
     pic.write_port(0x40, 0xa9);
@@ -69,8 +70,8 @@ extern "C" int powerpc_irq_prepare_user_probe()
 extern "C" void powerpc_irq_finish_user_probe()
 {
     using Kernel::PowerPC::Pegasos2::LegacyPIC;
-    LegacyPIC pic { reinterpret_cast<volatile u8*>(LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     pic.set_masks(0xff, 0xff);
 }
 
@@ -115,8 +116,8 @@ static int run_external_irq_roundtrip(u32 timebase_frequency, u32 expected_trans
         || !powerpc_install_external_interrupt_probe_vector())
         return 0;
 
-    LegacyPIC pic { reinterpret_cast<volatile u8*>(powerpc_probe_use_high_irq_handler ? POWERPC_HPT_PIC_IO_ADDRESS : LegacyPIC::io_physical_base),
-        reinterpret_cast<volatile u8*>(LegacyPIC::intack_physical_base + LegacyPIC::intack_offset) };
+    LegacyPIC pic { reinterpret_cast<volatile u8*>(powerpc_probe_use_high_irq_handler ? POWERPC_HPT_PIC_IO_ADDRESS : PEGASOS2_PCI_IO_PHYSICAL_BASE),
+        reinterpret_cast<volatile u8*>(PEGASOS2_INTACK_PHYSICAL_BASE + PEGASOS2_INTACK_OFFSET) };
     pic.initialize();
     powerpc_irq_probe_reset();
 
