@@ -104,6 +104,9 @@ direct-config fallback.
 `PowerPCNativeUHCIBootCheckQuick` and `PowerPCNativeUHCIBootCheck` require the
 first UHCI controller to complete initialization or report a bounded timeout
 before storage and, for the normal target, userland startup.
+`PowerPCNativeUSBKeyboardCheckQuick` and `PowerPCNativeUSBKeyboardCheck`
+require a hot-plugged keyboard to enumerate and its HID interface to
+initialize; their self-test rejects the observed zero descriptor.
 `PowerPCNativeEntropyBootCheckQuick` and `PowerPCNativeEntropyBootCheck`
 check the explicitly enabled bring-up entropy pool and, for the normal target,
 WindowServer startup. `PowerPCNativePS2MouseCheckQuick` and
@@ -134,7 +137,7 @@ file, and left a clean filesystem. That test does not exercise SmartFirmware
 loading `serenity.elf` from FFS. The one current local card image is
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB).
 Its SHA-256 is
-`4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+`3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
 The independent `rdbtool` sees `SERBOOT` as a 32 MiB bootable FFS partition
 and `SERROOT` as an 896 MiB ext2 partition. Extracting `serenity.elf` from
 FFS matched the rebuilt loader byte for byte.
@@ -272,7 +275,7 @@ The user authorized updating the existing card image. Its FFS `serenity.elf`
 now contains the AC'97 fix, Radeon budget cap, optional installed-RAM map,
 and short boot arguments. Extraction from FFS matched the
 loader byte for byte. The root partition was not rewritten. The image SHA-256
-is `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+is `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
 
 The next physical boot reached the desktop with `weakrng` and the default
 244 MiB firmware-available map. The user photographed a bluish desktop and
@@ -296,8 +299,25 @@ enables swapping on both nonsurface apertures without translation disable.
 QEMU's older CONFIG_CNTL swap path is unchanged. The new serial log prints
 `Radeon: SURFACE_CNTL=...`; a native log regression requires swap bits 21 and
 23 and rejects translation-disable bit 8. Host checks and the kernel build
-pass, but the corrected colors still need physical confirmation. The updated
+pass, and the user subsequently confirmed the colors are fixed. The updated
 card contains this fix, with only its FFS loader partition rewritten.
+
+After plugging the USB keyboard in at runtime, UHCI root port 2 reported a
+detach at 121.914 s, an attach at 122.923 s, then `GetDescriptor(Device)`
+returned descriptor type `0x0` instead of `0x1` at 123.112 s; device creation
+failed with `EIO`. The root hub is emulated, so this is the first physical
+UHCI data transfer. Its queue-head and transfer-descriptor pools were normal
+cacheable kernel pages even though the controller reads and writes them by
+DMA. [Linux UHCI](https://github.com/torvalds/linux/blob/master/drivers/usb/host/uhci-hcd.c)
+uses coherent DMA pools for both. The pools now use Serenity's
+cache-inhibited DMA page allocator. Control transfer polling also no longer
+counts a temporary NAK as completion, returns only data-stage bytes, and
+times out rather than spinning forever. A short transfer copies only its
+received bytes. New serial diagnostics distinguish timeout from transfer
+failure, and the native USB keyboard regression rejects the observed log.
+The loader and kernel build pass; physical keyboard enumeration still needs
+confirmation. The current card SHA-256 is
+`3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

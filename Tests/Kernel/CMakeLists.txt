@@ -186,6 +186,16 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCNativeUHCIBootCheckQuick
         VERBATIM
     )
+    set(powerpc_native_usb_keyboard_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_usb_keyboard.py")
+    add_custom_target(PowerPCNativeUSBKeyboardCheckQuick
+        COMMAND python3 "${powerpc_native_usb_keyboard_test}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeUSBKeyboardCheck
+        COMMAND python3 "${powerpc_native_usb_keyboard_test}" --normal
+        DEPENDS PowerPCNativeUSBKeyboardCheckQuick
+        VERBATIM
+    )
     add_custom_target(PowerPCNativeEntropyBootCheckQuick
         COMMAND python3 "${powerpc_native_pci_boot_test}" --require-entropy-progress
         VERBATIM

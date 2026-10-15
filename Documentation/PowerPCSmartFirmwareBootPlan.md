@@ -127,6 +127,16 @@ clear on native big-endian Radeon hardware, and logs `SURFACE_CNTL` for the
 next serial capture. The IDE path uses polled PIO; its contribution to the
 startup delay remains unmeasured.
 
+The user confirmed the Radeon colors are fixed. Hot-plugging the USB
+keyboard then reached root port 2, but its first device descriptor returned
+type zero and enumeration failed with `EIO`. UHCI's queue-head and transfer-
+descriptor pools used cacheable memory, unlike its frame list and data buffer.
+The updated loader uses cache-inhibited DMA pages for both pools, waits through
+temporary NAKs, returns only received control data bytes, and bounds the
+control-transfer wait. The physical keyboard test should show
+`USB HID: Initialized interface` with no device-descriptor error. No QEMU
+verification was run.
+
 ## Boot media
 
 SmartFirmware boots with `boot <device> <file>` and understands Amiga RDB

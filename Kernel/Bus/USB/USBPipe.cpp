@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2021, Jesse Buhagiar <jooster669@gmail.com>
- * Copyright (c) 2022, blackcat <b14ckcat@protonmail.com>
+ * Copyright (c) 2021-2026, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2022-2026, blackcat <b14ckcat@protonmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -64,9 +64,9 @@ ErrorOr<size_t> ControlPipe::submit_control_transfer(u8 request_type, u8 request
     dbgln_if(USB_DEBUG, "ControlPipe: Transfer allocated @ {}", transfer->buffer_physical());
     auto transfer_length = TRY(m_controller->submit_control_transfer(*transfer));
 
-    // TODO: Check transfer for completion and copy data from transfer buffer into data
+    // A short or failed transfer must not expose bytes left by an earlier request.
     if (length > 0)
-        memcpy(reinterpret_cast<u8*>(data), transfer->buffer().as_ptr() + sizeof(USBRequestData), length);
+        memcpy(reinterpret_cast<u8*>(data), transfer->buffer().as_ptr() + sizeof(USBRequestData), min(length, transfer_length));
 
     dbgln_if(USB_DEBUG, "Pipe: Control Transfer complete!");
     return transfer_length;

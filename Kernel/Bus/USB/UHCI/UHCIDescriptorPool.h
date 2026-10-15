@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, Jesse Buhagiar <jooster669@gmail.com>
+ * Copyright (c) 2021-2026, Jesse Buhagiar <jooster669@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -31,7 +31,9 @@ class UHCIDescriptorPool {
 public:
     static ErrorOr<NonnullOwnPtr<UHCIDescriptorPool<T>>> try_create(StringView name)
     {
-        auto pool_memory_block = TRY(MM.allocate_kernel_region(PAGE_SIZE, "UHCI Descriptor Pool"sv, Memory::Region::Access::ReadWrite));
+        // The controller reads descriptors and writes back their status. Keep
+        // this page cache-inhibited on machines with noncoherent PCI DMA.
+        auto pool_memory_block = TRY(MM.allocate_dma_buffer_page(name, Memory::Region::Access::ReadWrite, Memory::MemoryType::IO));
         return adopt_nonnull_own_or_enomem(new (nothrow) UHCIDescriptorPool(move(pool_memory_block), name));
     }
 

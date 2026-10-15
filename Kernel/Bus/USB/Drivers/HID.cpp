@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2025-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -208,6 +208,7 @@ ErrorOr<void> HIDDriver::probe(USB::Device& device)
             }
 
             m_hid_interfaces.append(hid_interface_or_error.release_value());
+            dmesgln("USB HID: Initialized interface {} of device {:04x}:{:04x}", interface.descriptor().interface_id, device.device_descriptor().vendor_id, device.device_descriptor().product_id);
             found_and_initialized_hid_interface = true;
         }
 

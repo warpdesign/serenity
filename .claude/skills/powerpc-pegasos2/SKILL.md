@@ -271,7 +271,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   boot-argument changes;
   extraction matched the rebuilt loader. Root ext2 was not rewritten. The
   image SHA-256 is
-  `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
   No QEMU run was made.
 
 - 2026-10-15: Physical boot with `weakrng` reached the desktop. Serial timing:
@@ -286,23 +286,38 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   driver clears stale surface descriptors, enables both aperture swap bits
   without translation disable on big-endian native Radeon, and logs the
   resulting `SURFACE_CNTL`. Host and native-log regression checks were added;
-  physical color correction is pending. IDE uses polled PIO, but the time
+  physical color correction was later confirmed. IDE uses polled PIO, but the time
   spent on disk versus painting has not yet been measured. The sole current
   SD image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`; its SHA-256 is
-  `4d814419c3038b8e6cceeecfd17c38a583402bbdcb96ccbc24d55efbb110f789`.
+  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
   The FFS loader was replaced; ext2 root was unchanged. No QEMU run was made.
+
+- 2026-10-15: User confirmed Radeon colors are fixed. After hot-plugging the
+  USB keyboard, UHCI root port 2 detected it, but the first physical device
+  descriptor returned type zero and device creation failed with `EIO`.
+  Queue-head and transfer-descriptor pools were cacheable kernel memory even
+  though UHCI uses DMA to read and update them. They now use cache-inhibited
+  DMA pages. Control transfers no longer treat a temporary NAK as success,
+  report only data-stage bytes, and have a bounded wait. `USB HID: Initialized
+  interface` is logged after successful HID setup. The native keyboard test
+  rejects the captured descriptor failure. The rebuilt loader was extracted
+  from the card image and matched byte for byte; root ext2 was unchanged.
+  The single current SD image SHA-256 is
+  `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
+  Physical keyboard operation remains unverified; no QEMU run was made.
 
 Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 to the SD card, then boot with `boot ide:0 serenity.elf weakrng`.
 Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, and `native`.
-Capture the `Radeon: SURFACE_CNTL=` line and check whether desktop colors
-now look normal. The default RAM map remains conservative. The same SD card
-can separately test the upper RAM with
-`boot ide:0 serenity.elf weakrng fullram` after the color check.
+After the desktop appears, plug the USB keyboard into the same root port 2
+and capture serial lines through `USB HID: Initialized interface` or the
+next failure; test that typing works in Terminal. The default RAM map remains
+conservative. The same SD card can separately test the upper RAM with
+`boot ide:0 serenity.elf weakrng fullram` after the keyboard check.
 Check that the loader prints `using installed RAM from /memory/reg` and the
-kernel lists physical RAM ending at `0x1fffffff`. Plug the USB keyboard in
-after firmware boot. The monitor should still report 1024×768/60 until native
+kernel lists physical RAM ending at `0x1fffffff`. The monitor should still
+report 1024×768/60 until native
 mode selection is added.
 Do not build separate cards for each checkpoint or run QEMU verification
 until the user requests it.

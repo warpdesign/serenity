@@ -307,7 +307,6 @@ ErrorOr<void> UHCIController::initialize_device(USB::Device& device)
     constexpr u8 short_device_descriptor_length = 8;
     auto transfer_length = TRY(device.control_transfer(USB_REQUEST_TRANSFER_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR, (DESCRIPTOR_TYPE_DEVICE << 8), 0, short_device_descriptor_length, &dev_descriptor));
 
-    // FIXME: This be "not equal to" instead of "less than", but control transfers report a higher transfer length than expected.
     if (transfer_length < short_device_descriptor_length) {
         dbgln("USB Device: Not enough bytes for short device descriptor. Expected {}, got {}.", short_device_descriptor_length, transfer_length);
         return EIO;
@@ -334,7 +333,6 @@ ErrorOr<void> UHCIController::initialize_device(USB::Device& device)
 
     transfer_length = TRY(device.control_transfer(USB_REQUEST_TRANSFER_DIRECTION_DEVICE_TO_HOST, USB_REQUEST_GET_DESCRIPTOR, (DESCRIPTOR_TYPE_DEVICE << 8), 0, sizeof(USBDeviceDescriptor), &dev_descriptor));
 
-    // FIXME: This be "not equal to" instead of "less than", but control transfers report a higher transfer length than expected.
     if (transfer_length < sizeof(USBDeviceDescriptor)) {
         dbgln("USB Device: Unexpected device descriptor length. Expected {}, got {}.", sizeof(USBDeviceDescriptor), transfer_length);
         return EIO;
@@ -625,9 +623,16 @@ ErrorOr<size_t> UHCIController::submit_control_transfer(Transfer& transfer)
     enqueue_qh(transfer_queue, m_fs_control_qh_anchor);
 
     size_t transfer_size = 0;
+    bool timed_out = false;
+    auto deadline = TimeManagement::the().uptime_ms() + 5000;
     while (!transfer.complete()) {
+        if (TimeManagement::the().uptime_ms() >= deadline) {
+            timed_out = true;
+            break;
+        }
         dbgln_if(USB_DEBUG, "Control transfer size: {}", transfer_size);
         transfer_size = poll_transfer_queue(*transfer_queue);
+        microseconds_delay(10);
     }
 
     dequeue_qh(transfer_queue);
@@ -635,7 +640,16 @@ ErrorOr<size_t> UHCIController::submit_control_transfer(Transfer& transfer)
     transfer_queue->free();
     m_queue_head_pool->release_to_pool(transfer_queue);
 
-    return transfer_size;
+    if (timed_out) {
+        dmesgln_pci(*this, "Control request {:#04x} for device {} timed out", transfer.request().request, pipe.device().address());
+        return ETIMEDOUT;
+    }
+    if (transfer.error_occurred() || transfer_size < sizeof(USBRequestData)) {
+        dmesgln_pci(*this, "Control request {:#04x} for device {} failed", transfer.request().request, pipe.device().address());
+        return EIO;
+    }
+    // The polling helper counts the setup TD too; callers expect only data bytes.
+    return transfer_size - sizeof(USBRequestData);
 }
 
 ErrorOr<size_t> UHCIController::submit_bulk_transfer(Transfer& transfer)
@@ -685,7 +699,9 @@ size_t UHCIController::poll_transfer_queue(QueueHead& transfer_queue)
         u32 status = descriptor->status();
 
         if (status & TransferDescriptor::StatusBits::NAKReceived) {
-            transfer_still_in_progress = false;
+            // A NAK means the endpoint is not ready yet, not that the data
+            // stage completed. The controller will retry the active TD.
+            transfer_still_in_progress = true;
             break;
         }
 
