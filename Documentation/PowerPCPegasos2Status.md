@@ -290,6 +290,14 @@ at about 44 s.
 The IDE driver uses polled PIO transfers; no timing breakdown yet separates
 disk I/O, process loading, and framebuffer updates. The first appearance of
 the pointer before Taskbar is consistent with this staged startup.
+The user later clarified that the Terminal window frame stayed empty for at
+least five seconds before its menu and contents appeared, followed by the
+gray wallpaper and taskbar. The serial log shows Terminal starting at 44.085 s,
+Shell at 49.668 s, and more Shell libraries loading through 58.995 s. The
+Radeon framebuffer is mapped uncached and the current driver exposes no
+hardware blitter or flush path. There is no measured CPU/disk/PCI breakdown,
+so performance work should start with timing those stages rather than assuming
+one cause.
 
 The physical RV280 driver requested 32-bit aperture byte swapping while also
 setting `SURF_TRANSLATION_DIS`. [Linux radeonfb](https://github.com/torvalds/linux/blob/master/drivers/video/fbdev/aty/radeon_base.c)

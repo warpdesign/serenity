@@ -305,6 +305,12 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   The single current SD image SHA-256 is
   `3c086bc0b4f3d4cf155d0648f67b58c06537c1a26b0c31f480be8a74cb6fdc3a`.
   Physical keyboard operation remains unverified; no QEMU run was made.
+  The user also reported Terminal's empty frame lasting at least five seconds
+  before its menu/content, followed by wallpaper and taskbar. In the serial
+  log Terminal starts at 44.085 s, Shell at 49.668 s, and Shell libraries
+  continue loading until 58.995 s. IDE uses polled PIO and Radeon framebuffer
+  CPU access is uncached; neither has been timed separately yet. Do not treat
+  the staged startup as one graphics stall without measurements.
 
 Next: write only the updated `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 to the SD card, then boot with `boot ide:0 serenity.elf weakrng`.
