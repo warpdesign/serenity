@@ -105,6 +105,7 @@ set(CMD_SOURCES_CPP
     markdown-check.cpp
     matroska.cpp
     md.cpp
+    membench.cpp
     memstat.cpp
     mkdir.cpp
     mkfifo.cpp

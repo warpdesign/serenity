@@ -66,6 +66,8 @@ def create_root(source, build, user_loader, work):
         "bin/lspci": "Userland/Utilities/lspci",
         "bin/lsusb": "Userland/Utilities/lsusb",
         "bin/memstat": "Userland/Utilities/memstat",
+        "bin/membench": "Userland/Utilities/membench",
+        "bin/disk_benchmark": "Userland/Utilities/disk_benchmark",
         "bin/lsblk": "Userland/Utilities/lsblk",
         "bin/lsdev": "Userland/Utilities/lsdev",
         "bin/lsirq": "Userland/Utilities/lsirq",

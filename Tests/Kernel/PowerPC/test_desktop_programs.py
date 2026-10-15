@@ -116,6 +116,7 @@ def prepare_root(args, source, build, user_loader, work, quick):
         "lsblk": "/bin/lsblk",
         "lsdev": "/bin/lsdev",
         "lsirq": "/bin/lsirq",
+        "membench_verify": "/bin/membench --verify",
     }
     if not quick:
         commands.update({
