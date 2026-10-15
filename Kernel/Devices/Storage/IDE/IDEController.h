@@ -8,6 +8,7 @@
 
 #include <AK/Vector.h>
 #include <Kernel/Bus/PCI/Definitions.h>
+#include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Devices/Storage/StorageController.h>
 
 namespace Kernel {
@@ -31,6 +32,7 @@ private:
     IDEController();
 
     ErrorOr<void> initialize_channel(PCI::DeviceIdentifier const&, u8 channel_index);
+    void configure_dma(PCI::DeviceIdentifier const&, IDEChannel&, u8 channel_index, IDEChannel::Drive, IDEChannel::Identity const&);
 
     Vector<NonnullRefPtr<IDEDevice>> m_devices;
 };

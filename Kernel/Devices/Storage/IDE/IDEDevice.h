@@ -8,7 +8,7 @@
 
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Devices/Storage/StorageDevice.h>
-#include <Kernel/Library/KBuffer.h>
+#include <Kernel/Memory/Region.h>
 
 namespace Kernel {
 
@@ -25,7 +25,7 @@ public:
     virtual void start_request(AsyncBlockDeviceRequest&) override;
 
 private:
-    IDEDevice(NonnullRefPtr<IDEChannel>, IDEChannel::Drive, IDEChannel::Identity, NonnullOwnPtr<KBuffer> bounce_buffer, LUNAddress, u32 hardware_relative_controller_id);
+    IDEDevice(NonnullRefPtr<IDEChannel>, IDEChannel::Drive, IDEChannel::Identity, NonnullOwnPtr<Memory::Region> bounce_buffer, PhysicalAddress bounce_buffer_physical, LUNAddress, u32 hardware_relative_controller_id);
 
     // ^DiskDevice
     virtual StringView class_name() const override { return "IDEDevice"sv; }
@@ -35,7 +35,9 @@ private:
     NonnullRefPtr<IDEChannel> const m_channel;
     IDEChannel::Drive const m_drive;
     bool const m_use_lba48;
-    NonnullOwnPtr<KBuffer> m_bounce_buffer;
+    // Physically contiguous and cacheable; the channel keeps its caches coherent around DMA.
+    NonnullOwnPtr<Memory::Region> m_bounce_buffer;
+    PhysicalAddress const m_bounce_buffer_physical;
 };
 
 }
