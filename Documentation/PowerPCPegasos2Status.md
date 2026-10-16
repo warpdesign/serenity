@@ -942,11 +942,16 @@ The existing `/bin/membench -f /dev/gpu/connector0` tests both RAM and
 framebuffer access on the current card, including the RAM-to-framebuffer
 `memcpy` path and 64-bit floating-point stores. It restores the screen after
 briefly changing its pixels. The `anon` user belongs to the connector's
-`window` access group. Physical throughput results are pending. If
-framebuffer writes dominate, compare the existing copy methods and PCI
-aperture mapping before changing the compositor. If they do not, collect
-WindowServer composition, framebuffer-copy, dirty-area, and input-delay
-timings in one future diagnostic image. Linux's
+`window` access group. On the physical card, the user measured 10.8 MB/s for
+framebuffer-to-RAM `memcpy`, 83.9 MB/s for RAM-to-framebuffer `memcpy`, and
+132 MB/s for 32-bit framebuffer stores. The routine compositor path uses the
+83.9 MB/s copy, so a full 1024×768×32-bit upload alone would take about
+37 ms; 60 full-screen updates per second require about 189 MB/s before any
+RAM composition. A menu hover normally dirties just two small item rows and
+the cursor, so these rates cannot yet explain menu lag without knowing the
+actual dirty area and composition time. RAM benchmark rates were not supplied.
+The next diagnostic should time WindowServer composition, framebuffer copy,
+dirty area, and input delay in one image. Linux's
 [radeonfb 2D acceleration path](https://github.com/torvalds/linux/blob/master/drivers/video/fbdev/aty/radeon_accel.c)
 shows that this Radeon family can accelerate VRAM fills and copies, but those
 operations do not by themselves eliminate uploads of CPU-composited pixels.
