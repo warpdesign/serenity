@@ -722,9 +722,10 @@ across the channel versus 134 successful DMA transfers. The IRQ counter
 increments even outside an active DMA transfer, so the aggregate mismatch
 does not identify which transfers received extra IRQs. The PRD pointer read
 back as programmed and the channel reset to ATA status `0x50`, after which
-PIO continued. This is an
-unfinished DMA transfer, not the stale `0x21` versus IRQ `0x24` race. An
-interrupt-driven wait would still time out on this transfer.
+PIO continued. This is an unfinished DMA transfer, not the stale `0x21`
+versus IRQ `0x24` race. The log does not show whether frequent PCI status
+reads contributed to the stall; an IRQ wait would time out if the engine
+remained active without asserting an interrupt.
 
 The cause of this remaining stall is unknown. Linux's
 [VT8231 driver](https://github.com/torvalds/linux/blob/master/drivers/ata/pata_via.c)
@@ -733,6 +734,20 @@ its UDMA2 timing calculation agrees with the programmed `0xf4`. The existing
 card can isolate timing without another write: its `udma=0` boot option
 selects the slowest supported UDMA mode. Do not infer that the SD adapter is
 faulty from this log; the same hardware reportedly runs UDMA under MorphOS.
+
+The next source revision replaces the ten-microsecond bus-master status poll
+with an IRQ-backed wait on channels with a registered handler. The IRQ handler
+records status, acknowledges the latch, and wakes the waiting I/O thread.
+The wait has a five-second deadline and samples status once more at timeout
+to catch a completion racing the timer. Channels with masked PCI interrupts
+still use the original poll. This also avoids a status read immediately after
+setting bus-master START, which [Linux's BMDMA implementation](https://github.com/torvalds/linux/blob/master/drivers/ata/libata-sff.c)
+warns may disturb some controllers. On failure, logs now show whether the
+IRQ wait expired, the ATA taskfile registers, and how many bus-master IRQs
+arrived outside an active transfer. A physical boot check requires an
+IRQ-waited success and no later PIO fallback for a stable-DMA result. The
+PowerPC kernel and host regression checks build; physical behavior remains
+unverified. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

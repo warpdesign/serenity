@@ -15,6 +15,7 @@
 #include <Kernel/Interrupts/IRQHandler.h>
 #include <Kernel/Library/Assertions.h>
 #include <Kernel/Memory/MemoryManager.h>
+#include <Kernel/Tasks/Thread.h>
 #include <Kernel/Time/TimeManagement.h>
 
 namespace Kernel {
@@ -126,6 +127,9 @@ bool IDEChannel::handle_dma_interrupt()
         m_dma_status_at_irq.store(status);
         m_drive_status_at_irq.store(drive_status);
         m_dma_irq_observed.store(true);
+        m_dma_wait_queue.wake_one();
+    } else {
+        m_dma_interrupts_outside_transfer.fetch_add(1);
     }
     return true;
 }
@@ -390,11 +394,26 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     full_memory_fence();
     microseconds_delay(1);
 
-    // Poll both the controller latch and the IRQ handler's recorded completion.
+    // The IRQ handler records and acknowledges completion. Sleep while waiting
+    // for it so repeated PCI I/O status reads cannot monopolize the bridge.
+    // Keep the controller-latch poll for systems that can mask the IRQ.
     ErrorOr<void> result = Error::from_errno(ETIMEDOUT);
     u8 drive_status = 0;
     u8 engine_status = 0;
     bool stopped_for_interrupt = false;
+    bool waited_for_irq = false;
+    bool wait_timed_out = false;
+    auto deadline = TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE) + Duration::from_seconds(5);
+    auto wait_for_dma_irq = [&] {
+        waited_for_irq = true;
+        auto wait_result = m_dma_wait_queue.wait_on(Thread::BlockTimeout(true, &deadline), "IDE DMA"sv);
+        wait_timed_out = wait_result == Thread::BlockResult::InterruptedByTimeout;
+    };
+    // Linux's bus-master driver deliberately avoids reading DMA status right
+    // after setting START: some controllers are upset by that access. An IRQ
+    // that arrives before we block is retained by the wait queue.
+    if (m_dma_irq_handler && !m_dma_irq_observed.load())
+        wait_for_dma_irq();
     for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
         drive_status = alternate_status();
         u8 polled_engine_status = m_bus_master->read8(bus_master_status);
@@ -425,7 +444,15 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
             }
             break;
         }
-        microseconds_delay(status_poll_delay_us);
+        // A completion can race the timeout callback. Take one final status
+        // sample before declaring that no interrupt arrived.
+        if (wait_timed_out)
+            break;
+        if (m_dma_irq_handler) {
+            wait_for_dma_irq();
+        } else {
+            microseconds_delay(status_poll_delay_us);
+        }
     }
 
     u8 engine_command = result.is_error() ? m_bus_master->read8(bus_master_command) : 0;
@@ -442,6 +469,10 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
         Processor::flush_data_cache(VirtualAddress(buffer), size);
     if (result.is_error()) {
         dmesgln("IDE: DMA {} of {} sectors at {} failed, drive status {:#02x}, drive error {:#02x}, DMA status {:#02x}", is_write ? "write"sv : "read"sv, count, lba, drive_status, drive_error, engine_status);
+        dmesgln("IDE: DMA wait timed out {}, taskfile count {:#02x}, LBA {:#02x}:{:#02x}:{:#02x}, device {:#02x}", wait_timed_out,
+            m_command_block->read8(ATA_REG_SECCOUNT0), m_command_block->read8(ATA_REG_LBA2),
+            m_command_block->read8(ATA_REG_LBA1), m_command_block->read8(ATA_REG_LBA0),
+            m_command_block->read8(ATA_REG_HDDEVSEL));
         dmesgln("IDE: DMA PRD at {}: buffer {:#08x}, bytes {}, flags {:#04x}", m_descriptor_table_physical,
             static_cast<u32>(descriptors[0].address), static_cast<u16>(descriptors[0].byte_count), static_cast<u16>(descriptors[0].flags));
         dmesgln("IDE: DMA registers: command {:#02x}, PRD pointer {:#08x}", engine_command, descriptor_pointer);
@@ -449,9 +480,14 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
             m_dma_interrupt_count.load() - interrupt_count_before, m_dma_irq_observed.load(), stopped_for_interrupt,
             m_dma_status_at_irq.load(), m_drive_status_at_irq.load());
         dmesgln("IDE: DMA history: {} successful transfers, {} handled interrupts", m_dma_success_count, m_dma_interrupt_count.load());
+        dmesgln("IDE: DMA IRQs outside an active transfer: {}", m_dma_interrupts_outside_transfer.load());
     } else if (++m_dma_success_count == 1) {
         dmesgln("IDE: First DMA transfer succeeded: drive status {:#02x}, DMA status {:#02x}, handled interrupt {}",
             drive_status, engine_status, m_dma_irq_observed.load());
+    }
+    if (!result.is_error() && waited_for_irq && !m_reported_irq_wait_success) {
+        m_reported_irq_wait_success = true;
+        dmesgln("IDE: First IRQ-waited DMA transfer succeeded");
     }
     return result;
 }

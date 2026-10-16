@@ -19,14 +19,15 @@
 #include <Kernel/Locking/Mutex.h>
 #include <Kernel/Memory/PhysicalAddress.h>
 #include <Kernel/Memory/Region.h>
+#include <Kernel/Tasks/DeprecatedWaitQueue.h>
 
 namespace Kernel {
 
 class IDEChannelIRQHandler;
 
 // One ATA channel (primary or secondary) of a PCI IDE controller. Transfers use bus-master
-// DMA when the controller and drive allow it, otherwise PIO; completion is
-// polled from the bus-master latch or recorded by an IRQ handler.
+// DMA when the controller and drive allow it, otherwise PIO. DMA completion
+// waits for a registered IRQ, or polls the bus-master latch without one.
 class IDEChannel final : public AtomicRefCounted<IDEChannel> {
 public:
     enum class Drive : u8 {
@@ -81,12 +82,15 @@ private:
     NonnullOwnPtr<IOWindow> m_control_block;
     OwnPtr<IOWindow> m_bus_master;
     OwnPtr<IDEChannelIRQHandler> m_dma_irq_handler;
+    DeprecatedWaitQueue m_dma_wait_queue;
     Atomic<bool> m_dma_in_progress { false };
     Atomic<bool> m_dma_irq_observed { false };
     Atomic<u32> m_dma_interrupt_count { 0 };
+    Atomic<u32> m_dma_interrupts_outside_transfer { 0 };
     Atomic<u8> m_dma_status_at_irq { 0 };
     Atomic<u8> m_drive_status_at_irq { 0 };
     u32 m_dma_success_count { 0 };
+    bool m_reported_irq_wait_success { false };
     OwnPtr<Memory::Region> m_descriptor_table;
     PhysicalAddress m_descriptor_table_physical;
     Array<bool, 2> m_dma_enabled {};

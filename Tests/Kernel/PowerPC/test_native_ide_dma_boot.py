@@ -21,6 +21,8 @@ def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2, requ
         raise AssertionError("a disk request or the init process failed")
     if require_stable_dma and ("IDE: First DMA transfer succeeded" not in log or "IDE: Master drive DMA transfer failed" in log):
         raise AssertionError("DMA did not remain operational through boot")
+    if require_stable_dma and "IDE: First IRQ-waited DMA transfer succeeded" not in log:
+        raise AssertionError("DMA did not complete while waiting for its IRQ")
     if "SystemServer(9): Activating" not in log:
         raise AssertionError("the initial services did not start after disk access")
     if require_desktop and "Entering WindowServer main loop" not in log:
@@ -50,6 +52,21 @@ Entering WindowServer main loop
 """
     check_dma_boot(recovered, False)
     check_dma_boot(recovered, True)
+    stalled_after_progress = recovered.replace(
+        "IDE: DMA read of 8 sectors at 68136 failed, drive status 0x58, DMA status 0x21",
+        "IDE: First DMA transfer succeeded: drive status 0x50, DMA status 0x24, handled interrupt true\n"
+        "IDE: DMA read of 8 sectors at 635776 failed, drive status 0x58, drive error 0x00, DMA status 0x21\n"
+        "IDE: DMA IRQ this transfer: 0 (recorded false, stopped engine false), BM at IRQ 0x00, ATA at IRQ 0x00\n"
+        "IDE: DMA history: 134 successful transfers, 138 handled interrupts",
+    )
+    check_dma_boot(stalled_after_progress, True)
+    try:
+        check_dma_boot(stalled_after_progress, True, require_stable_dma=True)
+    except AssertionError as error:
+        if "DMA did not remain operational" not in str(error):
+            raise
+    else:
+        raise AssertionError("a later DMA stall must fail the stable boot check")
     try:
         check_dma_boot(recovered, True, require_stable_dma=True)
     except AssertionError as error:
@@ -61,6 +78,14 @@ Entering WindowServer main loop
     stable = stable.replace("IDE: DMA read of 8 sectors at 68136 failed, drive status 0x58, DMA status 0x21\n", "")
     stable = stable.replace("IDE: Master drive DMA transfer failed (Error(errno=69)), using PIO from now on\n", "")
     stable = stable.replace("IDE: Channel reset after DMA failure, drive status 0x50\n", "")
+    try:
+        check_dma_boot(stable, True, require_stable_dma=True)
+    except AssertionError as error:
+        if "waiting for its IRQ" not in str(error):
+            raise
+    else:
+        raise AssertionError("a polled DMA boot must not pass the IRQ wait check")
+    stable += "IDE: First IRQ-waited DMA transfer succeeded\n"
     check_dma_boot(stable, True, require_stable_dma=True)
     try:
         check_dma_boot("IDE: channel 0 in legacy mode\n" + recovered, True)
