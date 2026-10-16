@@ -895,6 +895,22 @@ the contribution of backup-write avoidance from cache-lock interleaving, nor
 establish long-term DMA stability or raw-device throughput. No QEMU run was
 made.
 
+For a performance comparison, the PowerPC kernel was rebuilt with
+`ENABLE_KERNEL_UNDEFINED_SANITIZER=OFF` and
+`ENABLE_KERNEL_UNDEFINED_SANITIZER_ALWAYS_DEADLY=OFF`, without changing
+source or userland. The kernel ELF shrank from about 26 MiB to 14 MiB and
+the embedded SmartFirmware loader from 5.9 MiB to 2.3 MiB. The sole named
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` now contains this loader;
+its SHA-256 is
+`853650199251210d4d2b5673600e965a332dbfad1f1ba9a2ff4aae2ec4ac1bc7`.
+The loader extracted from FFS matches the new ELF, and the entire ext2
+partition matches the preceding image byte for byte. The compiler flags have
+no `-fsanitize=undefined`, and the loader's compressed kernel matches the
+rebuilt kernel ELF. No physical boot of this variant has been reported yet;
+no QEMU run was made. Compare it with the prior `dma fullram weakrng` boot
+using the time to WindowServer's main loop, full VFS sync durations, and the
+time for Shell to appear.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
