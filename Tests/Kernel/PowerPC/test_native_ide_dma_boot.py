@@ -8,9 +8,9 @@ import os
 from pathlib import Path
 
 
-def check_dma_boot(log: str, require_desktop: bool) -> None:
-    if "IDE: Master drive using Ultra DMA mode 2" not in log:
-        raise AssertionError("the unconfigured VIA drive did not start in conservative UDMA2")
+def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2) -> None:
+    if f"IDE: Master drive using Ultra DMA mode {expected_mode}" not in log:
+        raise AssertionError(f"the VIA drive did not start in UDMA{expected_mode}")
     if "IDE: Master drive DMA transfer failed" in log and "IDE: Channel reset after DMA failure, drive status" not in log:
         raise AssertionError("the drive was not reset before PIO fallback")
     if "IDEDevice: Request for block" in log or "Init process quit unexpectedly" in log:
@@ -44,6 +44,7 @@ Entering WindowServer main loop
 """
     check_dma_boot(recovered, False)
     check_dma_boot(recovered, True)
+    check_dma_boot(recovered.replace("mode 2", "mode 0"), True, 0)
     try:
         check_dma_boot(recovered.replace("IDE: Channel reset after DMA failure, drive status 0x50\n", ""), True)
     except AssertionError:
@@ -59,6 +60,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--normal", action="store_true")
     parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--mode", type=int, default=2)
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -66,7 +68,7 @@ def main() -> None:
     path = os.environ.get("PEGASOS2_NATIVE_SERIAL_LOG")
     if not path:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
-    check_dma_boot(Path(path).read_text(errors="replace"), args.normal)
+    check_dma_boot(Path(path).read_text(errors="replace"), args.normal, args.mode)
 
 
 if __name__ == "__main__":

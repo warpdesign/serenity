@@ -333,13 +333,14 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     }
 
     m_bus_master->write8(bus_master_command, direction);
+    u8 drive_error = result.is_error() ? m_command_block->read8(ATA_REG_ERROR) : 0;
     m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
     // Reading the status register acknowledges the drive.
     (void)m_command_block->read8(ATA_REG_STATUS);
     if (!is_write)
         Processor::flush_data_cache(VirtualAddress(buffer), size);
     if (result.is_error()) {
-        dmesgln("IDE: DMA {} of {} sectors at {} failed, drive status {:#02x}, DMA status {:#02x}", is_write ? "write"sv : "read"sv, count, lba, drive_status, engine_status);
+        dmesgln("IDE: DMA {} of {} sectors at {} failed, drive status {:#02x}, drive error {:#02x}, DMA status {:#02x}", is_write ? "write"sv : "read"sv, count, lba, drive_status, drive_error, engine_status);
         dmesgln("IDE: DMA PRD at {}: buffer {:#08x}, bytes {}, flags {:#04x}", m_descriptor_table_physical,
             static_cast<u32>(descriptors[0].address), static_cast<u16>(descriptors[0].byte_count), static_cast<u16>(descriptors[0].flags));
     }

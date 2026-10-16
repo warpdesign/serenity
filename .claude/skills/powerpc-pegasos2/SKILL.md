@@ -407,16 +407,39 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   `Documentation/UpstreamBugBacklog.md`. Source now synthesizes HID key-down
   events after 500 ms and every 40 ms until release, another key takes over,
   or device detach; modifiers and lock keys do not repeat. Host regression
-  and PowerPC kernel build pass. **Do not replace the current card image
-  while the user writes/tests it.** That image does not include this later
-  USB change. Wait for the user's test result and combine any needed fixes
-  into a single subsequent card rebuild.
+  and PowerPC kernel build pass. The first image written by the user did not
+  include this USB change; a later image below now does.
 
-Next: write the rebuilt card once. Use `boot ide:0 serenity.elf /?` to check
-the firmware prompt, then type `fullram weakrng` for default conservative
-UDMA2. Confirm `exit` returns to SmartFirmware if testing that path first.
-If it still stalls, the same new image accepts `udma=0` or `nodma` without
-another rewrite; try `udma=5` only after a lower DMA mode works.
+- 2026-10-16: First physical boot of the rebuilt card without `nodma` reached
+  the desktop, but **DMA itself failed**. `fullram weakrng` selected UDMA2
+  (`0x17 -> 0xf4`); at uptime 14.154 a read of eight sectors at LBA 198360
+  failed with ATA status `0x23` and bus-master status `0x21`. PRD pointed to
+  `0x05d77000`, 4096 bytes, EOT `0x8000`. ATA soft reset returned `0x50`;
+  the driver then used PIO and WindowServer started at 32.811 s. Full capture:
+  `/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-637a902f-e672-4349-a2c1-71820db91d58-txt.txt`.
+  `PowerPCNativeIDEDMABootCheck` quick and normal pass on this capture, which
+  verifies recovery, not continuing DMA. The user then booted the same card
+  directly with `boot ide:0 serenity.elf fullram weakrng udma=0` (no `/?`
+  required). UDMA0 (`0x17 -> 0xf5`) also failed an eight-sector read, now at
+  LBA 353536 at 20.842 s; ATA status was `0x73`, bus-master status `0x21`.
+  Reset returned `0x50`, and PIO fallback again reached the desktop. Full
+  second capture:
+  `/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-dbef3f0f-8325-4dd0-9203-61f8af166dcd-txt.txt`.
+  `test_native_ide_dma_boot.py --normal --mode 0` passes on the second log.
+  UDMA speed alone does not explain the failure. The drive selected mask was
+  `0x04` before the UDMA0 request, versus `0x00` before the prior UDMA2 run.
+  The local 929 MiB card image was then rebuilt with the committed HID
+  held-key repeat fix and an additional ATA error-register diagnostic on DMA
+  failure. The ext2 root is unchanged. New SHA-256:
+  `ef9c13eb88454b5f468757f17fabe5c7f40b452840d554d4f0c737f73a23f4cb`.
+  The new image needs physical repeat and DMA tests; do not claim DMA works
+  from the recovered desktop boot.
+
+Next: test the new card's USB held-key repeat and capture the ATA error byte
+if its default UDMA2 fails. The new image accepts `udma=0` or `nodma`
+without another rewrite. Do not assume a faster UDMA mode will fix the
+observed UDMA0 failure. `boot ide:0 serenity.elf /?` opens the optional firmware
+prompt; `exit` should return to SmartFirmware without restarting it.
 Short options are `/?`, `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, `native`, `nodma`, `udma=<mode>`, and `fixedio`. Check the serial log for
 `legacy I/O ports at 0xfe000000`; if the board goes silent after `entering kernel`, retry with `fixedio`.

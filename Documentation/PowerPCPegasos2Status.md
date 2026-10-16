@@ -402,14 +402,13 @@ loaded image. Entering `exit` returns to SmartFirmware without using its
 help again with `/?`. This interactive firmware path is built and host-tested,
 but a physical prompt and return test is still needed.
 
-The rebuilt one-card image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+The first rebuilt one-card image was `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 (929 MiB), SHA-256 `44ae3b8869c28135f33d0e81beb798ab32cb766a6587283508f9ef8a67a31d92`.
 Its FFS loader and ext2 root were extracted/compared against the built inputs.
-For the next physical test, start with `boot ide:0 serenity.elf /?`, enter
-`fullram weakrng`, and capture the first `IDE: DMA ...` failure if any. In the
-same prompt, `fullram weakrng udma=0` tests the lowest UDMA mode, while
-`fullram weakrng nodma` remains the known boot path. This has not been
-verified on physical hardware yet.
+That first image subsequently booted the desktop with `fullram weakrng` after
+DMA failed and reset recovered it. The current image below supersedes it.
+The user also tested `fullram weakrng udma=0` on that image, as detailed
+below; `fullram weakrng nodma` remains the known PIO boot path.
 
 While the user writes that card, a separate USB keyboard issue was identified:
 holding a key produces a single press. Commit `3ee3673b02` correctly advances
@@ -420,8 +419,39 @@ state-diff-only behavior is present in upstream SerenityOS (2026-10-16).
 The HID driver source now schedules 500 ms initial and 40 ms subsequent
 key-down repeats, stops them on release/disconnect, and excludes modifiers and
 lock keys. Host repeat tests and a PowerPC kernel build pass. The card image
-being written by the user is **unchanged** and does not include this new fix;
-a later image will be needed for physical repeat testing.
+first written by the user did not include this fix. A subsequent image now
+includes it for physical repeat testing.
+
+The user's 2026-10-16 serial capture at
+`/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-637a902f-e672-4349-a2c1-71820db91d58-txt.txt`
+shows a complete desktop boot with `fullram weakrng` and no `nodma`. The IDE
+drive selected UDMA2 (VIA timing `0x17 -> 0xf4`), then a DMA read of eight
+sectors at LBA 198360 failed at 14.154 s: drive status `0x23`, bus-master
+status `0x21`, PRD buffer `0x05d77000`, 4096 bytes, EOT `0x8000`.
+The channel reset returned drive status `0x50` and PIO fallback took over;
+WindowServer entered its main loop at 32.811 s and the Shell started around
+50 s. Thus the boot recovery works, but this run does **not** establish
+reliable DMA. The physical boot-log regression passes for recovery and desktop
+startup. A second run of that same card with
+`boot ide:0 serenity.elf fullram weakrng udma=0` also reached the desktop,
+but DMA failed again. It selected UDMA0 (`0x17 -> 0xf5`) and failed an
+eight-sector read at LBA 353536 at 20.842 s, with drive status `0x73` and
+bus-master status `0x21`; reset returned `0x50` and PIO fallback resumed.
+The drive's IDENTIFY selected mask was `0x04` before UDMA0 was requested,
+unlike `0x00` on the prior boot; why that changed is not established. The
+second full capture is
+`/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-dbef3f0f-8325-4dd0-9203-61f8af166dcd-txt.txt`.
+Both physical logs pass the recovery/desktop regression; neither proves
+reliable DMA. Since UDMA0 also fails, transfer speed alone is insufficient
+to explain the problem. The subsequent image records the ATA error register to
+separate interface CRC or media errors from a controller-side stall.
+
+The current 929 MiB image at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+has SHA-256 `ef9c13eb88454b5f468757f17fabe5c7f40b452840d554d4f0c737f73a23f4cb`.
+It includes the HID key-repeat commit and logs the ATA error register on a
+DMA failure. The ext2 root is the same as the first rebuilt image. Its boot
+partition and root have been compared to the built inputs; the new image
+still needs a physical run.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt
