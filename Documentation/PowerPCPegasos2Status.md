@@ -826,6 +826,19 @@ The reported total time of 1,649 ms conflicts with the tool's 65,000 B/s
 write rate for a 1 MiB file (which implies roughly 16 seconds), so only the
 rates are used for comparison.
 
+A read-only `membench --no-ram --disk /dev/hda --disk-mib 8
+--disk-block-kib 64` test returned permission denied for the desktop user;
+no privilege escalation or raw disk write was attempted. Source inspection
+then found that `StorageDevice::read()` and `write()` cap every request at one
+page because older PATA controllers use a one-page DMA buffer. The Pegasos
+IDE device already has a contiguous 64 KiB buffer, so the source now lets
+that device advertise a 64 KiB limit while all other storage devices retain
+the one-page default. A host regression checks that a 1 MiB request is
+planned as sixteen IDE transfers instead of 256 page-sized transfers; the
+PowerPC kernel builds. This is not in the currently running SD image and
+does not change ext2's separate 4 KiB direct-I/O splitting. Physical
+throughput for the larger raw requests remains unmeasured.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`

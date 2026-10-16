@@ -105,6 +105,20 @@ add_custom_target(KernelIDEDMACompletionCheck
     VERBATIM
 )
 
+set(kernel_storage_transfer_limit_source "${CMAKE_CURRENT_SOURCE_DIR}/IDE/TestStorageTransferLimit.cpp")
+set(kernel_storage_transfer_limit_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-storage-transfer-limit")
+add_custom_target(KernelStorageTransferLimitCheckQuick
+    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_storage_transfer_limit_source}" -o "${kernel_storage_transfer_limit_executable}"
+    COMMAND "${kernel_storage_transfer_limit_executable}"
+    VERBATIM
+)
+add_custom_target(KernelStorageTransferLimitCheck
+    COMMAND "${kernel_storage_transfer_limit_executable}" extended
+    DEPENDS KernelStorageTransferLimitCheckQuick
+    VERBATIM
+)
+
 set(kernel_hid_keyboard_repeat_source "${CMAKE_CURRENT_SOURCE_DIR}/HID/TestKeyboardRepeat.cpp")
 set(kernel_hid_keyboard_repeat_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-HID-keyboard-repeat")
 find_program(KERNEL_HID_HOST_CXX NAMES c++ clang++ REQUIRED)

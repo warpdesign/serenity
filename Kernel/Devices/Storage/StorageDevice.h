@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -84,6 +84,7 @@ public:
 
 protected:
     StorageDevice(LUNAddress, u32 hardware_relative_controller_id, size_t sector_size, u64);
+    virtual size_t max_transfer_size() const;
 
     // ^DiskDevice
     virtual StringView class_name() const override;
@@ -107,7 +108,6 @@ private:
     u32 const m_hardware_relative_controller_id { 0 };
 
     u64 const m_max_addressable_block { 0 };
-    size_t const m_blocks_per_page { 0 };
 };
 
 }

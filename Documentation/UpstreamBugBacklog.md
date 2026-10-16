@@ -45,6 +45,23 @@ submitted upstream as of 2026-10-16.
   partial-block, allocation, cache-coherency, or error semantics. Add a
   regression that checks fewer device requests for a large direct write.
 
+## Common storage layer limits every raw request to one page
+
+- **Observed:** A read-only `membench` test of `/dev/hda` could not be run as
+  the unprivileged desktop user. Source review shows the test would have been
+  limited to 4 KiB device requests despite asking for 64 KiB reads.
+- **Upstream source:** [StorageDevice.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/Devices/Storage/StorageDevice.cpp)
+  caps both read and write requests at `PAGE_SIZE` because an older PATA
+  channel has a one-page DMA buffer. Confirmed on upstream `master` on
+  2026-10-16.
+- **Local fix:** The common storage device retains a one-page default and
+  lets the Pegasos IDE device advertise its existing 64 KiB contiguous DMA
+  buffer. A host regression checks that a 1 MiB raw request now plans sixteen
+  64 KiB IDE requests instead of 256 one-page requests. The PowerPC kernel
+  builds; physical validation is pending, and the current SD image is unchanged.
+- **Upstream scope:** Let each storage driver report its safe maximum transfer
+  size while preserving the one-page limit for drivers that need it.
+
 ## USB HID keyboards have no held-key repeat
 
 - **Observed:** On the Pegasos 2, a USB keyboard now registers separate

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2020-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -11,6 +11,7 @@
 #include <Kernel/Devices/Device.h>
 #include <Kernel/Devices/Storage/StorageDevice.h>
 #include <Kernel/Devices/Storage/StorageManagement.h>
+#include <Kernel/Devices/Storage/StorageTransferLimit.h>
 #include <Kernel/FileSystem/OpenFileDescription.h>
 #include <Kernel/FileSystem/SysFS/Subsystems/DeviceIdentifiers/BlockDevicesDirectory.h>
 #include <Kernel/FileSystem/SysFS/Subsystems/DeviceIdentifiers/SymbolicLinkDeviceComponent.h>
@@ -24,8 +25,12 @@ StorageDevice::StorageDevice(LUNAddress logical_unit_number_address, u32 hardwar
     , m_logical_unit_number_address(logical_unit_number_address)
     , m_hardware_relative_controller_id(hardware_relative_controller_id)
     , m_max_addressable_block(max_addressable_block)
-    , m_blocks_per_page(PAGE_SIZE / block_size())
 {
+}
+
+size_t StorageDevice::max_transfer_size() const
+{
+    return PAGE_SIZE;
 }
 
 ErrorOr<void> StorageDevice::after_inserting()
@@ -83,15 +88,10 @@ ErrorOr<size_t> StorageDevice::read(OpenFileDescription&, u64 offset, UserOrKern
     size_t nread = min(static_cast<size_t>((max_mathematical_addressable_block() * block_size()) - offset), len);
     u64 index = offset >> block_size_log();
     off_t offset_within_block = 0;
-    size_t whole_blocks = nread >> block_size_log();
-    size_t remaining = nread - (whole_blocks << block_size_log());
-
-    // PATAChannel will chuck a wobbly if we try to read more than PAGE_SIZE
-    // at a time, because it uses a single page for its DMA buffer.
-    if (whole_blocks >= m_blocks_per_page) {
-        whole_blocks = m_blocks_per_page;
-        remaining = 0;
-    }
+    VERIFY(max_transfer_size() >= block_size());
+    auto plan = plan_storage_transfer(nread, block_size(), max_transfer_size());
+    size_t whole_blocks = plan.whole_blocks;
+    size_t remaining = plan.remaining_bytes;
 
     if (nread < block_size())
         offset_within_block = offset - (index << block_size_log());
@@ -148,15 +148,10 @@ ErrorOr<size_t> StorageDevice::write(OpenFileDescription&, u64 offset, UserOrKer
     size_t nwrite = min(static_cast<size_t>((max_mathematical_addressable_block() * block_size()) - offset), len);
     u64 index = offset >> block_size_log();
     off_t offset_within_block = 0;
-    size_t whole_blocks = nwrite >> block_size_log();
-    size_t remaining = nwrite - (whole_blocks << block_size_log());
-
-    // PATAChannel will chuck a wobbly if we try to write more than PAGE_SIZE
-    // at a time, because it uses a single page for its DMA buffer.
-    if (whole_blocks >= m_blocks_per_page) {
-        whole_blocks = m_blocks_per_page;
-        remaining = 0;
-    }
+    VERIFY(max_transfer_size() >= block_size());
+    auto plan = plan_storage_transfer(nwrite, block_size(), max_transfer_size());
+    size_t whole_blocks = plan.whole_blocks;
+    size_t remaining = plan.remaining_bytes;
 
     if (nwrite < block_size())
         offset_within_block = offset - (index << block_size_log());

@@ -29,6 +29,7 @@ private:
 
     // ^DiskDevice
     virtual StringView class_name() const override { return "IDEDevice"sv; }
+    virtual size_t max_transfer_size() const override { return IDEChannel::max_dma_transfer_size; }
 
     ErrorOr<void> handle_request(AsyncBlockDeviceRequest&);
 
