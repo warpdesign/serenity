@@ -17,14 +17,21 @@ constexpr bool ide_dma_pin_interrupt_is_masked(u16 pci_command)
 
 // PCI IDE bus-master status bit 2 is set by a rising edge on the drive's
 // INTRQ line. Active alone means the command is still in progress.
-constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status)
+constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status, bool irq_observed = false)
 {
     constexpr u8 busy_or_data_request_or_error = 0x80 | 0x08 | 0x20 | 0x01;
     constexpr u8 bus_master_interrupt = 0x04;
     constexpr u8 bus_master_error = 0x02;
-    return (bus_master_status & bus_master_interrupt)
+    return ((bus_master_status & bus_master_interrupt) || irq_observed)
         && !(bus_master_status & bus_master_error)
         && !(drive_status & busy_or_data_request_or_error);
+}
+
+// The IRQ handler acknowledges completion without clearing a simultaneous
+// bus-master error before the transfer loop can observe it.
+constexpr u8 ide_dma_irq_acknowledgement(u8 bus_master_status)
+{
+    return (bus_master_status & ~0x02) | 0x04;
 }
 
 constexpr bool ide_drive_ready_after_reset(u8 status)

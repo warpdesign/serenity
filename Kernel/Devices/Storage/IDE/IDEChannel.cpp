@@ -12,6 +12,7 @@
 #include <Kernel/Devices/Storage/AHCI/Definitions.h>
 #include <Kernel/Devices/Storage/IDE/DMACompletion.h>
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
+#include <Kernel/Interrupts/IRQHandler.h>
 #include <Kernel/Library/Assertions.h>
 #include <Kernel/Memory/MemoryManager.h>
 #include <Kernel/Time/TimeManagement.h>
@@ -50,7 +51,22 @@ static constexpr u16 descriptor_end_of_table = 0x8000;
 // A descriptor may not cross a 64 KiB boundary, so a 64 KiB buffer needs at most two.
 static constexpr size_t max_descriptors = 2;
 
-ErrorOr<NonnullRefPtr<IDEChannel>> IDEChannel::create(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master)
+class IDEChannelIRQHandler final : public IRQHandler {
+public:
+    IDEChannelIRQHandler(IDEChannel& channel, InterruptNumber irq)
+        : IRQHandler(irq)
+        , m_channel(channel)
+    {
+    }
+
+    virtual bool handle_irq() override { return m_channel.handle_dma_interrupt(); }
+    virtual StringView purpose() const override { return "IDE DMA"sv; }
+
+private:
+    IDEChannel& m_channel;
+};
+
+ErrorOr<NonnullRefPtr<IDEChannel>> IDEChannel::create(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master, Optional<InterruptNumber> dma_irq)
 {
     OwnPtr<Memory::Region> descriptor_table;
     PhysicalAddress descriptor_table_physical;
@@ -66,7 +82,15 @@ ErrorOr<NonnullRefPtr<IDEChannel>> IDEChannel::create(NonnullOwnPtr<IOWindow> co
             dmesgln("IDE: DMA descriptor table at {}", descriptor_table_physical);
         }
     }
-    return adopt_nonnull_ref_or_enomem(new (nothrow) IDEChannel(move(command_block), move(control_block), move(bus_master), move(descriptor_table), descriptor_table_physical));
+    auto channel = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) IDEChannel(move(command_block), move(control_block), move(bus_master), move(descriptor_table), descriptor_table_physical)));
+    if (channel->m_bus_master && dma_irq.has_value()) {
+        auto handler = TRY(adopt_nonnull_own_or_enomem(new (nothrow) IDEChannelIRQHandler(*channel, dma_irq.value())));
+        // Clear a firmware-pending drive interrupt before unmasking the PIC line.
+        (void)channel->m_command_block->read8(ATA_REG_STATUS);
+        handler->enable_irq();
+        channel->m_dma_irq_handler = move(handler);
+    }
+    return channel;
 }
 
 IDEChannel::IDEChannel(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master, OwnPtr<Memory::Region> descriptor_table, PhysicalAddress descriptor_table_physical)
@@ -78,6 +102,27 @@ IDEChannel::IDEChannel(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWi
 {
     // Transfers are polled, so keep the drives from raising INTRQ.
     m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+}
+
+IDEChannel::~IDEChannel()
+{
+    if (m_dma_irq_handler) {
+        m_dma_irq_handler->disable_irq();
+        m_dma_irq_handler->will_be_destroyed();
+    }
+}
+
+bool IDEChannel::handle_dma_interrupt()
+{
+    auto status = m_bus_master->read8(bus_master_status);
+    if (!(status & bus_master_status_interrupt))
+        return false;
+    // The controller's latch must be read before ATA STATUS, which can clear it.
+    (void)m_command_block->read8(ATA_REG_STATUS);
+    // Preserve a bus-master error for the transfer loop to report and recover.
+    m_bus_master->write8(bus_master_status, ide_dma_irq_acknowledgement(status));
+    m_dma_irq_observed.store(true);
+    return true;
 }
 
 u8 IDEChannel::alternate_status()
@@ -307,13 +352,14 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     u8 direction = is_write ? 0 : bus_master_command_write_to_memory;
     m_bus_master->write8(bus_master_command, direction);
     m_bus_master->write32(bus_master_descriptor_table, m_descriptor_table_physical.get());
-    // The bus-master IDE engine observes the drive's INTRQ edge even though
-    // its PCI interrupt output is masked. Keep nIEN set for polled PIO only.
+    // The bus-master IDE engine observes the drive's INTRQ edge. Keep nIEN
+    // set for polled PIO only.
     m_control_block->write8(ATA_CTL_CONTROL, 0);
     // A previous polled command may have left INTRQ pending. Acknowledge it,
     // then clear the bus master's latch before issuing this DMA command.
     (void)m_command_block->read8(ATA_REG_STATUS);
     m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
+    m_dma_irq_observed.store(false);
     auto command_result = issue_transfer_command(drive, use_lba48, lba, count,
         is_write ? ATA_CMD_WRITE_DMA : ATA_CMD_READ_DMA,
         is_write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT);
@@ -323,7 +369,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     }
     m_bus_master->write8(bus_master_command, direction | bus_master_command_start);
 
-    // Poll the controller's latched INTRQ status; no CPU interrupt is needed.
+    // Poll both the controller latch and the IRQ handler's recorded completion.
     ErrorOr<void> result = Error::from_errno(ETIMEDOUT);
     u8 drive_status = 0;
     u8 engine_status = 0;
@@ -338,7 +384,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
             result = Error::from_errno(EIO);
             break;
         }
-        if (ide_dma_has_completed(drive_status, engine_status)) {
+        if (ide_dma_has_completed(drive_status, engine_status, m_dma_irq_observed.load())) {
             result = {};
             break;
         }

@@ -18,6 +18,9 @@ class IDEDevice;
 // A PCI IDE controller whose channels run in PCI native mode, such as the Pegasos 2's VT8231.
 class IDEController final : public StorageController {
 public:
+    using IRQOverride = Optional<InterruptNumber> (*)(PCI::DeviceIdentifier const&, u8 channel_index);
+
+    static void set_irq_override(IRQOverride);
     static bool is_handled(PCI::DeviceIdentifier const&);
     static ErrorOr<NonnullRefPtr<IDEController>> initialize(PCI::DeviceIdentifier const&);
 

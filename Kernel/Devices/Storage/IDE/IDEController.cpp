@@ -30,6 +30,13 @@ static constexpr u8 via_udma_cable_bit = 1 << 4;
 static constexpr u8 via_udma_enable_bits = 0xe0;
 // Cycle time fields for a 33 MHz PCI clock: ceil(mode cycle time / 10 ns) clamped to 2..7, minus 2.
 static constexpr Array<u8, 6> via_udma100_cycle_fields { 5, 5, 4, 3, 1, 0 };
+static IDEController::IRQOverride s_irq_override;
+
+void IDEController::set_irq_override(IRQOverride override)
+{
+    VERIFY(!s_irq_override);
+    s_irq_override = override;
+}
 // Modes above this need an 80-wire cable.
 
 static u8 via_udma_register_offset(u8 channel_index, IDEChannel::Drive drive)
@@ -65,8 +72,8 @@ ErrorOr<NonnullRefPtr<IDEController>> IDEController::initialize(PCI::DeviceIdent
 {
     auto controller = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) IDEController()));
     PCI::enable_io_space(identifier);
-    // Poll IDE completion in software, but let the drive's INTRQ reach the
-    // bus-master engine. Mask only the PCI function's interrupt to the CPU.
+    // Prefer polling the bus-master latch if the PCI function can mask its
+    // CPU interrupt. Controllers without that mask use a registered IRQ.
     PCI::disable_interrupt_line(identifier);
     if (identifier.hardware_id().vendor_id == via_vendor_id) {
         dmesgln("IDE: VIA timing registers: drive timing {:#02x} {:#02x} {:#02x} {:#02x}, Ultra DMA {:#02x} {:#02x} {:#02x} {:#02x}",
@@ -111,6 +118,14 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
     auto control_block_base = TRY(IOWindow::create_for_pci_device_bar(identifier, control_bar, 4));
     auto control_block = TRY(control_block_base->create_from_io_window_with_offset(2));
     OwnPtr<IOWindow> bus_master;
+    Optional<InterruptNumber> dma_irq;
+    if (s_irq_override)
+        dma_irq = s_irq_override(identifier, channel_index);
+    if (!dma_irq.has_value()) {
+        auto line = identifier.interrupt_line().value();
+        if (line > 0 && line != 2 && line < 16)
+            dma_irq = InterruptNumber { line };
+    }
     u8 programming_interface = read_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF));
     bool pci_interrupt_is_masked;
     {
@@ -121,8 +136,8 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
         dmesgln("IDE: PCI interrupt output masked for polled DMA: {}", pci_interrupt_is_masked);
     if (kernel_command_line().contains("nodma"sv)) {
         dmesgln("IDE: DMA disabled by the nodma boot argument");
-    } else if (!pci_interrupt_is_masked) {
-        dmesgln("IDE: PCI interrupt cannot be masked, using PIO");
+    } else if (!pci_interrupt_is_masked && !dma_irq.has_value()) {
+        dmesgln("IDE: PCI interrupt cannot be masked and IRQ {} is invalid, using PIO", identifier.interrupt_line().value());
     } else if (!(programming_interface & bus_master_capable) || PCI::get_BAR(identifier, PCI::HeaderType0BaseRegister::BAR4) == 0) {
         dmesgln("IDE: Controller has no bus master, using PIO");
     } else {
@@ -137,9 +152,14 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
                 bus_master = channel_window.release_value();
         }
     }
+    if (pci_interrupt_is_masked)
+        dma_irq.clear();
+    if (bus_master && dma_irq.has_value()) {
+        dmesgln("IDE: channel {} using IRQ {} for DMA (PCI line {})", channel_index, dma_irq->value(), identifier.interrupt_line().value());
+    }
     if (bus_master)
         PCI::enable_bus_mastering(identifier);
-    auto channel = TRY(IDEChannel::create(move(command_block), move(control_block), move(bus_master)));
+    auto channel = TRY(IDEChannel::create(move(command_block), move(control_block), move(bus_master), dma_irq));
 
     for (auto drive : { IDEChannel::Drive::Master, IDEChannel::Drive::Slave }) {
         auto identity = TRY(channel->identify(drive));

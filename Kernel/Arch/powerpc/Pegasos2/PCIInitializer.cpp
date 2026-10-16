@@ -8,6 +8,7 @@
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/InterruptManagement.h>
 #include <Kernel/Arch/powerpc/Pegasos2/PCIHostController.h>
+#include <Kernel/Arch/powerpc/Pegasos2/IDEIRQRouting.h>
 #include <Kernel/Arch/powerpc/Pegasos2/InterruptController.h>
 #include <Kernel/Arch/powerpc/Pegasos2/VIAAC97.h>
 #include <Kernel/Boot/BootInfo.h>
@@ -16,10 +17,21 @@
 #include <Kernel/Bus/PCI/Access.h>
 #include <Kernel/Bus/PCI/Initializer.h>
 #include <Kernel/Devices/Audio/Management.h>
+#include <Kernel/Devices/Storage/IDE/IDEController.h>
 #include <Kernel/FileSystem/SysFS/Subsystems/Bus/PCI/BusDirectory.h>
 #include <Kernel/Sections.h>
 
 namespace Kernel::PCI {
+
+static Optional<InterruptNumber> pegasos2_ide_irq_override(DeviceIdentifier const& identifier, u8 channel)
+{
+    auto const& address = identifier.address();
+    auto irq = PowerPC::Pegasos2::ide_channel_irq(identifier.hardware_id().vendor_id, identifier.hardware_id().device_id,
+        address.domain(), address.bus(), address.device(), address.function(), channel);
+    if (!irq.has_value())
+        return {};
+    return InterruptNumber { irq.value() };
+}
 
 READONLY_AFTER_INIT SetOnce g_pci_access_io_probe_failed;
 READONLY_AFTER_INIT SetOnce g_pci_access_is_disabled_from_commandline;
@@ -120,6 +132,7 @@ UNMAP_AFTER_INIT void initialize()
     }
 
     auto& access = Access::the();
+    IDEController::set_irq_override(pegasos2_ide_irq_override);
     access.add_host_controller(move(south_controller));
     access.add_host_controller(move(agp_controller));
     MUST(AudioManagement::the().register_pci_driver({ PowerPC::Pegasos2::VIAAC97::probe, PowerPC::Pegasos2::VIAAC97::create }));

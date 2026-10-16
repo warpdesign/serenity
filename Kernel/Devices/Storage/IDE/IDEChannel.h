@@ -7,12 +7,14 @@
 #pragma once
 
 #include <AK/Array.h>
+#include <AK/Atomic.h>
 #include <AK/AtomicRefCounted.h>
 #include <AK/Error.h>
 #include <AK/NonnullOwnPtr.h>
 #include <AK/Optional.h>
 #include <AK/OwnPtr.h>
 #include <AK/Span.h>
+#include <Kernel/Interrupts/Interrupts.h>
 #include <Kernel/Library/IOWindow.h>
 #include <Kernel/Locking/Mutex.h>
 #include <Kernel/Memory/PhysicalAddress.h>
@@ -20,8 +22,11 @@
 
 namespace Kernel {
 
+class IDEChannelIRQHandler;
+
 // One ATA channel (primary or secondary) of a PCI IDE controller. Transfers use bus-master
-// DMA when the controller and drive allow it, otherwise PIO; completion is polled.
+// DMA when the controller and drive allow it, otherwise PIO; completion is
+// polled from the bus-master latch or recorded by an IRQ handler.
 class IDEChannel final : public AtomicRefCounted<IDEChannel> {
 public:
     enum class Drive : u8 {
@@ -42,7 +47,8 @@ public:
     static constexpr size_t max_dma_transfer_size = 64 * KiB;
     static constexpr size_t sector_size = 512;
 
-    static ErrorOr<NonnullRefPtr<IDEChannel>> create(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master);
+    static ErrorOr<NonnullRefPtr<IDEChannel>> create(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master, Optional<InterruptNumber> dma_irq);
+    ~IDEChannel();
 
     ErrorOr<Optional<Identity>> identify(Drive);
     bool has_bus_master() const { return m_bus_master; }
@@ -55,6 +61,7 @@ public:
     ErrorOr<void> write_sectors(Drive, bool use_lba48, u64 lba, size_t count, ReadonlyBytes, PhysicalAddress physical_buffer);
 
 private:
+    friend class IDEChannelIRQHandler;
     IDEChannel(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master, OwnPtr<Memory::Region> descriptor_table, PhysicalAddress descriptor_table_physical);
 
     u8 alternate_status();
@@ -68,10 +75,13 @@ private:
     ErrorOr<void> transfer_dma(Drive, bool use_lba48, u64 lba, size_t count, bool is_write, u8* buffer, PhysicalAddress physical_buffer);
     void disable_dma_after_error(Drive, Error);
     ErrorOr<void> reset_after_dma_error();
+    bool handle_dma_interrupt();
 
     NonnullOwnPtr<IOWindow> m_command_block;
     NonnullOwnPtr<IOWindow> m_control_block;
     OwnPtr<IOWindow> m_bus_master;
+    OwnPtr<IDEChannelIRQHandler> m_dma_irq_handler;
+    Atomic<bool> m_dma_irq_observed { false };
     OwnPtr<Memory::Region> m_descriptor_table;
     PhysicalAddress m_descriptor_table_physical;
     Array<bool, 2> m_dma_enabled {};

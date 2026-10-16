@@ -150,6 +150,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCVIAUDMAModeCheckQuick
         VERBATIM
     )
+    set(powerpc_pegasos_ide_irq_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestPegasos2IDEIRQ.cpp")
+    set(powerpc_pegasos_ide_irq_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-Pegasos2-IDE-IRQ")
+    add_custom_target(PowerPCPegasos2IDEIRQCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_pegasos_ide_irq_source}" -o "${powerpc_pegasos_ide_irq_executable}"
+        COMMAND "${powerpc_pegasos_ide_irq_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCPegasos2IDEIRQCheck
+        COMMAND "${powerpc_pegasos_ide_irq_executable}"
+        DEPENDS PowerPCPegasos2IDEIRQCheckQuick
+        VERBATIM
+    )
     set(powerpc_native_ide_dma_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_ide_dma_boot.py")
     add_custom_target(PowerPCNativeIDEDMABootCheckQuick
         COMMAND python3 "${powerpc_native_ide_dma_test}"

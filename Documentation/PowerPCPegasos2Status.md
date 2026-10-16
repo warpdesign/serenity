@@ -36,7 +36,8 @@ probe and is historical.
 - The VT8231 IDE controller (`1106:0571`) runs in PCI native mode with polled
   PIO and LBA48. The desktop boots with its root filesystem as the only disk,
   attached to the IDE primary master, and writes leave a clean ext2 image.
-  Interrupt-driven completion and bus-master DMA are not implemented yet.
+  An opt-in bus-master DMA path is built but has not completed a physical
+  transfer successfully yet; PIO remains the physical boot default.
 - LibPartition reads Amiga RDB partition tables. `Meta/PowerPC/make-pegasos-card.py`
   builds the SD card layout planned for SmartFirmware: an RDB with an FFS boot
   partition holding the loader and an ext2 root partition. Booted on the IDE
@@ -516,7 +517,7 @@ the drive is declared unusable; this cannot guarantee recovery from a wedged
 adapter. If the PCI interrupt cannot be masked, it uses PIO. This is built
 and covered by host status tests, but **physical DMA is not yet proven**.
 
-The canonical image has now been replaced at
+The previous image at
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB; SHA-256
 `a2ca58ac738634188fa95f8ebe74fe075f4a24d066cea5485492d2bcd925a3bf`).
 It contains the revised loader and restores per-write ATA cache flushes.
@@ -526,7 +527,7 @@ Physical Pegasos boots default to PIO for safety; `dma` or `udma=N` opts into
 experimental DMA on this same image. QEMU retains its existing default.
 Loader argument, DMA status, and recovery self-tests pass; the FFS loader and
 ext2 root match the built inputs. The temporary candidate image was removed
-so there is only one card image to write. On physical hardware, this image
+so there is only one card image to write. On physical hardware, that image
 ran with `fullram weakrng dma`, but the VT8231 did not retain the PCI
 Command interrupt-disable bit. The log says `PCI interrupt output masked for
 polled DMA: false` and `PCI interrupt cannot be masked, using PIO`. This run
@@ -552,9 +553,36 @@ also detects a Pegasos 2 firmware case where the IDE class byte reports PCI
 native mode while the controller is actually in legacy mode; when its PCI
 interrupt line is 14, Linux forces the programming interface to legacy mode.
 Serenity currently leaves this IDE function in native mode and uses the
-firmware BARs. Before changing the IRQ path, capture the physical IDE PCI
-interrupt line and determine whether this firmware needs Linux's legacy-mode
+firmware BARs. The physical IDE PCI Interrupt Line value will be captured
+on the next boot to determine whether this firmware needs Linux's legacy-mode
 fixup. Do not assume the old `0x21` DMA status identifies an adapter defect.
+
+The next source revision follows Linux's use of the IDE completion interrupt.
+It registers an IRQ handler when the controller cannot mask its PCI output,
+records the bus-master completion latch before acknowledging ATA status, and
+lets the transfer loop observe that recorded completion. For the onboard
+VT8231, Pegasos-specific routing uses primary IRQ 14 and secondary IRQ 15;
+the next physical log also prints the firmware's PCI Interrupt Line value to
+check whether Linux's conditional legacy-mode fixup applies. The driver's
+native BARs have already worked for PIO, so the mode fixup is not applied
+blindly. The IRQ route and completion tests pass, and the PowerPC kernel
+builds. Physical DMA success remains unverified. The current canonical image
+at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
+`a4b913cee8c5702ae07e00b150a2af54dab0c70d393e27bb0f5522c567b3ef7c`)
+contains this revision; its FFS boot partition was updated in place, leaving
+the ext2 root partition untouched. No QEMU run was made.
+
+The local MorphOS 1.4 Pegasos 2 `boot.img` contains a symbolized
+`Driver_VIA8231` routine. It configures southbridge routing and assigns IRQ 9
+to USB and audio functions, but contains no visible IDE DMA transfer-mode
+setup. The ISO's `morphos/Devs`, `morphos/Libs`, and `morphos/L` directories
+have no separately named IDE driver or matching `VIA IDE`/`UDMA` strings.
+The disk driver may be built into another component or supplied by other
+media, so this older ISO does not establish which UDMA mode the user's
+MorphOS installation uses. The
+[VT8231 datasheet](https://www.bitsavers.org/components/viaTechnologies/VT8231_South_Bridge_rev_2.32_20040510.pdf)
+and [Linux's Pegasos 2 fixup](https://github.com/torvalds/linux/blob/master/arch/powerpc/platforms/chrp/pci.c)
+are the references for IDE interrupt routing.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
