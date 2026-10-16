@@ -866,21 +866,34 @@ blocks: twelve distant block writes included in the cache writeback count.
 New source changes routine ext2 sync to update primary metadata only and
 refresh backups on clean unmount. Block-cache writeback now releases its
 lock and yields between blocks, preserves dirty entries on errors, and keeps
-direct writes coherent with cached entries. The next serial log will show
+direct writes coherent with cached entries. The new serial diagnostics show
 ext2 metadata preparation time, block-cache writeback time, overall VFS sync
 time, and aggregated IDE DMA write-versus-ATA-flush time for each sixteen
 writes. The PowerPC kernel and host regression targets build. This work is
-now in the updated local SD image below. Physical improvement remains
-unverified, and the SD card can still
-spend time committing writes even if desktop reads can interleave.
+in the updated local SD image below.
 
 After the user's SD-card copy finished, the verified candidate replaced the
 sole named image at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`. Its
 SHA-256 is
 `a8f89746507fc96387fb0c4f7f95977697239ec3bf93949bcad7dbbb79bc5b34`.
 The extracted FFS loader matches the separately rebuilt ELF, and its root
-partition matches `pegasos2-root.ext2` byte for byte. The user has not yet
-tested this writeback version on the physical Pegasos 2. No QEMU run was made.
+partition matches `pegasos2-root.ext2` byte for byte. The user booted this
+image on the physical Pegasos 2 with `dma fullram weakrng`. The drive selected
+UDMA5, and the first DMA transfer and first IRQ-waited transfer both
+succeeded. Ext2 mounted at 10.023 s; WindowServer entered its main loop at
+20.363 s. No DMA failure or PIO fallback appears in the supplied log through
+36.781 s.
+
+The formerly repeated seven- to eight-second writeback stalls did not recur
+in that excerpt. The logged full VFS syncs took 791, 1124, 419, and 269 ms.
+Ext2 cache writeback passes wrote 4 to 11 blocks in 77 to 523 ms, and primary
+metadata preparation took 25 to 362 ms. The first group of sixteen DMA writes
+spent 588 ms in transfers and 532 ms in ATA flushes; three later groups spent
+55 to 261 ms in transfers and 25 to 31 ms in flushes. This confirms a large
+reduction in periodic sync duration on the physical card. It does not isolate
+the contribution of backup-write avoidance from cache-lock interleaving, nor
+establish long-term DMA stability or raw-device throughput. No QEMU run was
+made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

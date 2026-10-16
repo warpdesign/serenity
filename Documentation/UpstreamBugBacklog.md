@@ -20,10 +20,11 @@ submitted upstream as of 2026-10-16.
 - **Local fix:** The cache now holds its lock for one dirty block write at a
   time and yields between blocks. A host regression checks that readers can
   enter between writes, new dirty entries survive the pass, and failed writes
-  stay dirty for retry. Per-block writeback time is logged. Physical validation
-  is pending; the current SD image does not contain this change. The earlier
-  Pegasos IDE flush-batching experiment was reverted and did not measure
-  per-request flush cost in UDMA5.
+  stay dirty for retry. Per-block writeback time is logged. The current SD
+  image contains this change; the next physical boot showed full VFS syncs
+  lasting 269 to 1124 ms instead of repeated seven- to eight-second stalls.
+  The log does not directly show whether a foreground read interleaved with
+  writeback. An earlier IDE flush-batching experiment was reverted.
 - **Upstream scope:** Let reads interleave with slow writeback without losing
   concurrent dirty updates, and propagate writeback errors before marking
   blocks clean. This needs a separate concurrency regression.
@@ -43,8 +44,11 @@ submitted upstream as of 2026-10-16.
   updates the primary superblock during routine sync.
 - **Local fix:** Routine sync now writes primary copies; clean unmount refreshes
   backup copies. A host regression checks sparse and non-sparse group selection,
-  and the kernel logs metadata and cache-writeback durations. Physical timing
-  is not yet known, and the running SD image is unchanged.
+  and the kernel logs metadata and cache-writeback durations. On the updated
+  physical SD card, full VFS syncs took 269 to 1124 ms, with 4 to 11 cache
+  blocks written per pass; the previous image repeatedly took seven to eight
+  seconds and wrote 16 to 23 blocks per pass. Cache-lock interleaving changed
+  in the same image, so this is a combined physical result.
 - **Upstream scope:** Avoid rewriting every recovery copy on each periodic sync
   while retaining a clear policy for backup freshness and clean unmount.
 
