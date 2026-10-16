@@ -4,7 +4,25 @@ Record architecture-independent bugs found during the Pegasos 2 port here when
 the same behavior is confirmed in [SerenityOS upstream](https://github.com/SerenityOS/serenity).
 Keep platform-specific work in [PowerPCPegasos2Status.md](PowerPCPegasos2Status.md).
 These entries are candidates for separate upstream fixes; none has been
-submitted upstream as of 2026-10-15.
+submitted upstream as of 2026-10-16.
+
+## One-page DMA buffers are zeroed through a mismatched cacheable mapping
+
+- **Observed risk:** A driver can request an uncached DMA page, but the page
+  is first zeroed through the default cacheable quickmap. On a noncoherent
+  machine, a delayed dirty-cache writeback can overwrite data later written
+  through the uncached DMA mapping. This is a plausible contributor to an IDE
+  PRD-table stall on the Pegasos 2, not yet isolated as its sole cause.
+- **Upstream source:** [MemoryManager.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/Memory/MemoryManager.cpp)
+  calls `allocate_physical_page()` without passing the requested memory type
+  in `allocate_dma_buffer_page()`. The multi-page allocator already passes the
+  memory type for zeroing. Verified against upstream `master` on 2026-10-16.
+- **Local fix:** Pass the DMA mapping's memory type to
+  `allocate_physical_page()` before the final mapping. Physical validation is
+  pending; the Pegasos IDE DMA boot regression checks whether disk reads
+  continue into userland.
+- **Upstream scope:** Submit this generic allocator correction separately from
+  the Pegasos IDE mode and recovery changes, with a noncoherent DMA test.
 
 ## UHCI interrupt transfers reuse the same DATA toggle
 

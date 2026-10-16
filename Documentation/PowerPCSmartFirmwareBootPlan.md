@@ -1,5 +1,13 @@
 # Booting the PowerPC port from Pegasos 2 SmartFirmware
 
+As of 2026-10-16, `boot ide:0 serenity.elf /?` displays the current loader
+options and waits at `boot>`. Type options such as `fullram weakrng nodma` and
+press Enter to boot without reloading the loader ELF. Type `exit` to return
+to the SmartFirmware prompt. The return path restores the firmware entry
+registers instead of calling the firmware `exit` service that previously
+restarted the machine. This interactive path is built but has not yet been
+tested on the physical board.
+
 ## Goal
 
 Boot the physical Pegasos 2 (512 MiB, G3 750CXe module, Radeon 9200 SE over

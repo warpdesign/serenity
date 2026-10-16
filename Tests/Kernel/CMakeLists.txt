@@ -93,6 +93,29 @@ add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
     find_program(POWERPC_HOST_CXX NAMES c++ clang++ REQUIRED)
+    set(powerpc_via_udma_mode_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestVIAUDMAMode.cpp")
+    set(powerpc_via_udma_mode_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-VIA-UDMA-mode")
+    add_custom_target(PowerPCVIAUDMAModeCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_via_udma_mode_source}" -o "${powerpc_via_udma_mode_executable}"
+        COMMAND "${powerpc_via_udma_mode_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCVIAUDMAModeCheck
+        COMMAND "${powerpc_via_udma_mode_executable}" extended
+        DEPENDS PowerPCVIAUDMAModeCheckQuick
+        VERBATIM
+    )
+    set(powerpc_native_ide_dma_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_ide_dma_boot.py")
+    add_custom_target(PowerPCNativeIDEDMABootCheckQuick
+        COMMAND python3 "${powerpc_native_ide_dma_test}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeIDEDMABootCheck
+        COMMAND python3 "${powerpc_native_ide_dma_test}" --normal
+        DEPENDS PowerPCNativeIDEDMABootCheckQuick
+        VERBATIM
+    )
     set(powerpc_uhci_interrupt_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestUHCIInterruptTransfer.cpp")
     set(powerpc_uhci_interrupt_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-UHCI-interrupt-transfer")
     add_custom_target(PowerPCUHCIInterruptTransferCheckQuick
@@ -117,6 +140,17 @@ if (SERENITY_ARCH STREQUAL "powerpc")
     add_custom_target(PowerPCLoaderBootArgumentsCheck
         COMMAND "${powerpc_loader_boot_arguments_executable}"
         DEPENDS PowerPCLoaderBootArgumentsCheckQuick
+        VERBATIM
+    )
+    set(powerpc_manual_membench_script "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_manual_membench.py")
+    set(powerpc_manual_membench_root "${CMAKE_BINARY_DIR}/PowerPCBoot/pegasos2-root.ext2")
+    add_custom_target(PowerPCManualMembenchCheckQuick
+        COMMAND "${Python3_EXECUTABLE}" "${powerpc_manual_membench_script}" "${powerpc_manual_membench_root}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCManualMembenchCheck
+        COMMAND "${Python3_EXECUTABLE}" "${powerpc_manual_membench_script}" "${powerpc_manual_membench_root}" --normal
+        DEPENDS PowerPCManualMembenchCheckQuick
         VERBATIM
     )
     set(powerpc_rtas_contract_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRTASPCIContract.cpp")

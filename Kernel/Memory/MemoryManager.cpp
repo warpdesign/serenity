@@ -893,7 +893,9 @@ ErrorOr<NonnullOwnPtr<Region>> MemoryManager::allocate_contiguous_kernel_region(
 
 ErrorOr<NonnullOwnPtr<Memory::Region>> MemoryManager::allocate_dma_buffer_page(StringView name, Memory::Region::Access access, RefPtr<Memory::PhysicalRAMPage>& dma_buffer_page, MemoryType memory_type)
 {
-    auto page = TRY(allocate_physical_page());
+    // Zero through the same memory type as the final DMA mapping. A dirty
+    // cacheable alias could otherwise write back over device descriptors.
+    auto page = TRY(allocate_physical_page(ShouldZeroFill::Yes, nullptr, memory_type));
     dma_buffer_page = page;
 
     // Ensure that the zeroing of the DMA pages is visible for devices.

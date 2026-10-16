@@ -17,6 +17,7 @@
 namespace Kernel {
 
 static constexpr u8 device_control_disable_interrupts = 1 << 1;
+static constexpr u8 device_control_software_reset = 1 << 2;
 static constexpr u8 device_select_lba_mode = 0xe0;
 static constexpr size_t status_poll_attempts = 500'000;
 static constexpr size_t status_poll_delay_us = 10;
@@ -61,6 +62,7 @@ ErrorOr<NonnullRefPtr<IDEChannel>> IDEChannel::create(NonnullOwnPtr<IOWindow> co
         } else {
             descriptor_table = table_or_error.release_value();
             descriptor_table_physical = page->paddr();
+            dmesgln("IDE: DMA descriptor table at {}", descriptor_table_physical);
         }
     }
     return adopt_nonnull_ref_or_enomem(new (nothrow) IDEChannel(move(command_block), move(control_block), move(bus_master), move(descriptor_table), descriptor_table_physical));
@@ -241,6 +243,38 @@ void IDEChannel::disable_dma_after_error(Drive drive, Error error)
     m_dma_enabled[to_underlying(drive)] = false;
 }
 
+ErrorOr<void> IDEChannel::reset_after_dma_error()
+{
+    VERIFY(m_lock.is_locked());
+    // SRST applies to both drives on this channel and may clear either
+    // drive's negotiated transfer mode.
+    m_dma_enabled.fill(false);
+    // Stopping the bus master does not abort the command in the drive. A
+    // timed-out DMA command can leave DRQ asserted, so reset before issuing
+    // the replacement PIO command.
+    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+    microseconds_delay(20);
+    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts | device_control_software_reset);
+    microseconds_delay(20);
+    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+    // libata waits before reading taskfile status after SRST; some devices
+    // transiently report ready before their reset actually starts.
+    microseconds_delay(150'000);
+
+    for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
+        u8 status = alternate_status();
+        if (!(status & (ATA_SR_BSY | ATA_SR_DRQ))) {
+            if (status & (ATA_SR_ERR | ATA_SR_DF))
+                return Error::from_errno(EIO);
+            dmesgln("IDE: Channel reset after DMA failure, drive status {:#02x}", status);
+            return {};
+        }
+        microseconds_delay(status_poll_delay_us);
+    }
+    dmesgln("IDE: Channel reset after DMA failure timed out, drive status {:#02x}", alternate_status());
+    return Error::from_errno(ETIMEDOUT);
+}
+
 ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, size_t count, bool is_write, u8* buffer, PhysicalAddress physical_buffer)
 {
     VERIFY(m_lock.is_locked());
@@ -304,8 +338,11 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     (void)m_command_block->read8(ATA_REG_STATUS);
     if (!is_write)
         Processor::flush_data_cache(VirtualAddress(buffer), size);
-    if (result.is_error())
+    if (result.is_error()) {
         dmesgln("IDE: DMA {} of {} sectors at {} failed, drive status {:#02x}, DMA status {:#02x}", is_write ? "write"sv : "read"sv, count, lba, drive_status, engine_status);
+        dmesgln("IDE: DMA PRD at {}: buffer {:#08x}, bytes {}, flags {:#04x}", m_descriptor_table_physical,
+            static_cast<u32>(descriptors[0].address), static_cast<u16>(descriptors[0].byte_count), static_cast<u16>(descriptors[0].flags));
+    }
     return result;
 }
 
@@ -318,6 +355,7 @@ ErrorOr<void> IDEChannel::read_sectors(Drive drive, bool use_lba48, u64 lba, siz
         if (!result.is_error())
             return {};
         disable_dma_after_error(drive, result.release_error());
+        TRY(reset_after_dma_error());
     }
     return read_sectors_pio(drive, use_lba48, lba, count, buffer);
 }
@@ -331,6 +369,7 @@ ErrorOr<void> IDEChannel::write_sectors(Drive drive, bool use_lba48, u64 lba, si
         if (!result.is_error())
             return flush_cache(drive, use_lba48);
         disable_dma_after_error(drive, result.release_error());
+        TRY(reset_after_dma_error());
     }
     TRY(write_sectors_pio(drive, use_lba48, lba, count, buffer));
     return flush_cache(drive, use_lba48);

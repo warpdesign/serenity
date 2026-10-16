@@ -10,6 +10,7 @@
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Devices/Storage/IDE/IDEController.h>
 #include <Kernel/Devices/Storage/IDE/IDEDevice.h>
+#include <Kernel/Devices/Storage/IDE/VIAUDMAMode.h>
 #include <Kernel/Devices/Storage/StorageManagement.h>
 #include <Kernel/Library/IOWindow.h>
 
@@ -29,7 +30,6 @@ static constexpr u8 via_udma_enable_bits = 0xe0;
 // Cycle time fields for a 33 MHz PCI clock: ceil(mode cycle time / 10 ns) clamped to 2..7, minus 2.
 static constexpr Array<u8, 6> via_udma100_cycle_fields { 5, 5, 4, 3, 1, 0 };
 // Modes above this need an 80-wire cable.
-static constexpr u8 max_udma_mode_without_cable_check = 2;
 
 static u8 via_udma_register_offset(u8 channel_index, IDEChannel::Drive drive)
 {
@@ -154,12 +154,25 @@ void IDEController::configure_dma(PCI::DeviceIdentifier const& identifier, IDECh
     if (is_via) {
         u8 offset = via_udma_register_offset(channel_index, drive);
         u8 old_timing = read_config8(identifier, offset);
-        // Firmware reports an 80-wire cable in bit 4, as Linux's pata_via reads it.
-        mode = highest_mode(identity.supported_udma_modes);
-        if (!(old_timing & via_udma_cable_bit))
-            mode = min(mode, max_udma_mode_without_cable_check);
-        // Only modes in the UDMA100 table can be programmed.
-        mode = min<u8>(mode, via_udma100_cycle_fields.size() - 1);
+        Optional<u8> requested_mode;
+        if (auto option = kernel_command_line().lookup("udma"sv); option.has_value()) {
+            auto parsed = option->to_number<unsigned>();
+            if (!parsed.has_value() || parsed.value() > 5) {
+                dmesgln("IDE: Invalid udma mode, using PIO");
+                return;
+            }
+            requested_mode = static_cast<u8>(parsed.value());
+        }
+        // Firmware reports an 80-wire cable in bit 4, as Linux's pata_via
+        // reads it, but it selected no UDMA mode on this Pegasos board. Do
+        // not jump straight from PIO to the drive's fastest advertised mode.
+        auto selected_mode = choose_via_udma_mode(identity.supported_udma_modes, identity.selected_udma_modes,
+            (old_timing & via_udma_cable_bit) != 0, requested_mode);
+        if (!selected_mode.has_value()) {
+            dmesgln("IDE: {} drive has no usable Ultra DMA mode, using PIO", drive_name);
+            return;
+        }
+        mode = selected_mode.value();
         u8 new_timing = (old_timing & via_udma_cable_bit) | via_udma_enable_bits | via_udma100_cycle_fields[mode];
         write_config8(identifier, offset, new_timing);
         dmesgln("IDE: {} drive Ultra DMA timing register {:#02x}: {:#02x} -> {:#02x}", drive_name, offset, old_timing, new_timing);

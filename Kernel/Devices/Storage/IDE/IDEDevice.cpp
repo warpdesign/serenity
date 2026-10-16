@@ -18,6 +18,7 @@ ErrorOr<NonnullRefPtr<IDEDevice>> IDEDevice::create(NonnullRefPtr<IDEChannel> ch
     Vector<NonnullRefPtr<Memory::PhysicalRAMPage>> pages;
     auto bounce_buffer = TRY(MM.allocate_dma_buffer_pages(bounce_buffer_size, "IDE bounce buffer"sv, Memory::Region::Access::ReadWrite, pages, Memory::MemoryType::Normal));
     auto bounce_buffer_physical = pages.first()->paddr();
+    dmesgln("IDE: DMA bounce buffer at {} ({} KiB)", bounce_buffer_physical, bounce_buffer_size / KiB);
     return Device::try_create_device<IDEDevice>(move(channel), drive, identity, move(bounce_buffer), bounce_buffer_physical, lun, hardware_relative_controller_id);
 }
 

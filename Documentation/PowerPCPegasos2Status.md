@@ -1,6 +1,6 @@
 # SerenityOS on PowerPC Pegasos 2: current status
 
-Status checked on 2026-10-15.
+Status checked on 2026-10-16.
 
 The goal is to port SerenityOS to the Pegasos 2, a 32-bit PowerPC G3/G4
 machine. The port currently boots and runs a graphical SerenityOS desktop on
@@ -361,6 +361,55 @@ also rearms the same interrupt TD without advancing its toggle. Its
 [descriptor implementation](https://github.com/SerenityOS/serenity/blob/master/Kernel/Bus/USB/UHCI/UHCIDescriptorTypes.h)
 only ORs the toggle bit when setting it. This fix is committed in the Pegasos
 branch and has not been submitted upstream.
+
+On 2026-10-16 a new image from another computer enabled bus-master IDE DMA,
+word-at-a-time PowerPC memory routines, and `membench`. With `fullram weakrng`
+it mounted ext2 and entered `/init`, but a DMA read of eight sectors at LBA
+68136 stalled: drive status `0x58` still had DRQ, and bus-master status `0x21`
+still had Active set without error or completion. The code switched to PIO
+without resetting the outstanding drive command, so the same block failed
+twice more and `/init` exited. The disk LED stayed lit. The user then booted
+the same image to the desktop with `fullram weakrng nodma`, isolating the
+immediate boot failure to IDE DMA rather than the new memory routines.
+
+The rebuilt source now chooses UDMA2 when the drive advertises UDMA0–5 but
+firmware selected none, instead of jumping to UDMA5. `udma=0` and `udma=5`
+allow explicit modes on the same future image. On DMA failure the channel
+performs an ATA software reset before retrying the request with PIO. The
+one-page DMA allocator now zeroes pages with the memory type requested for
+their final mapping, avoiding a dirty cacheable alias of an uncached PRD
+table. [Linux libata](https://github.com/torvalds/linux/blob/master/drivers/ata/libata-sff.c)
+uses the same reset mechanism after drive errors, and [pata_via](https://github.com/torvalds/linux/blob/master/drivers/ata/pata_via.c)
+notes that firmware cable reporting needs care on non-PC VIA systems.
+Diagnostic logs now include descriptor and bounce-buffer physical addresses
+and PRD contents on failure. Host UDMA policy and physical boot-log regression
+self-tests pass; the PowerPC kernel and loader compile. No QEMU run was made.
+
+The local card image was older than the one built on the user's other computer:
+it had neither `/bin/membench` nor an automatic benchmark service. A new ext2
+root was built from current binaries with `/bin/membench` installed and no
+boot service. The root-image test verifies both facts. Run `membench` from a
+Terminal after the desktop is ready for RAM throughput, or `membench --verify`
+for small aligned and overlapping memory operations. `membench -f
+/dev/gpu/connector0 -d /dev/hda` also measures framebuffer and disk reads
+when run with permission to access those devices.
+
+The loader now accepts `/?`: `boot ide:0 serenity.elf /?` prints loader and
+kernel bring-up options, then presents `boot>`. Type a new full option line,
+for example `fullram weakrng nodma`, and press Enter to continue in the same
+loaded image. Entering `exit` returns to SmartFirmware without using its
+`exit` client service. The boot option line supports Backspace and can show
+help again with `/?`. This interactive firmware path is built and host-tested,
+but a physical prompt and return test is still needed.
+
+The rebuilt one-card image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+(929 MiB), SHA-256 `44ae3b8869c28135f33d0e81beb798ab32cb766a6587283508f9ef8a67a31d92`.
+Its FFS loader and ext2 root were extracted/compared against the built inputs.
+For the next physical test, start with `boot ide:0 serenity.elf /?`, enter
+`fullram weakrng`, and capture the first `IDE: DMA ...` failure if any. In the
+same prompt, `fullram weakrng udma=0` tests the lowest UDMA mode, while
+`fullram weakrng nodma` remains the known boot path. This has not been
+verified on physical hardware yet.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

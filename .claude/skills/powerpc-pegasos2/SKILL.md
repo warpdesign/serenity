@@ -108,7 +108,7 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
 | `pixelpaint-latency.py` | Boots a PixelPaint image headless and times cursor, paint and burst latency. |
 | `amiga-disk.py` | Read-only RDB partition listing and OFS/FFS (incl. DOS\6/\7) listing and extraction. |
 | `make-pegasos-card.py` | Builds the SD card image (RDB, FFS boot partition with `serenity.elf`, ext2 root), or rewrites only the boot partition. Boot it in QEMU with `-drive if=ide,...` and `root=lun3:0:0;part1`; copy it to the card with `dd`. amitools (`pip install amitools`: `rdbtool`, `xdftool`) independently checks the result. |
-| `make-pegasos-root.py` | Builds the SD card's ext2 desktop root from the desktop test recipe; `--boot-benchmark` adds a root service that runs `membench` 60 s after boot and logs to serial. |
+| `make-pegasos-root.py` | Builds the SD card's ext2 desktop root from the desktop test recipe, with `membench` installed for manual use and no benchmark boot service. |
 | `test-loader-inflate.cpp` | Runs the loader's gzip decoder on the host against the real kernel. |
 
 ## Gotchas found so far
@@ -364,10 +364,48 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   loader was replaced; SHA-256
   `8237052ebf8ed71361b69264e809e1e64e381be6d998c587d7f1e8a28163cf56`.
 
-Next: write only `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` to the SD
-card and boot with `boot ide:0 serenity.elf weakrng fullram`.
-Short options are `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
-`claimram`, `native`, `nodma`, and `fixedio`. Check the serial log for
+- 2026-10-16: The other computer pushed DMA IDE, `membench`, and faster
+  PowerPC memory routines. The physical boot with `fullram weakrng` mounted
+  ext2 but stalled a DMA read of eight sectors at LBA 68136. Drive status
+  `0x58` kept DRQ asserted; bus-master status `0x21` kept Active set, with
+  neither Error nor Interrupt. Switching to PIO without resetting the drive
+  failed the same request again, `/init` exited, and the SD LED stayed lit.
+  The user tested `boot ide:0 serenity.elf fullram weakrng nodma` on that
+  image and reached the desktop, isolating this boot failure to IDE DMA.
+  Source fixes staged: default VIA UDMA2 when IDENTIFY word 88 has no selected
+  mode (instead of immediately picking UDMA5); `udma=0` or `udma=5` selects an
+  explicit supported mode on a future image; ATA software reset before PIO
+  retry after a DMA error; one-page DMA allocations zero with the requested
+  memory type to avoid cacheable/uncached aliases. The generic allocator bug
+  is also in upstream SerenityOS and is recorded in
+  `Documentation/UpstreamBugBacklog.md`. New logs show PRD table/bounce-buffer
+  physical addresses and PRD contents on failure. Host UDMA policy and native
+  boot-log self-tests and the PowerPC kernel/loader build passed. Physical
+  verification is still needed. No QEMU run was made.
+
+- 2026-10-16: Rebuilt the 929 MiB canonical card image from the current kernel,
+  loader and ext2 desktop root. The local previous image was stale and had no
+  `membench`, unlike the user's other-computer image. The new root installs
+  `/bin/membench` but has no auto-start service; the root-image regression
+  checks this. From Terminal after startup, run `membench` for RAM rates or
+  `membench --verify` for memory-routine checks. With device access,
+  `membench -f /dev/gpu/connector0 -d /dev/hda` adds framebuffer and disk.
+  The loader now accepts `boot ide:0 serenity.elf /?`, prints options, and
+  prompts at `boot>`; a typed line replaces the original arguments and Enter
+  continues booting without reloading the 6 MiB ELF. `exit` returns to
+  SmartFirmware through the saved entry context, without calling the firmware
+  `exit` service. The prompt, return, and DMA changes still need a physical
+  test. Host tests and the kernel/loader build pass; no QEMU run. Card image
+  SHA-256:
+  `44ae3b8869c28135f33d0e81beb798ab32cb766a6587283508f9ef8a67a31d92`.
+
+Next: write the rebuilt card once. Use `boot ide:0 serenity.elf /?` to check
+the firmware prompt, then type `fullram weakrng` for default conservative
+UDMA2. Confirm `exit` returns to SmartFirmware if testing that path first.
+If it still stalls, the same new image accepts `udma=0` or `nodma` without
+another rewrite; try `udma=5` only after a lower DMA mode works.
+Short options are `/?`, `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
+`claimram`, `native`, `nodma`, `udma=<mode>`, and `fixedio`. Check the serial log for
 `legacy I/O ports at 0xfe000000`; if the board goes silent after `entering kernel`, retry with `fixedio`.
 After the desktop appears, plug the USB keyboard into the same root port 2
 and test separate repeated letters, two Backspaces, Space, and Return in

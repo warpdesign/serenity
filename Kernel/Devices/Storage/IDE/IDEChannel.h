@@ -67,6 +67,7 @@ private:
     ErrorOr<void> write_sectors_pio(Drive, bool use_lba48, u64 lba, size_t count, ReadonlyBytes);
     ErrorOr<void> transfer_dma(Drive, bool use_lba48, u64 lba, size_t count, bool is_write, u8* buffer, PhysicalAddress physical_buffer);
     void disable_dma_after_error(Drive, Error);
+    ErrorOr<void> reset_after_dma_error();
 
     NonnullOwnPtr<IOWindow> m_command_block;
     NonnullOwnPtr<IOWindow> m_control_block;

@@ -10,6 +10,8 @@
 #include <Kernel/Arch/powerpc/Loader/Inflate.h>
 #include <Kernel/Arch/powerpc/Loader/KernelImagePlan.h>
 #include <Kernel/Arch/powerpc/Loader/KernelMappings.h>
+#include <Kernel/Arch/powerpc/Loader/LoaderHelp.h>
+#include <Kernel/Arch/powerpc/Loader/LoaderInput.h>
 #include <Kernel/Arch/powerpc/HashPageTable.h>
 #include <Kernel/Arch/powerpc/BootHandoff.h>
 #include <Kernel/Arch/powerpc/OpenFirmwareMemoryMap.h>
@@ -35,6 +37,7 @@ extern "C" void powerpc_loader_enable_translation(u32 sdr1, u32 io_block_physica
 extern "C" void powerpc_loader_disable_translation();
 extern "C" u8 __loader_start[];
 extern "C" u8 __stack_end[];
+extern "C" u32 powerpc_loader_return_to_firmware;
 
 static BootMemoryRange s_memory_ranges[32];
 static BootMemoryRange s_available_ranges[32];
@@ -230,6 +233,15 @@ static bool discover_pci_host_bridges(FirmwareEntry firmware, u32 root, u32 sout
     return seen_bridges == (1u << POWERPC_PEGASOS2_PCI_HOST_BRIDGE_COUNT) - 1;
 }
 
+static u32 append_serial_debug(u32 count)
+{
+    char const* debug = count == 0 ? "serial_debug" : " serial_debug";
+    for (u32 index = 0; debug[index] != '\0'; ++index)
+        s_command_line[count++] = debug[index];
+    s_command_line[count] = '\0';
+    return count;
+}
+
 static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
 {
     int length = get_property(firmware, chosen, "bootargs", s_command_line, sizeof(s_command_line) - sizeof(" serial_debug"));
@@ -238,11 +250,7 @@ static u32 prepare_command_line(FirmwareEntry firmware, u32 chosen)
         while (count < static_cast<u32>(length) && s_command_line[count] != '\0')
             ++count;
     }
-    char const* debug = count == 0 ? "serial_debug" : " serial_debug";
-    for (u32 index = 0; debug[index] != '\0'; ++index)
-        s_command_line[count++] = debug[index];
-    s_command_line[count] = '\0';
-    return count;
+    return append_serial_debug(count);
 }
 
 static bool command_line_contains(char const* needle)
@@ -314,6 +322,50 @@ static void write_console(FirmwareEntry firmware, u32 stdout, char const* messag
     }
     FirmwareCall call { "write", 3, 1, { stdout, firmware_pointer(message), length, 0 } };
     (void)firmware(&call);
+}
+
+static bool read_loader_options(FirmwareEntry firmware, u32 stdin, u32 stdout, u32& command_line_length)
+{
+    Kernel::PowerPC::Loader::LoaderInput input;
+    write_console(firmware, stdout, Kernel::PowerPC::Loader::loader_help);
+    write_console(firmware, stdout, "boot> ");
+    for (;;) {
+        u8 character = 0;
+        FirmwareCall call { "read", 3, 1, { stdin, firmware_pointer(&character), 1, 0 } };
+        if (firmware(&call) != 0 || call.cells[3] == 0xffffffffu) {
+            write_console(firmware, stdout, "\r\nFirmware console read failed; returning to firmware.\r\n");
+            return false;
+        }
+        if (call.cells[3] != 1)
+            continue;
+        auto action = input.consume(character);
+        switch (action) {
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Ignore:
+            break;
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Add: {
+            char echo[] = { input.options[input.length - 1], '\0' };
+            write_console(firmware, stdout, echo);
+            break;
+        }
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Erase:
+            write_console(firmware, stdout, "\b \b");
+            break;
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Help:
+            write_console(firmware, stdout, "\r\n");
+            write_console(firmware, stdout, Kernel::PowerPC::Loader::loader_help);
+            write_console(firmware, stdout, "boot> ");
+            break;
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Exit:
+            write_console(firmware, stdout, "\r\nReturning to firmware.\r\n");
+            return false;
+        case Kernel::PowerPC::Loader::LoaderInput::Action::Boot:
+            write_console(firmware, stdout, "\r\n");
+            for (u32 index = 0; index <= input.length; ++index)
+                s_command_line[index] = input.options[index];
+            command_line_length = append_serial_debug(input.length);
+            return true;
+        }
+    }
 }
 
 static void write_hex(FirmwareEntry firmware, u32 stdout, u32 value)
@@ -664,11 +716,19 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     u32 qemu_boot_kernel[2];
     bool is_qemu = get_property(firmware, chosen, "qemu,boot-kernel", qemu_boot_kernel, sizeof(qemu_boot_kernel)) > 0;
     u32 command_line_length = prepare_command_line(firmware, chosen);
+    s_firmware_real_mode = firmware_requires_real_mode(firmware) || has_flag("realmode");
+    if (has_flag("/?")) {
+        u32 stdin = 0;
+        if (get_property(firmware, chosen, "stdin", &stdin, sizeof(stdin)) != sizeof(stdin)
+            || !read_loader_options(firmware, stdin, stdout, command_line_length)) {
+            powerpc_loader_return_to_firmware = 1;
+            return;
+        }
+        s_firmware_real_mode = firmware_requires_real_mode(firmware) || has_flag("realmode");
+    }
     bool native_boot = has_flag("native");
     if ((!is_qemu || native_boot) && !append_native_root(command_line_length))
         return;
-    s_firmware_real_mode = firmware_requires_real_mode(firmware) || has_flag("realmode");
-
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
     if (has_flag("ofdump"))
         dump_firmware_tree(firmware, stdout);
