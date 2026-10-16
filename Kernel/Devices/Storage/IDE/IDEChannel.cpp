@@ -118,11 +118,15 @@ bool IDEChannel::handle_dma_interrupt()
     if (!(status & bus_master_status_interrupt))
         return false;
     // The controller's latch must be read before ATA STATUS, which can clear it.
-    (void)m_command_block->read8(ATA_REG_STATUS);
+    u8 drive_status = m_command_block->read8(ATA_REG_STATUS);
     // Preserve a bus-master error for the transfer loop to report and recover.
     m_bus_master->write8(bus_master_status, ide_dma_irq_acknowledgement(status));
-    m_dma_irq_observed.store(true);
     m_dma_interrupt_count.fetch_add(1);
+    if (ide_dma_irq_belongs_to_transfer(m_dma_in_progress.load(), status)) {
+        m_dma_status_at_irq.store(status);
+        m_drive_status_at_irq.store(drive_status);
+        m_dma_irq_observed.store(true);
+    }
     return true;
 }
 
@@ -369,7 +373,11 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     (void)m_command_block->read8(ATA_REG_STATUS);
     m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
     full_memory_fence();
+    m_dma_in_progress.store(false);
     m_dma_irq_observed.store(false);
+    m_dma_status_at_irq.store(0);
+    m_drive_status_at_irq.store(0);
+    u32 interrupt_count_before = m_dma_interrupt_count.load();
     auto command_result = issue_transfer_command(drive, use_lba48, lba, count,
         is_write ? ATA_CMD_WRITE_DMA : ATA_CMD_READ_DMA,
         is_write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT);
@@ -377,6 +385,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
         m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
         return command_result.release_error();
     }
+    m_dma_in_progress.store(true);
     m_bus_master->write8(bus_master_command, direction | bus_master_command_start);
     full_memory_fence();
     microseconds_delay(1);
@@ -385,15 +394,34 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     ErrorOr<void> result = Error::from_errno(ETIMEDOUT);
     u8 drive_status = 0;
     u8 engine_status = 0;
+    bool stopped_for_interrupt = false;
     for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
         drive_status = alternate_status();
         engine_status = m_bus_master->read8(bus_master_status);
-        if (ide_dma_has_failed(drive_status, engine_status, m_dma_irq_observed.load())) {
+        if (engine_status & bus_master_status_error) {
             result = Error::from_errno(EIO);
             break;
         }
-        if (ide_dma_has_completed(drive_status, engine_status, m_dma_irq_observed.load())) {
-            result = {};
+        bool interrupt_observed = m_dma_irq_observed.load();
+        if (ide_dma_should_stop(engine_status, interrupt_observed)) {
+            // Linux and Haiku stop the bus master on its completion IRQ before
+            // checking the drive's final status. Do not wait for DRQ to clear
+            // while the engine is still running.
+            m_bus_master->write8(bus_master_command, direction);
+            full_memory_fence();
+            stopped_for_interrupt = true;
+            microseconds_delay(1);
+            auto final_status = wait_until_not_busy();
+            if (final_status.is_error()) {
+                result = final_status.release_error();
+            } else {
+                drive_status = final_status.release_value();
+                if (ide_dma_has_failed(drive_status, engine_status, interrupt_observed)
+                    || !ide_dma_has_completed(drive_status, engine_status, interrupt_observed))
+                    result = Error::from_errno(EIO);
+                else
+                    result = {};
+            }
             break;
         }
         microseconds_delay(status_poll_delay_us);
@@ -401,7 +429,9 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
 
     u8 engine_command = result.is_error() ? m_bus_master->read8(bus_master_command) : 0;
     u32 descriptor_pointer = result.is_error() ? m_bus_master->read32(bus_master_descriptor_table) : 0;
-    m_bus_master->write8(bus_master_command, direction);
+    if (!stopped_for_interrupt)
+        m_bus_master->write8(bus_master_command, direction);
+    m_dma_in_progress.store(false);
     u8 drive_error = result.is_error() ? m_command_block->read8(ATA_REG_ERROR) : 0;
     m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
     // Reading the status register acknowledges the drive.
@@ -414,6 +444,9 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
         dmesgln("IDE: DMA PRD at {}: buffer {:#08x}, bytes {}, flags {:#04x}", m_descriptor_table_physical,
             static_cast<u32>(descriptors[0].address), static_cast<u16>(descriptors[0].byte_count), static_cast<u16>(descriptors[0].flags));
         dmesgln("IDE: DMA registers: command {:#02x}, PRD pointer {:#08x}", engine_command, descriptor_pointer);
+        dmesgln("IDE: DMA IRQ this transfer: {} (recorded {}, stopped engine {}), BM at IRQ {:#02x}, ATA at IRQ {:#02x}",
+            m_dma_interrupt_count.load() - interrupt_count_before, m_dma_irq_observed.load(), stopped_for_interrupt,
+            m_dma_status_at_irq.load(), m_drive_status_at_irq.load());
         dmesgln("IDE: DMA history: {} successful transfers, {} handled interrupts", m_dma_success_count, m_dma_interrupt_count.load());
     } else if (++m_dma_success_count == 1) {
         dmesgln("IDE: First DMA transfer succeeded: drive status {:#02x}, DMA status {:#02x}, handled interrupt {}",

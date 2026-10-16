@@ -636,35 +636,64 @@ negotiated UDMA2 and mounted ext2. `/init` and the initial SystemServer
 services started. A later eight-sector DMA read at LBA 277408 timed out with
 drive status `0x58`, ATA error `0x00`, and bus-master status `0x21`: the drive
 requested data, the bus master was active, and no completion interrupt was
-latched. Reset returned `0x50` on its first attempt, then PIO fallback
+visible in that later status snapshot. The handler may already have cleared
+the interrupt bit, so this snapshot alone cannot prove that no IRQ arrived.
+Reset returned `0x50` on its first attempt, then PIO fallback
 continued into the WindowServer main loop. Thus ignoring the early `0x2f`
 sample avoids the premature abort but does not solve the stalled transfer.
 Because root and user programs loaded before this first reported failure,
 earlier DMA reads may have succeeded; old logs did not record successful
 transfers, so that remains an inference.
 
-The current source checks that PCI Command retains both I/O and bus
-master enable bits, confirms VIA UDMA timing register readback, and logs the
-bus-master command and PRD pointer if a transfer stalls. It also uses full
+The previous source revision checked that PCI Command retained both I/O and bus
+master enable bits, confirmed VIA UDMA timing register readback, and logged the
+bus-master command and PRD pointer if a transfer stalled. It also used full
 memory fences between DMA setup, ATA command issue, and bus-master start,
 matching the ordering around PowerPC PCI I/O in Haiku's
 [PCI I/O implementation](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/bus_managers/pci/pci_io.cpp).
-The driver now logs the first successful DMA transfer and reports the number
+The driver logged the first successful DMA transfer and reported the number
 of successful transfers and handled IRQs at failure. Haiku's
 [PowerPC PCI DMA address conversion](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/bus_managers/pci/pci.cpp)
 uses physical RAM addresses directly, as Serenity does. This makes a missing
 PCI DMA address offset less likely, but does not prove the controller can
 reach every RAM page used here. Hardware DMA stability is still unverified.
-The sole current card image is at
+That card image was at
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
 `499b0a2ae2850b86315631f23b2c8a82fe76ba232b146117fc042e95363e65e7`).
-It also contains a check that PCI Command retains I/O and bus-master enable,
-a readback of the VIA UDMA timing byte, and full fences between major PCI
-DMA register writes. If another transfer stalls, it reports the bus-master
-command, PRD pointer, number of successful transfers, and IRQ count. The
-first successful transfer is logged once. The FFS loader matches the built
-loader and ext2 root is unchanged. DMA stability is still unverified on
-physical hardware; no QEMU run was made.
+The FFS loader matched the built loader and ext2 root was unchanged; no QEMU
+run was made.
+
+The physical run of that image (`499b0a2a...`) confirmed PCI Command `0x0007`
+(I/O and bus master enabled), and the VIA UDMA2 timing byte read back as
+`0xf4`. The first DMA read, one sector at LBA 0, timed out with drive status
+`0x58` and a final bus-master status snapshot of `0x21`. The bus-master
+command was `0x09` (started, device to memory), and the PRD pointer read back
+as the programmed physical address. The log counted zero successful DMA
+transfers and two handled IRQs, then reset succeeded and PIO booted ext2.
+Those two IRQs were counted since channel creation, **not** since this DMA
+command. Also, the IRQ handler clears bus-master interrupt bit 2 when it
+runs. It was therefore incorrect to interpret final status `0x21` as proof
+that no DMA interrupt occurred during this read.
+
+Haiku's [IDE DMA path](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/bus_managers/ata/ATADevice.cpp)
+waits for an IRQ and stops the bus master before checking final ATA status;
+Linux's [BMDMA interrupt handler](https://github.com/torvalds/linux/blob/master/drivers/ata/libata-sff.c)
+also stops it upon the DMA IRQ. Serenity had instead waited for DRQ to clear
+before stopping the engine. The current source revision records IRQ count and
+controller/drive status for each transfer, stops the engine on a recorded
+or still-latched IRQ, and only then decides whether the transfer completed.
+It acknowledges old controller IRQs without attributing them to a transfer
+that has not started yet.
+It rejects an interrupt received while the PRD engine is still active, to
+avoid treating incomplete DMA data as a successful disk read. DMA stability
+remains unverified on physical hardware.
+
+The sole current card image at
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
+`8f6b8964e283b7349d168bab57bc9261abfca8d7b4951f09a461002dcf578a8e`)
+contains this change in the FFS loader. The ext2 root partition is unchanged;
+the FFS loader bytes match the built loader. The host IRQ/completion tests and
+PowerPC kernel/loader builds pass. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

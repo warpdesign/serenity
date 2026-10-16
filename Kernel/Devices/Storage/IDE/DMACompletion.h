@@ -23,13 +23,25 @@ constexpr bool ide_dma_pci_command_allows_mastering(u16 pci_command)
 
 // PCI IDE bus-master status bit 2 is set by a rising edge on the drive's
 // INTRQ line. Active alone means the command is still in progress.
+constexpr bool ide_dma_should_stop(u8 bus_master_status, bool irq_observed)
+{
+    constexpr u8 bus_master_interrupt_or_error = 0x04 | 0x02;
+    return (bus_master_status & bus_master_interrupt_or_error) || irq_observed;
+}
+
+constexpr bool ide_dma_irq_belongs_to_transfer(bool dma_in_progress, u8 bus_master_status)
+{
+    return dma_in_progress && (bus_master_status & 0x04);
+}
+
 constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status, bool irq_observed = false)
 {
     constexpr u8 busy_or_data_request_or_error = 0x80 | 0x08 | 0x20 | 0x01;
     constexpr u8 bus_master_interrupt = 0x04;
     constexpr u8 bus_master_error = 0x02;
+    constexpr u8 bus_master_active = 0x01;
     return ((bus_master_status & bus_master_interrupt) || irq_observed)
-        && !(bus_master_status & bus_master_error)
+        && !(bus_master_status & (bus_master_error | bus_master_active))
         && !(drive_status & busy_or_data_request_or_error);
 }
 

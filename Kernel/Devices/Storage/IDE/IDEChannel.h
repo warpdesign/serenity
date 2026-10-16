@@ -81,8 +81,11 @@ private:
     NonnullOwnPtr<IOWindow> m_control_block;
     OwnPtr<IOWindow> m_bus_master;
     OwnPtr<IDEChannelIRQHandler> m_dma_irq_handler;
+    Atomic<bool> m_dma_in_progress { false };
     Atomic<bool> m_dma_irq_observed { false };
     Atomic<u32> m_dma_interrupt_count { 0 };
+    Atomic<u8> m_dma_status_at_irq { 0 };
+    Atomic<u8> m_drive_status_at_irq { 0 };
     u32 m_dma_success_count { 0 };
     OwnPtr<Memory::Region> m_descriptor_table;
     PhysicalAddress m_descriptor_table_physical;
