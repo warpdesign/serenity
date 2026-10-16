@@ -838,14 +838,15 @@ planned as sixteen IDE transfers instead of 256 page-sized transfers; the
 PowerPC kernel builds. It does not change ext2's separate 4 KiB direct-I/O
 splitting. Physical throughput for the larger raw requests remains unmeasured.
 
-The sole updated local image is
+The preceding local image was
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`, SHA-256
 `cdcf304559ddefce3ba8db8268aab25cfc6e699b48d91411e70ad8d462e7c459`.
 It includes the explicit Pegasos `dma` opt-in and the IDE 64 KiB raw-request
 limit. The extracted FFS loader matches the rebuilt ELF byte for byte, and
 the ext2 root partition matches `pegasos2-root.ext2` byte for byte. The
-existing physical card has not yet been rewritten with this image. Boot it
-with `fullram weakrng dma` to keep the previously validated DMA path, or
+user copied this version to the physical card before the newer writeback
+image was ready. Boot with `fullram weakrng dma` to keep the previously
+validated DMA path, or
 with `fullram weakrng udma=5` for the measured UDMA5 mode. Plain
 `fullram weakrng` selects the PIO default. No QEMU run was made.
 
@@ -869,19 +870,17 @@ direct writes coherent with cached entries. The next serial log will show
 ext2 metadata preparation time, block-cache writeback time, overall VFS sync
 time, and aggregated IDE DMA write-versus-ATA-flush time for each sixteen
 writes. The PowerPC kernel and host regression targets build. This work is
-not in the current SD image; do not replace that image while it is being
-copied. Physical improvement remains unverified, and the SD card can still
+now in the updated local SD image below. Physical improvement remains
+unverified, and the SD card can still
 spend time committing writes even if desktop reads can interleave.
 
-A candidate with these changes has been built at
-`/tmp/serenity-pegasos-flush.axlOEe/pegasos2-sdcard.img` (SHA-256
-`a8f89746507fc96387fb0c4f7f95977697239ec3bf93949bcad7dbbb79bc5b34`).
-Its extracted FFS loader matches the separately rebuilt ELF, and its root
-partition matches `pegasos2-root.ext2` byte for byte. The named image in
-`Build/powerpc/PowerPCBoot/` still has SHA-256
-`cdcf304559ddefce3ba8db8268aab25cfc6e699b48d91411e70ad8d462e7c459`;
-the candidate will replace it after the user's current SD-card copy ends.
-No QEMU run was made.
+After the user's SD-card copy finished, the verified candidate replaced the
+sole named image at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`. Its
+SHA-256 is
+`a8f89746507fc96387fb0c4f7f95977697239ec3bf93949bcad7dbbb79bc5b34`.
+The extracted FFS loader matches the separately rebuilt ELF, and its root
+partition matches `pegasos2-root.ext2` byte for byte. The user has not yet
+tested this writeback version on the physical Pegasos 2. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
