@@ -477,10 +477,12 @@ its cache lock through the entire writeback loop, an independent generic
 upstream issue now recorded in `Documentation/UpstreamBugBacklog.md`.
 
 An experiment batched ATA cache flushes at filesystem sync instead of after
-each block write. The physical result below showed that flush commands were
-not the expensive part, so the experiment was reverted and per-write flush
-semantics restored. The PowerPC dynamic loader also recognizes `DT_PPC_GOT` as a handled
-architecture tag: its PLT code already used the tag, but the generic scanner
+each block write. The physical PIO result did not show a startup improvement
+and measured the batched flush at 0 ms, so the experiment was reverted and
+per-write flush semantics restored. That result does not measure each flush
+in the current UDMA5 path. The PowerPC dynamic loader also recognizes
+`DT_PPC_GOT` as a handled architecture tag: its PLT code already used the tag,
+but the generic scanner
 had printed an “unhandled DT_LOPROC” line for every library. Host regressions
 for dynamic-tag recognition pass, and the kernel, dynamic loader, and LibELF
 build. Physical DMA stability remains unverified.
@@ -785,9 +787,10 @@ LED can stay lit for several seconds. The DMA boot log shows Ext2 syncs of
 16-23 blocks continuing at 30.206, 41.351, 51.555, 59.873, 70.799, 78.798,
 and 86.909 seconds. Thus successful DMA completion has not resolved the
 filesystem write latency. `IDEChannel::write_sectors()` still issues an ATA
-cache flush after each request, although earlier PIO logs measured the flush
-itself as near zero; the drive's write completion and Ext2 sync locking
-remain candidates. Compare the same `disk_benchmark` command against the
+cache flush after each request. Earlier PIO logs measured a batched flush at
+near zero; the per-request UDMA5 flush cost, drive write completion, and Ext2
+sync locking remain candidates. Compare the same `disk_benchmark` command
+against the
 earlier PIO result before attributing the LED stalls to any one component.
 
 On a later physical boot with `udma=5`, the same
@@ -805,9 +808,9 @@ DMA stability.
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
-showed the ATA FLUSH CACHE command itself was cheap. The user saw the Shell
-window fully drawn around uptime 81.090 s. This disproves the hypothesis
-that per-write ATA flushes caused most of the delay. Slow data writes, the
+showed the batched ATA FLUSH CACHE command was cheap in that PIO run. The user
+saw the Shell window fully drawn around uptime 81.090 s. This does not
+measure per-write flush cost in UDMA5. Slow data writes, the
 PIO data transfer, device write latency, and the filesystem cache lock remain
 candidates; the upstream lock issue is documented separately. The batching
 change has been reverted in source. Per-write cache flushes are restored.
