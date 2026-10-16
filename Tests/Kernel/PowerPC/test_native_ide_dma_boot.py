@@ -45,6 +45,20 @@ Entering WindowServer main loop
     check_dma_boot(recovered, False)
     check_dma_boot(recovered, True)
     check_dma_boot(recovered.replace("mode 2", "mode 0"), True, 0)
+    retried = recovered.replace("IDE: Channel reset after DMA failure, drive status 0x50",
+        "IDE: Channel reset after DMA failure attempt 1 timed out, drive status 0x58\n"
+        "IDE: Channel reset after DMA failure, drive status 0x50, attempt 2")
+    check_dma_boot(retried, True)
+    stuck = recovered.replace("IDE: Channel reset after DMA failure, drive status 0x50\n",
+        "IDE: Channel reset after DMA failure attempt 1 timed out, drive status 0x58\n"
+        "IDE: Channel reset after DMA failure attempt 2 timed out, drive status 0x58\n"
+        "IDEDevice: Request for block 151776 failed: Error(errno=69)\n")
+    try:
+        check_dma_boot(stuck, True)
+    except AssertionError:
+        pass
+    else:
+        raise AssertionError("a wedged drive must not count as a successful PIO fallback")
     try:
         check_dma_boot(recovered.replace("IDE: Channel reset after DMA failure, drive status 0x50\n", ""), True)
     except AssertionError:

@@ -7,6 +7,7 @@
 #include <AK/BuiltinWrappers.h>
 #include <Kernel/Boot/CommandLine.h>
 #include <Kernel/Bus/PCI/API.h>
+#include <Kernel/Devices/Storage/IDE/DMACompletion.h>
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Devices/Storage/IDE/IDEController.h>
 #include <Kernel/Devices/Storage/IDE/IDEDevice.h>
@@ -64,6 +65,9 @@ ErrorOr<NonnullRefPtr<IDEController>> IDEController::initialize(PCI::DeviceIdent
 {
     auto controller = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) IDEController()));
     PCI::enable_io_space(identifier);
+    // Poll IDE completion in software, but let the drive's INTRQ reach the
+    // bus-master engine. Mask only the PCI function's interrupt to the CPU.
+    PCI::disable_interrupt_line(identifier);
     if (identifier.hardware_id().vendor_id == via_vendor_id) {
         dmesgln("IDE: VIA timing registers: drive timing {:#02x} {:#02x} {:#02x} {:#02x}, Ultra DMA {:#02x} {:#02x} {:#02x} {:#02x}",
             read_config8(identifier, 0x48), read_config8(identifier, 0x49), read_config8(identifier, 0x4a), read_config8(identifier, 0x4b),
@@ -108,8 +112,17 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
     auto control_block = TRY(control_block_base->create_from_io_window_with_offset(2));
     OwnPtr<IOWindow> bus_master;
     u8 programming_interface = read_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF));
+    bool pci_interrupt_is_masked;
+    {
+        SpinlockLocker locker(identifier.operation_lock());
+        pci_interrupt_is_masked = ide_dma_pin_interrupt_is_masked(PCI::read16_locked(identifier, PCI::RegisterOffset::COMMAND));
+    }
+    if (channel_index == 0)
+        dmesgln("IDE: PCI interrupt output masked for polled DMA: {}", pci_interrupt_is_masked);
     if (kernel_command_line().contains("nodma"sv)) {
         dmesgln("IDE: DMA disabled by the nodma boot argument");
+    } else if (!pci_interrupt_is_masked) {
+        dmesgln("IDE: PCI interrupt cannot be masked, using PIO");
     } else if (!(programming_interface & bus_master_capable) || PCI::get_BAR(identifier, PCI::HeaderType0BaseRegister::BAR4) == 0) {
         dmesgln("IDE: Controller has no bus master, using PIO");
     } else {

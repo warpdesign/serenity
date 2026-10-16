@@ -104,6 +104,20 @@ add_custom_target(KernelIDEWriteCacheCheck
     VERBATIM
 )
 
+set(kernel_ide_dma_completion_source "${CMAKE_CURRENT_SOURCE_DIR}/IDE/TestDMACompletion.cpp")
+set(kernel_ide_dma_completion_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-IDE-DMA-completion")
+add_custom_target(KernelIDEDMACompletionCheckQuick
+    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_ide_dma_completion_source}" -o "${kernel_ide_dma_completion_executable}"
+    COMMAND "${kernel_ide_dma_completion_executable}"
+    VERBATIM
+)
+add_custom_target(KernelIDEDMACompletionCheck
+    COMMAND "${kernel_ide_dma_completion_executable}" extended
+    DEPENDS KernelIDEDMACompletionCheckQuick
+    VERBATIM
+)
+
 set(kernel_hid_keyboard_repeat_source "${CMAKE_CURRENT_SOURCE_DIR}/HID/TestKeyboardRepeat.cpp")
 set(kernel_hid_keyboard_repeat_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-HID-keyboard-repeat")
 find_program(KERNEL_HID_HOST_CXX NAMES c++ clang++ REQUIRED)

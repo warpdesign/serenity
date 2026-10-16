@@ -491,6 +491,41 @@ loader and root bytes match the built inputs. The root has `/bin/membench`
 but no benchmark boot service, and e2fsck reports a clean filesystem. No
 QEMU run was made, per the user's request.
 
+The user's next physical run of that image did not reach the desktop. A DMA
+read of eight sectors at LBA 151776 failed with drive status `0x55`, ATA
+error `0x00`, and bus-master status `0x21`. This time the channel software
+reset timed out with drive status `0x58`; later PIO reads failed and `/init`
+faulted while loading code. The crash follows the failed disk reads. In the
+driver, PIO retry follows `TRY(reset_after_dma_error())`, so a reset timeout
+returns before PIO is attempted; earlier images reached status `0x50` and
+could retry. The new writeback image cannot establish a speed improvement
+from this failed boot. Booting this card with explicit `nodma` avoids the
+experimental DMA path.
+
+Source review found a likely root cause. The IDE channel sets ATA `nIEN`
+(interrupt disable) for polling and left it set for DMA too. The
+[PCI IDE bus-master specification](https://read.seas.harvard.edu/~kohler/class/04f-aos/ref/hardware/IDE-BusMaster.pdf)
+says the drive signals INTRQ at DMA completion and the controller latches it
+in status bit 2. The observed `0x21` has Active set but Interrupt clear. The
+driver also previously accepted Active clear without that completion bit.
+The revised source masks the IDE PCI function's interrupt to the CPU, checks
+that this mask is supported, briefly clears drive `nIEN` for DMA, acknowledges
+any old interrupt, and requires the controller's completion latch. A failed
+DMA command now gets a second bounded soft reset with a longer pulse before
+the drive is declared unusable; this cannot guarantee recovery from a wedged
+adapter. If the PCI interrupt cannot be masked, it uses PIO. This is built
+and covered by host status tests, but **physical DMA is not yet proven**.
+
+The user is testing the `050dade...` image with explicit `nodma`; its bytes
+remain unchanged. A separate candidate image at
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard-next.img` (929 MiB; SHA-256
+`7cf7e9ad22c74287a21fc139c6e42081349c8b9428badf0a3a80bb9b94293595`)
+contains the new loader. It defaults physical Pegasos boots to PIO for safety;
+`dma` or `udma=N` opts into experimental DMA on that same image. QEMU retains
+its existing default. Loader argument, DMA status, and recovery self-tests
+pass; its FFS loader and ext2 root match the built inputs. The candidate has
+not been written to or booted on physical hardware.
+
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt
 source. The RNG wait now uses the predicate-based wait queue, which rechecks

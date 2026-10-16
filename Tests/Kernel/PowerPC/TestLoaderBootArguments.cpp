@@ -11,6 +11,7 @@
 #include <initializer_list>
 
 using Kernel::PowerPC::Loader::boot_argument_present;
+using Kernel::PowerPC::Loader::should_append_native_nodma;
 
 static_assert(boot_argument_present("serial_debug weakrng fullram", "weakrng"));
 static_assert(boot_argument_present("serial_debug weakrng fullram", "fullram"));
@@ -18,6 +19,12 @@ static_assert(!boot_argument_present("serial_debug oldfullram", "fullram"));
 static_assert(!boot_argument_present("serial_debug fullram=1", "fullram"));
 static_assert(boot_argument_present("fullram /? nodma", "/?"));
 static_assert(!boot_argument_present("fullram /?suffix nodma", "/?"));
+static_assert(should_append_native_nodma("fullram weakrng", false));
+static_assert(!should_append_native_nodma("fullram weakrng", true));
+static_assert(!should_append_native_nodma("fullram weakrng nodma", false));
+static_assert(!should_append_native_nodma("fullram weakrng dma", false));
+static_assert(!should_append_native_nodma("fullram weakrng udma=0", false));
+static_assert(should_append_native_nodma("fullram weakrng oldudma=0", false));
 
 int main()
 {
@@ -33,7 +40,7 @@ int main()
         return 1;
     if (!boot_argument_present("\t/?  fullram\t", "/?"))
         return 1;
-    for (auto const* option : { "/?", "fullram", "fixedio", "ofdump", "halt", "stop", "realmode", "claimram", "native", "weakrng", "nodma", "udma=N", "root=..." }) {
+    for (auto const* option : { "/?", "fullram", "fixedio", "ofdump", "halt", "stop", "realmode", "claimram", "native", "dma", "weakrng", "nodma", "udma=N", "root=..." }) {
         if (!std::strstr(Kernel::PowerPC::Loader::loader_help, option))
             return 1;
     }

@@ -460,14 +460,47 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   929 MiB card SHA-256:
   `050dade55256bc5f42c17f8cc13d929910c7313afe7e98c4eab7d5c04da82ed4`.
 
-Next: write the newest card image once, boot `fullram weakrng`, measure Shell
+- 2026-10-16: The user's next physical test of that image crashed: DMA read
+  LBA 151776 failed (`ATA status 0x55`, ATA error `0x00`, BM status `0x21`),
+  SRST then timed out with status `0x58`, further reads failed, and `/init`
+  faulted. The PIO retry is after `TRY(reset_after_dma_error())`, so the reset
+  timeout returned before the retry. Earlier images reached status `0x50`
+  and could continue with PIO. The failed boot cannot validate the newest
+  writeback performance change. Explicit `nodma` is the safe way to boot the
+  current card.
+  Source review against the PCI IDE bus-master specification identified a
+  strong candidate: our IDE channel left ATA `nIEN` set during DMA, hiding
+  the drive's INTRQ completion signal from the bus-master engine. The engine
+  status `0x21` is Active=1, Interrupt=0. New source masks the PCI function's
+  interrupt output to the CPU (falls back to PIO if that mask cannot be set),
+  clears device `nIEN` only for DMA, acknowledges any prior INTRQ, and accepts
+  DMA only when BM Interrupt is latched and the drive is ready. A failed DMA
+  command now gets one additional, longer bounded SRST attempt; this remains
+  best-effort and cannot guarantee recovery from a wedged adapter. On physical
+  Pegasos, the loader now appends `nodma` by default; `dma` or `udma=N` opts
+  into experimental DMA, while QEMU defaults remain unchanged. Host tests
+  and the PowerPC kernel/loader build pass; no QEMU or physical run of this
+  source yet. The user is now booting the prior card with explicit `nodma` to
+  check the writeback change independently of DMA. **Do not overwrite the
+  canonical `pegasos2-sdcard.img` while that baseline is under test.** A
+  separate 929 MiB candidate is ready at
+  `Build/powerpc/PowerPCBoot/pegasos2-sdcard-next.img`, SHA-256
+  `7cf7e9ad22c74287a21fc139c6e42081349c8b9428badf0a3a80bb9b94293595`.
+  Its FFS loader and ext2 root match the built inputs; it still needs a
+  physical run. Spec:
+  `https://read.seas.harvard.edu/~kohler/class/04f-aos/ref/hardware/IDE-BusMaster.pdf`.
+
+Next: inspect the user's `nodma` boot result on the current card. The
+candidate image is already built with safe default PIO and opt-in `dma`.
+Boot it with `fullram weakrng`
+first, then `fullram weakrng dma` to test the revised DMA completion. Measure Shell
 window delay and rerun the one-case disk benchmark to compare with the 102500
 bytes/s write baseline. Check for `IDE: cache flush after ... writes took ...`
 and any DMA failure/reset. USB repeat is already confirmed. The image accepts
 `udma=0` or `nodma` without another rewrite. Do not assume a faster UDMA mode
 will fix the observed UDMA0 failure. `boot ide:0 serenity.elf /?` opens the optional firmware
 prompt; `exit` should return to SmartFirmware without restarting it.
-Short options are `/?`, `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
+Short options are `/?`, `weakrng`, `fullram`, `dma`, `halt`, `ofdump`, `realmode`,
 `claimram`, `native`, `nodma`, `udma=<mode>`, and `fixedio`. Check the serial log for
 `legacy I/O ports at 0xfe000000`; if the board goes silent after `entering kernel`, retry with `fixedio`.
 After the desktop appears, plug the USB keyboard into the same root port 2

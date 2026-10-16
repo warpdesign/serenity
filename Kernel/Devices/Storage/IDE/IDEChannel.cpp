@@ -10,6 +10,7 @@
 #include <Kernel/Arch/MemoryFences.h>
 #include <Kernel/Arch/Processor.h>
 #include <Kernel/Devices/Storage/AHCI/Definitions.h>
+#include <Kernel/Devices/Storage/IDE/DMACompletion.h>
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Library/Assertions.h>
 #include <Kernel/Memory/MemoryManager.h>
@@ -32,7 +33,6 @@ static constexpr u8 bus_master_status = 2;
 static constexpr u8 bus_master_descriptor_table = 4;
 static constexpr u8 bus_master_command_start = 1 << 0;
 static constexpr u8 bus_master_command_write_to_memory = 1 << 3;
-static constexpr u8 bus_master_status_active = 1 << 0;
 static constexpr u8 bus_master_status_error = 1 << 1;
 static constexpr u8 bus_master_status_interrupt = 1 << 2;
 static constexpr u8 bus_master_status_drive_dma_capable(IDEChannel::Drive drive) { return 1 << (5 + to_underlying(drive)); }
@@ -253,26 +253,28 @@ ErrorOr<void> IDEChannel::reset_after_dma_error()
     // Stopping the bus master does not abort the command in the drive. A
     // timed-out DMA command can leave DRQ asserted, so reset before issuing
     // the replacement PIO command.
-    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
-    microseconds_delay(20);
-    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts | device_control_software_reset);
-    microseconds_delay(20);
-    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
-    // libata waits before reading taskfile status after SRST; some devices
-    // transiently report ready before their reset actually starts.
-    microseconds_delay(150'000);
+    for (unsigned reset_attempt = 0; reset_attempt < 2; ++reset_attempt) {
+        m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+        microseconds_delay(20);
+        m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts | device_control_software_reset);
+        // A second, longer pulse gives slow SD-to-IDE adapters one more chance
+        // to leave a wedged DMA command before declaring the channel unusable.
+        microseconds_delay(reset_attempt == 0 ? 20 : 5'000);
+        m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+        // libata waits before reading taskfile status after SRST; some devices
+        // transiently report ready before their reset actually starts.
+        microseconds_delay(150'000);
 
-    for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
-        u8 status = alternate_status();
-        if (!(status & (ATA_SR_BSY | ATA_SR_DRQ))) {
-            if (status & (ATA_SR_ERR | ATA_SR_DF))
-                return Error::from_errno(EIO);
-            dmesgln("IDE: Channel reset after DMA failure, drive status {:#02x}", status);
-            return {};
+        for (size_t poll = 0; poll < status_poll_attempts; ++poll) {
+            u8 status = alternate_status();
+            if (ide_drive_ready_after_reset(status)) {
+                dmesgln("IDE: Channel reset after DMA failure, drive status {:#02x}, attempt {}", status, reset_attempt + 1);
+                return {};
+            }
+            microseconds_delay(status_poll_delay_us);
         }
-        microseconds_delay(status_poll_delay_us);
+        dmesgln("IDE: Channel reset after DMA failure attempt {} timed out, drive status {:#02x}", reset_attempt + 1, alternate_status());
     }
-    dmesgln("IDE: Channel reset after DMA failure timed out, drive status {:#02x}", alternate_status());
     return Error::from_errno(ETIMEDOUT);
 }
 
@@ -304,12 +306,24 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
 
     u8 direction = is_write ? 0 : bus_master_command_write_to_memory;
     m_bus_master->write8(bus_master_command, direction);
-    m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
     m_bus_master->write32(bus_master_descriptor_table, m_descriptor_table_physical.get());
-    TRY(issue_transfer_command(drive, use_lba48, lba, count, is_write ? ATA_CMD_WRITE_DMA : ATA_CMD_READ_DMA, is_write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT));
+    // The bus-master IDE engine observes the drive's INTRQ edge even though
+    // its PCI interrupt output is masked. Keep nIEN set for polled PIO only.
+    m_control_block->write8(ATA_CTL_CONTROL, 0);
+    // A previous polled command may have left INTRQ pending. Acknowledge it,
+    // then clear the bus master's latch before issuing this DMA command.
+    (void)m_command_block->read8(ATA_REG_STATUS);
+    m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
+    auto command_result = issue_transfer_command(drive, use_lba48, lba, count,
+        is_write ? ATA_CMD_WRITE_DMA : ATA_CMD_READ_DMA,
+        is_write ? ATA_CMD_WRITE_DMA_EXT : ATA_CMD_READ_DMA_EXT);
+    if (command_result.is_error()) {
+        m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
+        return command_result.release_error();
+    }
     m_bus_master->write8(bus_master_command, direction | bus_master_command_start);
 
-    // Interrupts are disabled at the drive, so wait for both the drive and the DMA engine to go idle.
+    // Poll the controller's latched INTRQ status; no CPU interrupt is needed.
     ErrorOr<void> result = Error::from_errno(ETIMEDOUT);
     u8 drive_status = 0;
     u8 engine_status = 0;
@@ -320,15 +334,13 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
             result = Error::from_errno(EIO);
             break;
         }
-        if (!(drive_status & (ATA_SR_BSY | ATA_SR_DRQ))) {
-            if (drive_status & (ATA_SR_ERR | ATA_SR_DF)) {
-                result = Error::from_errno(EIO);
-                break;
-            }
-            if (!(engine_status & bus_master_status_active)) {
-                result = {};
-                break;
-            }
+        if (!(drive_status & ATA_SR_BSY) && (drive_status & (ATA_SR_ERR | ATA_SR_DF))) {
+            result = Error::from_errno(EIO);
+            break;
+        }
+        if (ide_dma_has_completed(drive_status, engine_status)) {
+            result = {};
+            break;
         }
         microseconds_delay(status_poll_delay_us);
     }
@@ -338,6 +350,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     m_bus_master->write8(bus_master_status, m_bus_master->read8(bus_master_status) | bus_master_status_error | bus_master_status_interrupt);
     // Reading the status register acknowledges the drive.
     (void)m_command_block->read8(ATA_REG_STATUS);
+    m_control_block->write8(ATA_CTL_CONTROL, device_control_disable_interrupts);
     if (!is_write)
         Processor::flush_data_cache(VirtualAddress(buffer), size);
     if (result.is_error()) {
