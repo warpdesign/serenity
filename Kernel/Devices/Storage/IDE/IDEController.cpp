@@ -31,19 +31,14 @@ static constexpr u8 via_udma_enable_bits = 0xe0;
 // Cycle time fields for a 33 MHz PCI clock: ceil(mode cycle time / 10 ns) clamped to 2..7, minus 2.
 static constexpr Array<u8, 6> via_udma100_cycle_fields { 5, 5, 4, 3, 1, 0 };
 static IDEController::IRQOverride s_irq_override;
-static IDEController::LegacyIOOverride s_legacy_io_override;
 
 void IDEController::set_irq_override(IRQOverride override)
 {
     VERIFY(!s_irq_override);
     s_irq_override = override;
 }
+// Modes above this need an 80-wire cable.
 
-void IDEController::set_legacy_io_override(LegacyIOOverride override)
-{
-    VERIFY(!s_legacy_io_override);
-    s_legacy_io_override = override;
-}
 static u8 via_udma_register_offset(u8 channel_index, IDEChannel::Drive drive)
 {
     return via_udma_timing_register + 3 - (channel_index * 2 + to_underlying(drive));
@@ -99,18 +94,15 @@ IDEController::IDEController()
 
 ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& identifier, u8 channel_index)
 {
-    u8 programming_interface = read_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF));
-    Optional<ChannelIOWindows> legacy_windows;
-    if (!(programming_interface & channel_native_mode(channel_index))) {
-        if (s_legacy_io_override)
-            legacy_windows = TRY(s_legacy_io_override(identifier, channel_index));
-        if (!legacy_windows.has_value()) {
-            // Preserve the previous generic behavior for controllers without a
-            // platform mapping of their legacy ISA ports.
+    {
+        SpinlockLocker locker(identifier.operation_lock());
+        u8 programming_interface = PCI::read8_locked(identifier, PCI::RegisterOffset::PROG_IF);
+        if (!(programming_interface & channel_native_mode(channel_index))) {
+            // Legacy ISA port decoding is only reachable through x86 port I/O, so prefer native mode.
             if (!(programming_interface & channel_mode_switchable(channel_index)))
                 return Error::from_errno(ENOTSUP);
-            write_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF), programming_interface | channel_native_mode(channel_index));
-            programming_interface = read_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF));
+            PCI::write8_locked(identifier, PCI::RegisterOffset::PROG_IF, programming_interface | channel_native_mode(channel_index));
+            programming_interface = PCI::read8_locked(identifier, PCI::RegisterOffset::PROG_IF);
             if (!(programming_interface & channel_native_mode(channel_index)))
                 return Error::from_errno(ENOTSUP);
         }
@@ -118,22 +110,13 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
 
     auto command_bar = channel_index == 0 ? PCI::HeaderType0BaseRegister::BAR0 : PCI::HeaderType0BaseRegister::BAR2;
     auto control_bar = channel_index == 0 ? PCI::HeaderType0BaseRegister::BAR1 : PCI::HeaderType0BaseRegister::BAR3;
-    auto windows_or_error = [&]() -> ErrorOr<ChannelIOWindows> {
-        if (legacy_windows.has_value()) {
-            dmesgln("IDE: {} {} channel {} in legacy mode", identifier.address(), identifier.hardware_id(), channel_index);
-            return legacy_windows.release_value();
-        }
-        dmesgln("IDE: {} {} channel {} in native mode, command block {:#x}, control block {:#x}", identifier.address(), identifier.hardware_id(),
-            channel_index, PCI::get_BAR(identifier, command_bar), PCI::get_BAR(identifier, control_bar));
-        auto command = TRY(IOWindow::create_for_pci_device_bar(identifier, command_bar, 8));
-        // Device control and alternate status are at offset 2 of the 4-byte BAR.
-        auto control_base = TRY(IOWindow::create_for_pci_device_bar(identifier, control_bar, 4));
-        auto control = TRY(control_base->create_from_io_window_with_offset(2));
-        return ChannelIOWindows { move(command), move(control) };
-    }();
-    auto windows = TRY(windows_or_error);
-    auto command_block = move(windows.command);
-    auto control_block = move(windows.control);
+    dmesgln("IDE: {} {} channel {} in native mode, command block {:#x}, control block {:#x}", identifier.address(), identifier.hardware_id(),
+        channel_index, PCI::get_BAR(identifier, command_bar), PCI::get_BAR(identifier, control_bar));
+
+    auto command_block = TRY(IOWindow::create_for_pci_device_bar(identifier, command_bar, 8));
+    // The device control and alternate status register is at offset 2 of the 4-byte control block.
+    auto control_block_base = TRY(IOWindow::create_for_pci_device_bar(identifier, control_bar, 4));
+    auto control_block = TRY(control_block_base->create_from_io_window_with_offset(2));
     OwnPtr<IOWindow> bus_master;
     Optional<InterruptNumber> dma_irq;
     if (s_irq_override)
@@ -143,6 +126,7 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
         if (line > 0 && line != 2 && line < 16)
             dma_irq = InterruptNumber { line };
     }
+    u8 programming_interface = read_config8(identifier, to_underlying(PCI::RegisterOffset::PROG_IF));
     bool pci_interrupt_is_masked;
     {
         SpinlockLocker locker(identifier.operation_lock());

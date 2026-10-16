@@ -21,20 +21,4 @@ constexpr Optional<u8> ide_channel_irq(u16 vendor, u16 device, u16 domain, u8 bu
     return static_cast<u8>(14 + channel);
 }
 
-constexpr bool should_force_ide_legacy_mode(u16 vendor, u16 device, u16 domain, u8 bus, u8 slot, u8 function, u8 pci_line, bool dma_requested)
-{
-    return dma_requested && pci_line == 14
-        && ide_channel_irq(vendor, device, domain, bus, slot, function, 0).has_value();
-}
-
-struct IDELegacyChannelPorts {
-    u16 command;
-    u16 control;
-};
-
-constexpr IDELegacyChannelPorts ide_legacy_channel_ports(u8 channel)
-{
-    return channel == 0 ? IDELegacyChannelPorts { 0x1f0, 0x3f6 } : IDELegacyChannelPorts { 0x170, 0x376 };
-}
-
 }

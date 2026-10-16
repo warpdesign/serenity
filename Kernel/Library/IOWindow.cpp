@@ -108,12 +108,6 @@ IOWindow::IOWindow(NonnullOwnPtr<Memory::TypedMapping<u8 volatile>> memory_mappe
 {
 }
 
-ErrorOr<NonnullOwnPtr<IOWindow>> IOWindow::create_for_pci_io_space(PhysicalAddress address, u64 space_length)
-{
-    auto mapping = TRY(Memory::adopt_new_nonnull_own_typed_mapping<u8 volatile>(address, space_length, Memory::Region::Access::ReadWrite));
-    return TRY(adopt_nonnull_own_or_enomem(new (nothrow) IOWindow(move(mapping), true)));
-}
-
 IOWindow::~IOWindow() = default;
 
 bool IOWindow::is_access_aligned(u64 offset, size_t byte_size_access) const

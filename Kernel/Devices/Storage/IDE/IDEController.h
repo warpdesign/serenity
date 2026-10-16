@@ -6,7 +6,6 @@
 
 #pragma once
 
-#include <AK/Optional.h>
 #include <AK/Vector.h>
 #include <Kernel/Bus/PCI/Definitions.h>
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
@@ -19,16 +18,9 @@ class IDEDevice;
 // A PCI IDE controller whose channels run in PCI native mode, such as the Pegasos 2's VT8231.
 class IDEController final : public StorageController {
 public:
-    struct ChannelIOWindows {
-        NonnullOwnPtr<IOWindow> command;
-        NonnullOwnPtr<IOWindow> control;
-    };
-
     using IRQOverride = Optional<InterruptNumber> (*)(PCI::DeviceIdentifier const&, u8 channel_index);
-    using LegacyIOOverride = ErrorOr<Optional<ChannelIOWindows>> (*)(PCI::DeviceIdentifier const&, u8 channel_index);
 
     static void set_irq_override(IRQOverride);
-    static void set_legacy_io_override(LegacyIOOverride);
     static bool is_handled(PCI::DeviceIdentifier const&);
     static ErrorOr<NonnullRefPtr<IDEController>> initialize(PCI::DeviceIdentifier const&);
 

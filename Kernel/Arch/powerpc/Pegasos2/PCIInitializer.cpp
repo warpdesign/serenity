@@ -10,7 +10,6 @@
 #include <Kernel/Arch/powerpc/Pegasos2/PCIHostController.h>
 #include <Kernel/Arch/powerpc/Pegasos2/IDEIRQRouting.h>
 #include <Kernel/Arch/powerpc/Pegasos2/InterruptController.h>
-#include <Kernel/Arch/powerpc/Pegasos2/LegacyIO.h>
 #include <Kernel/Arch/powerpc/Pegasos2/VIAAC97.h>
 #include <Kernel/Boot/BootInfo.h>
 #include <Kernel/Boot/CommandLine.h>
@@ -32,19 +31,6 @@ static Optional<InterruptNumber> pegasos2_ide_irq_override(DeviceIdentifier cons
     if (!irq.has_value())
         return {};
     return InterruptNumber { irq.value() };
-}
-
-static ErrorOr<Optional<IDEController::ChannelIOWindows>> pegasos2_ide_legacy_io_override(DeviceIdentifier const& identifier, u8 channel)
-{
-    auto const& address = identifier.address();
-    if (!PowerPC::Pegasos2::ide_channel_irq(identifier.hardware_id().vendor_id, identifier.hardware_id().device_id,
-            address.domain(), address.bus(), address.device(), address.function(), channel).has_value())
-        return Optional<IDEController::ChannelIOWindows> {};
-    auto ports = PowerPC::Pegasos2::ide_legacy_channel_ports(channel);
-    auto base = PowerPC::Pegasos2::legacy_io_physical_base();
-    auto command = TRY(IOWindow::create_for_pci_io_space(base.offset(ports.command), 8));
-    auto control = TRY(IOWindow::create_for_pci_io_space(base.offset(ports.control), 1));
-    return Optional<IDEController::ChannelIOWindows> { IDEController::ChannelIOWindows { move(command), move(control) } };
 }
 
 READONLY_AFTER_INIT SetOnce g_pci_access_io_probe_failed;
@@ -145,22 +131,8 @@ UNMAP_AFTER_INIT void initialize()
         dmesgln("PCI: Pegasos 2 routed {} unconfigured PCI interrupt lines", assigned);
     }
 
-    auto dma_requested = !kernel_command_line().contains("nodma"sv)
-        && (kernel_command_line().contains("dma"sv) || kernel_command_line().lookup("udma"sv).has_value());
-    auto ide_line = south_controller->read8_field(south_bus, 12, 1, 0x3c);
-    if (PowerPC::Pegasos2::should_force_ide_legacy_mode(
-            south_controller->read16_field(south_bus, 12, 1, 0), south_controller->read16_field(south_bus, 12, 1, 2),
-            0, south_bus, 12, 1, ide_line, dma_requested)) {
-        auto previous_interface = south_controller->read8_field(south_bus, 12, 1, 0x09);
-        south_controller->write8_field(south_bus, 12, 1, 0x09, previous_interface & ~0x05);
-        auto current_interface = south_controller->read8_field(south_bus, 12, 1, 0x09);
-        dmesgln("PCI: Pegasos 2 IDE programming interface {:#02x} -> {:#02x}, IRQ {} (Linux legacy fixup)",
-            previous_interface, current_interface, ide_line);
-    }
-
     auto& access = Access::the();
     IDEController::set_irq_override(pegasos2_ide_irq_override);
-    IDEController::set_legacy_io_override(pegasos2_ide_legacy_io_override);
     access.add_host_controller(move(south_controller));
     access.add_host_controller(move(agp_controller));
     MUST(AudioManagement::the().register_pci_driver({ PowerPC::Pegasos2::VIAAC97::probe, PowerPC::Pegasos2::VIAAC97::create }));

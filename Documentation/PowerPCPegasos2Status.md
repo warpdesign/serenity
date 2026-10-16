@@ -610,15 +610,24 @@ and waits briefly after starting the bus master before polling its status.
 The physical `0x2f`/`0x21` case now has a regression test, but hardware DMA
 success is still unverified.
 
-The current image also applies Linux's Pegasos 2 compatibility-mode fixup on
-explicit `dma` or `udma=N` boots when the onboard VIA IDE function reports
-PCI line 14. It maps the fixed primary ports `0x1f0`/`0x3f6` and secondary
-ports `0x170`/`0x376` in the firmware's legacy I/O window, while keeping the
-bus-master BAR. A `nodma` boot retains the proven native BAR path. The
-source, route tests, DMA completion tests, and PowerPC kernel and loader
-build pass. The sole card image at
+The next image (`7cf6ebff...`) tried Linux's Pegasos 2 compatibility-mode
+fixup on an explicit `dma` boot because PCI line 14 matched its condition.
+It switched both channels to the standard legacy ports. On this physical
+board neither channel found a drive, and storage discovery reported zero
+devices before panicking. No DMA transfer was attempted in that run. This
+proves that PCI line 14 alone does not establish usable legacy I/O decoding
+on this firmware; changing the programming-interface bits is insufficient.
+Do not reapply the legacy-mode fixup without evidence that the fixed ports
+actually decode on this machine.
+
+The current source restores the previously working native BAR path for every
+boot, including `dma`. It retains the independent correction that waits for
+the bus-master completion interrupt before treating ATA status as final.
+The physical legacy-mode failure has a regression case in the native IDE
+boot checker. The IRQ route and completion tests, native IDE checker
+self-test, and PowerPC kernel and loader build pass. The sole card image at
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
-`7cf6ebff2e801d7c912c62dded3533beb94d4db83408cc0eb8f99b8b2f73e5f7`)
+`4d114132491e6efb24bf52fd60f2c2bc75a3ac0594e4d3345d1c25a4fc992727`)
 has the new loader in its FFS partition; the ext2 root is byte-for-byte
 unchanged. FFS loader bytes match the built loader. No QEMU run was made.
 

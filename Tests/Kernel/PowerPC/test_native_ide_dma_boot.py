@@ -9,6 +9,10 @@ from pathlib import Path
 
 
 def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2) -> None:
+    if "channel 0 in legacy mode" in log:
+        raise AssertionError("the physical Pegasos 2 loses its IDE drive in legacy mode")
+    if "StorageManagement: Detected 0 storage devices" in log or "KERNEL PANIC" in log:
+        raise AssertionError("the IDE root device was unavailable")
     if f"IDE: Master drive using Ultra DMA mode {expected_mode}" not in log:
         raise AssertionError(f"the VIA drive did not start in UDMA{expected_mode}")
     if "IDE: Master drive DMA transfer failed" in log and "IDE: Channel reset after DMA failure, drive status" not in log:
@@ -44,6 +48,13 @@ Entering WindowServer main loop
 """
     check_dma_boot(recovered, False)
     check_dma_boot(recovered, True)
+    try:
+        check_dma_boot("IDE: channel 0 in legacy mode\n" + recovered, True)
+    except AssertionError as error:
+        if "legacy mode" not in str(error):
+            raise
+    else:
+        raise AssertionError("the observed physical legacy-mode boot failure must be rejected")
     check_dma_boot(recovered.replace("mode 2", "mode 0"), True, 0)
     retried = recovered.replace("IDE: Channel reset after DMA failure, drive status 0x50",
         "IDE: Channel reset after DMA failure attempt 1 timed out, drive status 0x58\n"

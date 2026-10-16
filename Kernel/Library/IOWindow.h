@@ -35,7 +35,6 @@ public:
 #endif
     static ErrorOr<NonnullOwnPtr<IOWindow>> create_for_pci_device_bar(PCI::DeviceIdentifier const&, PCI::HeaderType0BaseRegister, u64 space_length);
     static ErrorOr<NonnullOwnPtr<IOWindow>> create_for_pci_device_bar(PCI::DeviceIdentifier const&, PCI::HeaderType0BaseRegister);
-    static ErrorOr<NonnullOwnPtr<IOWindow>> create_for_pci_io_space(PhysicalAddress, u64 space_length);
 
     ErrorOr<NonnullOwnPtr<IOWindow>> create_from_io_window_with_offset(u64 offset, u64 space_length);
     ErrorOr<NonnullOwnPtr<IOWindow>> create_from_io_window_with_offset(u64 offset);
