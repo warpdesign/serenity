@@ -521,14 +521,40 @@ The canonical image has now been replaced at
 `a2ca58ac738634188fa95f8ebe74fe075f4a24d066cea5485492d2bcd925a3bf`).
 It contains the revised loader and restores per-write ATA cache flushes.
 The kernel logs up to eight slow PIO writes with separate setup, device wait,
-data-port transfer, and completion times, so one physical run can locate
-the expensive stage.
+data-port transfer, and completion times.
 Physical Pegasos boots default to PIO for safety; `dma` or `udma=N` opts into
 experimental DMA on this same image. QEMU retains its existing default.
 Loader argument, DMA status, and recovery self-tests pass; the FFS loader and
 ext2 root match the built inputs. The temporary candidate image was removed
-so there is only one card image to write. This image has not yet booted on
-physical hardware.
+so there is only one card image to write. On physical hardware, this image
+ran with `fullram weakrng dma`, but the VT8231 did not retain the PCI
+Command interrupt-disable bit. The log says `PCI interrupt output masked for
+polled DMA: false` and `PCI interrupt cannot be masked, using PIO`. This run
+did **not** test a DMA transfer.
+
+The same run measured five 8-sector PIO writes with 35–36 us setup,
+375–434 us waiting for data, 904–999 us sending data, and 113–170 ms
+waiting for command completion. Two later 1-sector writes also spent
+159–166 ms waiting for completion, with 120 us sending data. The long
+completion wait is in polling the drive's busy status after writing the data,
+not in Serenity's PIO data-copy loop. This does not yet prove why each VFS
+sync takes about 8 s: those syncs report 16–23 flushed blocks, and other
+metadata writes or serialization may add time. The full log reached `/init`
+and later VFS syncs without reporting a DMA failure; desktop appearance was
+not explicitly confirmed for this run.
+
+Source comparison: [Haiku's VT8231 driver](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/busses/ata/via_ide_pci/via_ide_pci.cpp)
+uses its shared ATA adapter, which [installs an interrupt handler](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/generic/ata_adapter/ata_adapter.cpp)
+for DMA and enables drive interrupts when issuing DMA requests. It does not
+need the PCI Command interrupt-disable bit to stick. [Linux's CHRP PCI
+fixup](https://github.com/torvalds/linux/blob/master/arch/powerpc/platforms/chrp/pci.c)
+also detects a Pegasos 2 firmware case where the IDE class byte reports PCI
+native mode while the controller is actually in legacy mode; when its PCI
+interrupt line is 14, Linux forces the programming interface to legacy mode.
+Serenity currently leaves this IDE function in native mode and uses the
+firmware BARs. Before changing the IRQ path, capture the physical IDE PCI
+interrupt line and determine whether this firmware needs Linux's legacy-mode
+fixup. Do not assume the old `0x21` DMA status identifies an adapter defect.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
