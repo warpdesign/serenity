@@ -1051,8 +1051,23 @@ movement. Successful blit counts imply the one-time pixel-copy self-test
 passed, although the user supplied only the aggregate `WindowServer perf:`
 lines. The log does not record why other frames skipped the fast path.
 Source review shows the conservative cursor-rectangle and full-visibility
-checks can reject many otherwise useful moves. Physical visual correctness
-and subjective smoothness have not yet been reported.
+checks can reject many otherwise useful moves.
+
+The user then reported no visible corruption but no perceptible smoothness
+improvement with `gfx2d`; movement may have felt slower. Treat this as a
+failed performance experiment, despite the successful hardware-copy counts.
+The card's normal boot without `gfx2d` remains the software path and needs no
+rewrite. Do not ask for more accelerated-move trials based on this prototype.
+The measured composition stage still dominates, and the current blit path
+reuses only an eligible client rectangle while the rest of WindowServer's
+RAM compositor runs. Before another image, the next implementation should
+remove more of the software composition work or establish a GPU-backed layer
+path; simply increasing this blit's hit rate is not evidence of a useful
+speedup. Source review confirms that `Gfx::Painter::blit()` already copies
+opaque BGRx/BGRA rows with `memcpy`; replacing that copy with an in-place RAM
+`memmove` does not remove the memory traffic. Even eliminating the earlier
+roughly 11 ms framebuffer upload completely would leave roughly 35 ms of
+composition for a dragged frame, above a 60 Hz frame budget of 16.7 ms.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
