@@ -752,8 +752,9 @@ unverified. The sole current image is
 `11b4366dd5dcc70fb5de07a315a6e3a730d88124f4a87e9f9dad796eec31571a`.
 Its extracted FFS loader matches the built ELF byte for byte, and its ext2
 root partition still matches `pegasos2-root.ext2` byte for byte. No QEMU run
-was made. Boot with `fullram weakrng` for the default UDMA2 path; the same
-image accepts `udma=0` to isolate UDMA timing if the stall recurs.
+was made. On physical Pegasos 2 the loader appends `nodma` unless `dma` or
+`udma=N` is explicit. Boot with `fullram weakrng dma` for the default UDMA2
+path; the same image accepts `fullram weakrng udma=0` to isolate UDMA timing.
 
 A physical boot of the existing card with `fullram weakrng udma=0` also
 stalled. It completed 619 DMA transfers, then an eight-sector read at LBA
