@@ -873,6 +873,16 @@ not in the current SD image; do not replace that image while it is being
 copied. Physical improvement remains unverified, and the SD card can still
 spend time committing writes even if desktop reads can interleave.
 
+A candidate with these changes has been built at
+`/tmp/serenity-pegasos-flush.axlOEe/pegasos2-sdcard.img` (SHA-256
+`a8f89746507fc96387fb0c4f7f95977697239ec3bf93949bcad7dbbb79bc5b34`).
+Its extracted FFS loader matches the separately rebuilt ELF, and its root
+partition matches `pegasos2-root.ext2` byte for byte. The named image in
+`Build/powerpc/PowerPCBoot/` still has SHA-256
+`cdcf304559ddefce3ba8db8268aab25cfc6e699b48d91411e70ad8d462e7c459`;
+the candidate will replace it after the user's current SD-card copy ends.
+No QEMU run was made.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
