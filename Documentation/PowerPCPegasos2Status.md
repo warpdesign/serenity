@@ -755,6 +755,15 @@ root partition still matches `pegasos2-root.ext2` byte for byte. No QEMU run
 was made. Boot with `fullram weakrng` for the default UDMA2 path; the same
 image accepts `udma=0` to isolate UDMA timing if the stall recurs.
 
+A physical boot of the existing card with `fullram weakrng udma=0` also
+stalled. It completed 619 DMA transfers, then an eight-sector read at LBA
+125928 timed out with ATA status `0x58`, bus-master status `0x21`, command
+`0x09`, and no IRQ for that transfer. The log counted 629 bus-master IRQs
+since channel creation. Reset recovered the drive and switched to PIO.
+Thus UDMA2 timing alone cannot explain the stall; UDMA0 changes neither the
+failure shape nor the need to recover. The excerpt does not establish whether
+the IRQ-wait image above was on the physical card for this boot.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
