@@ -795,10 +795,11 @@ On a later physical boot with `udma=5`, the same
 `write_bps=453666 read_bps=2060000`. The earlier PIO run reported
 `write_bps=102500 read_bps=1311000`, so the measured write rate rose about
 4.4 times and read rate about 1.6 times. The tool uses `O_DIRECT` by default
-and transfers sequential 8 KiB chunks; its per-phase rates do not include
-file close/unlink or background ext2 sync. This confirms a useful DMA speedup
-for that workload, while leaving the seconds-long desktop/LED pauses as a
-separate unresolved problem. The UDMA5 result also does not prove long-term
+and transfers sequential 8 KiB chunks; its per-phase rates exclude file
+close/unlink and do not directly measure background ext2 sync. This confirms
+a useful DMA speedup for that workload, while leaving the seconds-long
+desktop and LED pauses as a separate unresolved problem. The UDMA5 result
+also does not prove long-term
 DMA stability.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
