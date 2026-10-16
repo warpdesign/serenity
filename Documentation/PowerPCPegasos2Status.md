@@ -911,6 +911,19 @@ no QEMU run was made. Compare it with the prior `dma fullram weakrng` boot
 using the time to WindowServer's main loop, full VFS sync durations, and the
 time for Shell to appear.
 
+The first physical boot of the KUBSAN-off image used `fullram weakrng udma=5`.
+The IDE driver confirmed UDMA5 and the first IRQ-waited DMA transfer succeeded.
+Measured from kernel startup, ext2 mounted at 9.832 s versus 10.023 s before,
+and WindowServer entered its main loop at 16.885 s versus 20.363 s before:
+3.478 s, or about 17%, sooner. The first full VFS sync took 556 ms versus
+791 ms; the second took 1134 ms versus 1124 ms, so the excerpt does not show
+a consistent writeback speedup. The first sixteen DMA writes spent 539 ms in
+ATA flushes versus 532 ms before, also essentially unchanged. The serial
+excerpt ends at 29.881 s without Shell or final desktop readiness, and has
+no loader-start timestamp; neither the full visible boot time nor the
+firmware-to-kernel loader improvement is measured here. No DMA failure or PIO
+fallback appears in the supplied excerpt.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
