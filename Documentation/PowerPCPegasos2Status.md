@@ -572,14 +572,18 @@ at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
 contains this revision; its FFS boot partition was updated in place, leaving
 the ext2 root partition untouched. No QEMU run was made.
 
-The local MorphOS 1.4 Pegasos 2 `boot.img` contains a symbolized
-`Driver_VIA8231` routine. It configures southbridge routing and assigns IRQ 9
-to USB and audio functions, but contains no visible IDE DMA transfer-mode
-setup. The ISO's `morphos/Devs`, `morphos/Libs`, and `morphos/L` directories
-have no separately named IDE driver or matching `VIA IDE`/`UDMA` strings.
-The disk driver may be built into another component or supplied by other
-media, so this older ISO does not establish which UDMA mode the user's
-MorphOS installation uses. The
+The local MorphOS 1.4 Pegasos 2 `boot.img` has two layers. Its outer gzip
+member contains a PowerPC ELF with a symbolized `Driver_VIA8231` routine;
+that routine configures southbridge routing and assigns IRQ 9 to USB and
+audio. The ELF also has an embedded `COM1` payload between `module_start`
+(`0x4b6000`) and `module_end` (`0x5c4000`). Decompressing that payload
+reveals `idevia.device 50.17 (5.5.03)` and `ide.device`, plus messages for
+drive IDENTIFY data, selecting PIO/MWDMA/UDMA modes, allocating physical PRD
+tables, bus-master I/O, and handling ATA interrupts. The IDE driver was
+indeed in `boot.img`, rather than a separate file in the ISO's `morphos/Devs`
+directory. These embedded messages establish that MorphOS supports and
+configures UDMA, but do not show which mode the user's adapter actually
+negotiated at runtime. The
 [VT8231 datasheet](https://www.bitsavers.org/components/viaTechnologies/VT8231_South_Bridge_rev_2.32_20040510.pdf)
 and [Linux's Pegasos 2 fixup](https://github.com/torvalds/linux/blob/master/arch/powerpc/platforms/chrp/pci.c)
 are the references for IDE interrupt routing.
