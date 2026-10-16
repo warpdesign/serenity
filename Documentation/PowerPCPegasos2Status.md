@@ -747,7 +747,13 @@ IRQ wait expired, the ATA taskfile registers, and how many bus-master IRQs
 arrived outside an active transfer. A physical boot check requires an
 IRQ-waited success and no later PIO fallback for a stable-DMA result. The
 PowerPC kernel and host regression checks build; physical behavior remains
-unverified. No QEMU run was made.
+unverified. The sole current image is
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` with SHA-256
+`11b4366dd5dcc70fb5de07a315a6e3a730d88124f4a87e9f9dad796eec31571a`.
+Its extracted FFS loader matches the built ELF byte for byte, and its ext2
+root partition still matches `pegasos2-root.ext2` byte for byte. No QEMU run
+was made. Boot with `fullram weakrng` for the default UDMA2 path; the same
+image accepts `udma=0` to isolate UDMA timing if the stall recurs.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
