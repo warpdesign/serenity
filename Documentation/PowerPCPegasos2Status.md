@@ -1042,6 +1042,18 @@ Compare the same opaque window move in each boot and capture
 `WindowServer: Radeon 2D`, `Radeon: 2D`, `WindowServer perf:`, and any fault
 lines. One SD-card write is enough for both boots.
 
+The first `gfx2d` physical window-move log covered five busy two-second
+reports (86.922–95.494 s). It reported 14 completed 2D blits in 82 rendered
+frames, about a 17% hit rate. Those frames averaged 37.3 ms in composition
+and 12.5 ms in framebuffer upload; neither is clearly better than the
+earlier software-only move intervals, which were not the same controlled
+movement. Successful blit counts imply the one-time pixel-copy self-test
+passed, although the user supplied only the aggregate `WindowServer perf:`
+lines. The log does not record why other frames skipped the fast path.
+Source review shows the conservative cursor-rectangle and full-visibility
+checks can reject many otherwise useful moves. Physical visual correctness
+and subjective smoothness have not yet been reported.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
