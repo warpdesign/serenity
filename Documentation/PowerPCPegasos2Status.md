@@ -717,8 +717,12 @@ status `0x24`, and a recorded IRQ. It completed 134 DMA transfers before a
 different eight-sector read at LBA 635776 stalled. After roughly 6.9 seconds,
 the driver reported ATA status `0x58` (DRQ still set), bus-master status `0x21`
 (engine active, no interrupt or error), bus-master command `0x09`, and zero
-IRQs assigned to this transfer. The PRD pointer read back as programmed and
-the channel reset to ATA status `0x50`, after which PIO continued. This is an
+IRQs assigned to this transfer. The log also showed 138 acknowledged bus-master IRQs
+across the channel versus 134 successful DMA transfers. The IRQ counter
+increments even outside an active DMA transfer, so the aggregate mismatch
+does not identify which transfers received extra IRQs. The PRD pointer read
+back as programmed and the channel reset to ATA status `0x50`, after which
+PIO continued. This is an
 unfinished DMA transfer, not the stale `0x21` versus IRQ `0x24` race. An
 interrupt-driven wait would still time out on this transfer.
 
