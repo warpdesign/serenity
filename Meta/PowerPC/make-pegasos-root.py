@@ -33,6 +33,9 @@ def main():
     with tempfile.TemporaryDirectory(prefix="pegasos-root-") as directory:
         work = Path(directory)
         root = test_desktop.create_root(SOURCE, build, build / "Userland/DynamicLoader/Loader.so", work)
+        window_server_config = root / "etc/WindowServer.ini"
+        with window_server_config.open("a") as config:
+            config.write("\n[Debug]\nProfileComposition=true\n")
         disk = test_desktop.create_disk(root, work)
         shutil.move(disk, args.output)
     print(f"{args.output}: {args.output.stat().st_size // 1048576} MiB ext2 root")

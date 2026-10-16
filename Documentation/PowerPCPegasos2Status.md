@@ -958,6 +958,38 @@ operations do not by themselves eliminate uploads of CPU-composited pixels.
 Its source also warns that PowerPC firmware can leave the chip's VRAM base at
 a different engine offset, which must be handled before enabling 2D commands.
 
+MorphOS is a useful counterexample on this exact GPU. The MorphOS team's
+[2.2 release notes](https://www.morphos-team.net/releasenotes/2.2) say 3D
+layers became the default on Radeon and improved window refresh and resize;
+the team's [hardware list](https://www.morphos-team.net/hardware) includes
+the Radeon 9200 SE among cards with 3D acceleration. The locally available
+MorphOS 3.20 media also includes an R200 TinyGL driver, but that alone does
+not establish which path the installed desktop uses. The local Haiku Radeon
+acceleration plan at
+`/Volumes/HaikuPowerPC/Haiku-PowerPC/docs/ppc/radeon-acceleration-plan.md`
+records physical measurements on the same Radeon 9200 SE: CPU upload
+48.8 MiB/s, hardware solid fill 1982 MiB/s, and VRAM blit 1024 MiB/s. Its
+safe 2D blit path visibly improved window movement while leaving newly
+exposed content limited by software rendering and CPU upload. These results
+make Radeon acceleration a real opportunity, but neither blindly enabling
+3D nor using a VRAM blit for every rectangle is a substitute for measuring
+Serenity's compositor work.
+
+A single diagnostic image now enables quiet WindowServer composition timing
+through `ProfileComposition=true` in the Pegasos root's WindowServer config.
+It keeps 1024×768, restores KUBSAN, and logs aggregate frame count, RAM
+composition time, framebuffer upload time and bytes, and longest frame and
+upload every two seconds of updates. The current
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` has SHA-256
+`e24c97f724fc4d031d35e91120a02583a458844d2229067f23035d806b75d516`.
+Its RDB layout, extracted FFS loader, compressed kernel, and ext2 partition
+were checked against the built inputs. The host quick and normal
+`WindowServerCompositionProfileCheck` targets pass; they check aggregation
+and that the installed root enables the instrumented binary. No QEMU run was
+made. For the physical test, boot with `fullram weakrng udma=5`, then capture
+`WindowServer perf:` lines during about ten seconds of window dragging and
+another ten seconds of menu hovering. Physical timings are pending.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`

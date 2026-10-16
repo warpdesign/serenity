@@ -24,8 +24,16 @@
 #include <LibGfx/Painter.h>
 #include <LibGfx/StylePainter.h>
 #include <LibThreading/BackgroundAction.h>
+#include <time.h>
 
 namespace WindowServer {
+
+static u64 monotonic_microseconds()
+{
+    timespec now {};
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<u64>(now.tv_sec) * 1'000'000 + now.tv_nsec / 1'000;
+}
 
 Compositor& Compositor::the()
 {
@@ -48,6 +56,9 @@ static WallpaperMode mode_to_enum(ByteString const& name)
 
 Compositor::Compositor()
 {
+    m_profile_composition = g_config->read_bool_entry("Debug", "ProfileComposition", false);
+    if (m_profile_composition)
+        dbgln("WindowServer perf: composition profiling enabled");
     m_display_link_notify_timer = add<Core::Timer>(
         1000 / 60, [this] {
             notify_display_links();
@@ -181,6 +192,9 @@ void Compositor::compose()
         // nothing dirtied since the last compose pass.
         return;
     }
+
+    u64 profile_frame_start_us = m_profile_composition ? monotonic_microseconds() : 0;
+    m_profile_frame_upload_bytes = 0;
 
     if (m_occlusions_dirty) {
         m_occlusions_dirty = false;
@@ -598,10 +612,22 @@ void Compositor::compose()
         screen_data.draw_cursor(cursor_screen, cursor_rect);
     }
 
+    u64 profile_upload_start_us = m_profile_composition ? monotonic_microseconds() : 0;
     Screen::for_each([&](auto& screen) {
         flush(screen);
         return IterationDecision::Continue;
     });
+    if (m_profile_composition) {
+        auto finished_at_us = monotonic_microseconds();
+        m_profile_stats.record(finished_at_us, profile_upload_start_us - profile_frame_start_us,
+            finished_at_us - profile_upload_start_us, m_profile_frame_upload_bytes);
+        CompositionProfileStats::Report report;
+        if (m_profile_stats.take_report_if_due(finished_at_us, report)) {
+            dbgln("WindowServer perf: frames {} composition {} us upload {} us bytes {} longest frame {} us longest upload {} us",
+                report.frames, report.composition_us, report.upload_us, report.upload_bytes,
+                report.longest_frame_us, report.longest_upload_us);
+        }
+    }
 }
 
 void Compositor::flush(Screen& screen)
@@ -672,6 +698,8 @@ void Compositor::flush(Screen& screen)
         // a scale applied. But this routine accesses the backbuffer pixels directly, so it
         // must work in physical coordinates.
         auto scaled_rect = rect * screen.scale_factor();
+        if (m_profile_composition)
+            m_profile_frame_upload_bytes += static_cast<u64>(scaled_rect.width()) * scaled_rect.height() * sizeof(Gfx::ARGB32);
         Gfx::ARGB32* front_ptr = screen_data.m_front_bitmap->scanline(scaled_rect.y()) + scaled_rect.x();
         Gfx::ARGB32* back_ptr = screen_data.m_back_bitmap->scanline(scaled_rect.y()) + scaled_rect.x();
         size_t pitch = screen_data.m_back_bitmap->pitch();

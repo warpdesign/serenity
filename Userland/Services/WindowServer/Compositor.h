@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,6 +12,7 @@
 #include <LibGfx/Color.h>
 #include <LibGfx/DisjointRectSet.h>
 #include <LibGfx/Font/Font.h>
+#include <WindowServer/CompositionProfileStats.h>
 #include <WindowServer/Overlays.h>
 
 namespace WindowServer {
@@ -217,6 +218,9 @@ private:
     RefPtr<Core::Timer> m_compose_timer;
     RefPtr<Core::Timer> m_immediate_compose_timer;
     bool m_flash_flush { false };
+    bool m_profile_composition { false };
+    u64 m_profile_frame_upload_bytes { 0 };
+    CompositionProfileStats m_profile_stats;
     bool m_occlusions_dirty { true };
     bool m_invalidated_any { true };
     bool m_invalidated_window { false };
