@@ -990,18 +990,23 @@ made. For the physical test, boot with `fullram weakrng udma=5`, then capture
 `WindowServer perf:` lines during about ten seconds of window dragging and
 another ten seconds of menu hovering.
 
-The first physical timing log shows two active spans. From 51.447 through
-65.743 seconds, 179 rendered frames averaged 35.1 ms in RAM composition and
-10.6 ms in framebuffer upload, with about 0.67 MB uploaded per frame and a
-173.9 ms longest frame. Composition accounted for 77% of measured rendering
-time. From 67.766 through 84.041 seconds, 355 frames averaged 11.7 ms in
-composition and 5.3 ms in upload, with about 0.28 MB uploaded per frame and a
-115.4 ms longest frame; composition was 69% of measured time. By contrast,
+The first physical timing log shows two active spans. During the user's
+window moves, roughly 51.447 through 65.743 seconds, 179 rendered frames
+averaged 35.1 ms in RAM composition and 10.6 ms in framebuffer upload, with
+about 0.67 MB uploaded per frame and a 173.9 ms longest frame. Composition
+accounted for 77% of measured rendering
+time. During subsequent menu hovering, roughly 67.766 through 84.041 seconds,
+355 frames averaged 11.7 ms in composition and 5.3 ms in upload, with about
+0.28 MB uploaded per frame and a 115.4 ms longest frame; composition was 69%
+of measured time. By contrast,
 86.055–96.134 seconds had 36 small updates averaging 0.85 ms composition,
-0.60 ms upload, and 23 KB copied per frame. The user has not yet identified
-which active span was dragging and which was menu hovering. These timings
-show that software composition is the larger measured render cost during
-both active spans, while uncached framebuffer writes remain significant.
+0.60 ms upload, and 23 KB copied per frame. Reports are time-window totals
+of every frame WindowServer happened to render; their boundaries do not mark
+the exact start or end of a user action, and some windows include background
+UI updates. The figures describe predominantly dragging and predominantly
+menu hovering rather than isolated per-action benchmarks. They show software
+composition is the larger measured render cost in both busy spans, while
+uncached framebuffer writes remain significant.
 They do not separate RAM bandwidth from CPU drawing and occlusion work, and
 menu item drawing occurs outside the timed `Compositor::compose()` call.
 
