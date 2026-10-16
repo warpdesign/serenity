@@ -711,6 +711,25 @@ Its FFS loader and unchanged ext2 root match the built inputs; host tests
 and the PowerPC kernel and loader build pass. Physical validation remains
 for a later time, at the user's preference. No QEMU run was made.
 
+The physical run of this image confirmed that the earlier false-completion
+race is fixed: the first transfer completed with ATA status `0x50`, bus-master
+status `0x24`, and a recorded IRQ. It completed 134 DMA transfers before a
+different eight-sector read at LBA 635776 stalled. After roughly 6.9 seconds,
+the driver reported ATA status `0x58` (DRQ still set), bus-master status `0x21`
+(engine active, no interrupt or error), bus-master command `0x09`, and zero
+IRQs assigned to this transfer. The PRD pointer read back as programmed and
+the channel reset to ATA status `0x50`, after which PIO continued. This is an
+unfinished DMA transfer, not the stale `0x21` versus IRQ `0x24` race. An
+interrupt-driven wait would still time out on this transfer.
+
+The cause of this remaining stall is unknown. Linux's
+[VT8231 driver](https://github.com/torvalds/linux/blob/master/drivers/ata/pata_via.c)
+identifies the chip as UDMA100 without the older VIA FIFO/PREQ erratum, and
+its UDMA2 timing calculation agrees with the programmed `0xf4`. The existing
+card can isolate timing without another write: its `udma=0` boot option
+selects the slowest supported UDMA mode. Do not infer that the SD adapter is
+faulty from this log; the same hardware reportedly runs UDMA under MorphOS.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
