@@ -91,6 +91,10 @@ private:
     Atomic<u8> m_drive_status_at_irq { 0 };
     u32 m_dma_success_count { 0 };
     bool m_reported_irq_wait_success { false };
+    u32 m_dma_write_timing_requests { 0 };
+    u32 m_dma_write_timing_sectors { 0 };
+    u64 m_dma_write_timing_transfer_us { 0 };
+    u64 m_dma_write_timing_flush_us { 0 };
     OwnPtr<Memory::Region> m_descriptor_table;
     PhysicalAddress m_descriptor_table_physical;
     Array<bool, 2> m_dma_enabled {};

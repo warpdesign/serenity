@@ -511,9 +511,30 @@ ErrorOr<void> IDEChannel::write_sectors(Drive drive, bool use_lba48, u64 lba, si
     VERIFY(buffer.size() >= count * sector_size);
     MutexLocker locker(m_lock);
     if (is_dma_enabled(drive)) {
+        auto transfer_started = TimeManagement::the().current_time(CLOCK_MONOTONIC);
         auto result = transfer_dma(drive, use_lba48, lba, count, true, const_cast<u8*>(buffer.data()), physical_buffer);
-        if (!result.is_error())
-            return flush_cache(drive, use_lba48);
+        if (!result.is_error()) {
+            auto transfer_finished = TimeManagement::the().current_time(CLOCK_MONOTONIC);
+            if (auto flush_result = flush_cache(drive, use_lba48); flush_result.is_error()) {
+                dmesgln("IDE: ATA cache flush after DMA write failed: {}", flush_result.error());
+                return flush_result.release_error();
+            }
+            auto flush_finished = TimeManagement::the().current_time(CLOCK_MONOTONIC);
+            ++m_dma_write_timing_requests;
+            m_dma_write_timing_sectors += count;
+            m_dma_write_timing_transfer_us += (transfer_finished - transfer_started).to_microseconds();
+            m_dma_write_timing_flush_us += (flush_finished - transfer_finished).to_microseconds();
+            if (m_dma_write_timing_requests == 16) {
+                dmesgln("IDE: DMA write timing: {} requests, {} sectors, transfer {} us, ATA flush {} us",
+                    m_dma_write_timing_requests, m_dma_write_timing_sectors,
+                    m_dma_write_timing_transfer_us, m_dma_write_timing_flush_us);
+                m_dma_write_timing_requests = 0;
+                m_dma_write_timing_sectors = 0;
+                m_dma_write_timing_transfer_us = 0;
+                m_dma_write_timing_flush_us = 0;
+            }
+            return {};
+        }
         disable_dma_after_error(drive, result.release_error());
         TRY(reset_after_dma_error());
     }

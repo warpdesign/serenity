@@ -119,6 +119,34 @@ add_custom_target(KernelStorageTransferLimitCheck
     VERBATIM
 )
 
+set(kernel_block_cache_writeback_source "${CMAKE_CURRENT_SOURCE_DIR}/FileSystem/TestBlockCacheWriteback.cpp")
+set(kernel_block_cache_writeback_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-block-cache-writeback")
+add_custom_target(KernelBlockCacheWritebackCheckQuick
+    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_block_cache_writeback_source}" -o "${kernel_block_cache_writeback_executable}"
+    COMMAND "${kernel_block_cache_writeback_executable}"
+    VERBATIM
+)
+add_custom_target(KernelBlockCacheWritebackCheck
+    COMMAND "${kernel_block_cache_writeback_executable}" extended
+    DEPENDS KernelBlockCacheWritebackCheckQuick
+    VERBATIM
+)
+
+set(kernel_ext2_backup_policy_source "${CMAKE_CURRENT_SOURCE_DIR}/FileSystem/TestExt2BackupWritePolicy.cpp")
+set(kernel_ext2_backup_policy_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-ext2-backup-policy")
+add_custom_target(KernelExt2BackupPolicyCheckQuick
+    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_ext2_backup_policy_source}" -o "${kernel_ext2_backup_policy_executable}"
+    COMMAND "${kernel_ext2_backup_policy_executable}"
+    VERBATIM
+)
+add_custom_target(KernelExt2BackupPolicyCheck
+    COMMAND "${kernel_ext2_backup_policy_executable}" extended
+    DEPENDS KernelExt2BackupPolicyCheckQuick
+    VERBATIM
+)
+
 set(kernel_hid_keyboard_repeat_source "${CMAKE_CURRENT_SOURCE_DIR}/HID/TestKeyboardRepeat.cpp")
 set(kernel_hid_keyboard_repeat_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-HID-keyboard-repeat")
 find_program(KERNEL_HID_HOST_CXX NAMES c++ clang++ REQUIRED)

@@ -9,6 +9,7 @@
 #include <AK/Bitmap.h>
 #include <AK/HashMap.h>
 #include <Kernel/FileSystem/BlockBasedFileSystem.h>
+#include <Kernel/FileSystem/Ext2FS/BackupWritePolicy.h>
 #include <Kernel/FileSystem/Ext2FS/Definitions.h>
 #include <Kernel/FileSystem/FileSystemSpecificOption.h>
 #include <Kernel/FileSystem/Inode.h>
@@ -73,7 +74,7 @@ private:
     ext2_group_desc const& group_descriptor(GroupIndex) const;
     ext2_group_desc* block_group_descriptors() { return (ext2_group_desc*)m_cached_group_descriptor_table->data(); }
     ext2_group_desc const* block_group_descriptors() const { return (ext2_group_desc const*)m_cached_group_descriptor_table->data(); }
-    void flush_block_group_descriptor_table();
+    ErrorOr<void> flush_block_group_descriptor_table(Ext2BackupWritePolicy);
     u64 inodes_per_block() const;
     u64 inodes_per_group() const;
     u64 blocks_per_group() const;
@@ -88,7 +89,7 @@ private:
 
     bool find_block_containing_inode(InodeIndex, BlockIndex& block_index, unsigned& offset) const;
 
-    ErrorOr<void> flush_super_block();
+    ErrorOr<void> flush_super_block(Ext2BackupWritePolicy);
 
     virtual ErrorOr<void> initialize_while_locked() override;
     virtual bool is_initialized_while_locked() override;

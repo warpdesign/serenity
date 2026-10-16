@@ -10,6 +10,7 @@
 #include <Kernel/FileSystem/Ext2FS/FileSystem.h>
 #include <Kernel/FileSystem/Ext2FS/Inode.h>
 #include <Kernel/Tasks/Process.h>
+#include <Kernel/Time/TimeManagement.h>
 #include <Kernel/UnixTypes.h>
 
 namespace Kernel {
@@ -95,7 +96,7 @@ ErrorOr<void> Ext2FS::rename(Inode& old_parent_inode, StringView old_basename, I
     return {};
 }
 
-ErrorOr<void> Ext2FS::flush_super_block()
+ErrorOr<void> Ext2FS::flush_super_block(Ext2BackupWritePolicy policy)
 {
     MutexLocker locker(m_lock);
     auto super_block_buffer = UserOrKernelBuffer::for_kernel_buffer((u8*)&m_super_block);
@@ -105,6 +106,11 @@ ErrorOr<void> Ext2FS::flush_super_block()
     VERIFY((sizeof(ext2_super_block) % device_block_size()) == 0);
     TRY(raw_write_blocks(super_block_offset_on_device / device_block_size(), superblock_physical_block_count, super_block_buffer));
 
+    // Routine sync updates the primary copy. The geographically distant
+    // backups are refreshed on clean unmount, as a recovery aid.
+    if (policy == Ext2BackupWritePolicy::PrimaryOnly)
+        return {};
+
     auto is_sparse = has_flag(get_features_readonly(), FeaturesReadOnly::SparseSuperblock);
 
     // Backup copies start a block, so pad the superblock to a whole block instead of writing whatever follows it in memory.
@@ -113,14 +119,12 @@ ErrorOr<void> Ext2FS::flush_super_block()
     auto backup_block_buffer = UserOrKernelBuffer::for_kernel_buffer(backup_block.data());
 
     // Group indices are 1-based and group 1 holds the primary superblock, so backups live in groups 2 and up.
-    for (auto group = 2u; group <= m_block_group_count; ++group) {
+    TRY(for_each_ext2_backup_group(m_block_group_count, is_sparse, policy, [&](unsigned group) -> ErrorOr<void> {
         auto first_block_in_group = first_block_of_group(group);
-        // Superblock copies with sparse layout are in group number 2 and powers of 3, 5, and 7.
-        if (!is_sparse || group == 2 || AK::is_power_of<3>(group - 1) || AK::is_power_of<5>(group - 1) || AK::is_power_of<7>(group - 1)) {
-            dbgln_if(EXT2_DEBUG, "Writing superblock backup to block group {} (block {})", group, first_block_in_group);
-            TRY(write_blocks(first_block_in_group, 1, backup_block_buffer));
-        }
-    }
+        dbgln_if(EXT2_DEBUG, "Writing superblock backup to block group {} (block {})", group, first_block_in_group);
+        TRY(write_blocks(first_block_in_group, 1, backup_block_buffer));
+        return {};
+    }));
 
     return {};
 }
@@ -206,7 +210,7 @@ ErrorOr<void> Ext2FS::initialize_while_locked()
     // Set filesystem to "error" state until we unmount cleanly.
     dmesgln("Ext2FS: Mount successful, setting superblock to error state.");
     m_super_block.s_state = EXT2_ERROR_FS;
-    TRY(flush_super_block());
+    TRY(flush_super_block(Ext2BackupWritePolicy::PrimaryOnly));
 
     return {};
 }
@@ -702,7 +706,9 @@ ErrorOr<void> Ext2FS::prepare_to_clear_last_mount(Inode& mount_guest_inode)
     // Mark filesystem as valid before unmount.
     dmesgln("Ext2FS: Clean unmount, setting superblock to valid state");
     m_super_block.s_state = EXT2_VALID_FS;
-    TRY(flush_super_block());
+    TRY(flush_block_group_descriptor_table(Ext2BackupWritePolicy::UpdateBackups));
+    TRY(flush_super_block(Ext2BackupWritePolicy::UpdateBackups));
+    TRY(BlockBasedFileSystem::flush_writes());
 
     return {};
 }
@@ -734,38 +740,40 @@ ErrorOr<void> Ext2FS::free_inode(Ext2FSInode& inode)
     return {};
 }
 
-void Ext2FS::flush_block_group_descriptor_table()
+ErrorOr<void> Ext2FS::flush_block_group_descriptor_table(Ext2BackupWritePolicy policy)
 {
     MutexLocker locker(m_lock);
     auto blocks_to_write = ceil_div(m_block_group_count * sizeof(ext2_group_desc), logical_block_size());
     auto first_block_of_bgdt = first_block_of_block_group_descriptors();
     auto buffer = UserOrKernelBuffer::for_kernel_buffer((u8*)block_group_descriptors());
-    auto write_bgdt_to_block = [&](BlockIndex index) {
-        if (auto result = write_blocks(index, blocks_to_write, buffer); result.is_error())
-            dbgln("Ext2FS[{}]::flush_block_group_descriptor_table(): Failed to write blocks: {}", fsid(), result.error());
+    auto write_bgdt_to_block = [&](BlockIndex index) -> ErrorOr<void> {
+        return write_blocks(index, blocks_to_write, buffer);
     };
 
-    write_bgdt_to_block(first_block_of_bgdt);
+    TRY(write_bgdt_to_block(first_block_of_bgdt));
 
     auto is_sparse = has_flag(get_features_readonly(), FeaturesReadOnly::SparseSuperblock);
-
-    for (auto group = 2u; group <= m_block_group_count; ++group) {
+    TRY(for_each_ext2_backup_group(m_block_group_count, is_sparse, policy, [&](unsigned group) -> ErrorOr<void> {
         // First block is occupied by the super block
         BlockIndex second_block_in_group = first_block_of_group(group).value() + 1;
-        // BGDT copies with sparse layout are in group number 2 and powers of 3, 5, and 7.
-        if (!is_sparse || group == 2 || AK::is_power_of<3>(group - 1) || AK::is_power_of<5>(group - 1) || AK::is_power_of<7>(group - 1)) {
-            dbgln_if(EXT2_DEBUG, "Writing block group descriptor table backup to block group {} (block {})", group, second_block_in_group);
-            write_bgdt_to_block(second_block_in_group);
-        }
-    }
+        dbgln_if(EXT2_DEBUG, "Writing block group descriptor table backup to block group {} (block {})", group, second_block_in_group);
+        TRY(write_bgdt_to_block(second_block_in_group));
+        return {};
+    }));
+    return {};
 }
 
 ErrorOr<void> Ext2FS::flush_writes()
 {
+    auto metadata_started = TimeManagement::the().current_time(CLOCK_MONOTONIC);
+    bool super_block_was_dirty = false;
+    bool descriptors_were_dirty = false;
+    size_t bitmap_count = 0;
     {
         MutexLocker locker(m_lock);
         if (m_super_block_dirty) {
-            auto result = flush_super_block();
+            super_block_was_dirty = true;
+            auto result = flush_super_block(Ext2BackupWritePolicy::PrimaryOnly);
             if (result.is_error()) {
                 dbgln("Ext2FS[{}]::flush_writes(): Failed to write superblock: {}", fsid(), result.error());
                 return result.release_error();
@@ -773,16 +781,16 @@ ErrorOr<void> Ext2FS::flush_writes()
             m_super_block_dirty = false;
         }
         if (m_block_group_descriptors_dirty) {
-            flush_block_group_descriptor_table();
+            descriptors_were_dirty = true;
+            TRY(flush_block_group_descriptor_table(Ext2BackupWritePolicy::PrimaryOnly));
             m_block_group_descriptors_dirty = false;
         }
         for (auto& cached_bitmap : m_cached_bitmaps) {
             if (cached_bitmap->dirty) {
                 auto buffer = UserOrKernelBuffer::for_kernel_buffer(cached_bitmap->buffer->data());
-                if (auto result = write_block(cached_bitmap->bitmap_block_index, buffer, logical_block_size()); result.is_error()) {
-                    dbgln("Ext2FS[{}]::flush_writes(): Failed to write blocks: {}", fsid(), result.error());
-                }
+                TRY(write_block(cached_bitmap->bitmap_block_index, buffer, logical_block_size()));
                 cached_bitmap->dirty = false;
+                ++bitmap_count;
                 dbgln_if(EXT2_DEBUG, "Ext2FS[{}]::flush_writes(): Flushed bitmap block {}", fsid(), cached_bitmap->bitmap_block_index);
             }
         }
@@ -804,6 +812,11 @@ ErrorOr<void> Ext2FS::flush_writes()
             return cached_inode->ref_count() == 1 && !cached_inode->has_watchers();
         });
     }
+
+    if (super_block_was_dirty || descriptors_were_dirty || bitmap_count > 0)
+        dbgln("Ext2FS: Prepared primary metadata (super {}, descriptors {}, bitmaps {}) in {} ms",
+            super_block_was_dirty, descriptors_were_dirty, bitmap_count,
+            (TimeManagement::the().current_time(CLOCK_MONOTONIC) - metadata_started).to_milliseconds());
 
     auto result = BlockBasedFileSystem::flush_writes();
     if (result.is_error()) {

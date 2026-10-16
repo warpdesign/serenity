@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -20,7 +20,7 @@ public:
     u64 device_block_size() const { return m_device_block_size; }
 
     virtual ErrorOr<void> flush_writes() override;
-    void flush_writes_impl();
+    ErrorOr<void> flush_writes_impl();
 
 protected:
     explicit BlockBasedFileSystem(OpenFileDescription&);
@@ -42,7 +42,7 @@ protected:
     u64 m_device_block_size { 512 };
 
 private:
-    void flush_specific_block_if_needed(BlockIndex index);
+    ErrorOr<void> flush_specific_block_if_needed(BlockIndex index);
 
     mutable MutexProtected<OwnPtr<DiskCache>> m_cache;
 };

@@ -849,6 +849,30 @@ with `fullram weakrng dma` to keep the previously validated DMA path, or
 with `fullram weakrng udma=5` for the measured UDMA5 mode. Plain
 `fullram weakrng` selects the PIO default. No QEMU run was made.
 
+The user identified repeated several-second LED activity ending at ext2
+writeback lines (for example, 23 blocks at 40.207 s, 17 at 50.449 s, 16 at
+58.537 s, and 19 at 69.098 s). Those lines mark completion, not the exact
+start of each flush, but the LED observation makes periodic writeback the
+leading boot-latency issue. Source review found that ext2 routinely rewrote
+backup superblocks and block-group descriptors across distant disk groups,
+then `BlockBasedFileSystem` held its cache lock through every dirty block
+write. Linux ext2 updates the primary superblock during routine sync.
+The exact `pegasos2-root.ext2` superblock has seven block groups and no
+sparse-superblock feature. When both metadata counters were dirty, a routine
+sync therefore queued six backup superblocks and six backup descriptor
+blocks: twelve distant block writes included in the cache writeback count.
+
+New source changes routine ext2 sync to update primary metadata only and
+refresh backups on clean unmount. Block-cache writeback now releases its
+lock and yields between blocks, preserves dirty entries on errors, and keeps
+direct writes coherent with cached entries. The next serial log will show
+ext2 metadata preparation time, block-cache writeback time, overall VFS sync
+time, and aggregated IDE DMA write-versus-ATA-flush time for each sixteen
+writes. The PowerPC kernel and host regression targets build. This work is
+not in the current SD image; do not replace that image while it is being
+copied. Physical improvement remains unverified, and the SD card can still
+spend time committing writes even if desktop reads can interleave.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`

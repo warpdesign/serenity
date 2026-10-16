@@ -17,14 +17,51 @@ submitted upstream as of 2026-10-16.
   holds `m_cache.with_exclusive` around the loop that calls
   `file_description().write()` for every dirty block. Verified against
   upstream `master` on 2026-10-16.
-- **Local status:** A Pegasos IDE experiment batched ATA cache flushes at
-  filesystem sync. The physical PIO log measured the batched drive-cache
-  flush at 0 ms, while the slow VFS writeback and Shell wait remained. The
-  experiment was reverted; it did not measure each flush in the later UDMA5
-  path. The shared filesystem locking remains unchanged.
+- **Local fix:** The cache now holds its lock for one dirty block write at a
+  time and yields between blocks. A host regression checks that readers can
+  enter between writes, new dirty entries survive the pass, and failed writes
+  stay dirty for retry. Per-block writeback time is logged. Physical validation
+  is pending; the current SD image does not contain this change. The earlier
+  Pegasos IDE flush-batching experiment was reverted and did not measure
+  per-request flush cost in UDMA5.
 - **Upstream scope:** Let reads interleave with slow writeback without losing
   concurrent dirty updates, and propagate writeback errors before marking
   blocks clean. This needs a separate concurrency regression.
+
+## Ext2 periodically rewrites distant backup metadata
+
+- **Observed:** The physical Pegasos 2 often spends about seven seconds in a
+  periodic filesystem sync. The ext2 driver rewrites backup superblocks and
+  block-group descriptors whenever allocation counters change, spreading
+  small writes across the SD card. The local root image has seven groups
+  without sparse backups, making twelve backup-block writes possible per sync
+  when both counters are dirty.
+- **Upstream source:** [Ext2FS FileSystem.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/FileSystem/Ext2FS/FileSystem.cpp)
+  calls `flush_super_block()` and `flush_block_group_descriptor_table()` from
+  periodic `flush_writes()`, and both walk the backup groups. Confirmed on
+  upstream `master` on 2026-10-16. [Linux ext2](https://raw.githubusercontent.com/torvalds/linux/master/fs/ext2/super.c)
+  updates the primary superblock during routine sync.
+- **Local fix:** Routine sync now writes primary copies; clean unmount refreshes
+  backup copies. A host regression checks sparse and non-sparse group selection,
+  and the kernel logs metadata and cache-writeback durations. Physical timing
+  is not yet known, and the running SD image is unchanged.
+- **Upstream scope:** Avoid rewriting every recovery copy on each periodic sync
+  while retaining a clear policy for backup freshness and clean unmount.
+
+## Direct I/O can leave stale block-cache data
+
+- **Observed risk:** Before a direct write, the block cache flushes a dirty
+  entry but leaves it marked dirty. After the direct write, a later sync can
+  write the old cached bytes over the new direct data. Errors from that first
+  flush were also ignored.
+- **Upstream source:** [BlockBasedFileSystem.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/FileSystem/BlockBasedFileSystem.cpp)
+  contains both behaviors on `master`, confirmed 2026-10-16.
+- **Local fix:** Direct writes now propagate a failed dirty flush, mark a
+  successful flush clean, and invalidate the cached bytes before the direct
+  write. The host regression checks write ordering and failure handling;
+  physical validation is pending.
+- **Upstream scope:** Keep cached and direct access coherent, including partial
+  and failed writes, with an integration regression on a fake block device.
 
 ## Ext2 direct I/O splits large requests into filesystem blocks
 
