@@ -552,21 +552,20 @@ fixup](https://github.com/torvalds/linux/blob/master/arch/powerpc/platforms/chrp
 also detects a Pegasos 2 firmware case where the IDE class byte reports PCI
 native mode while the controller is actually in legacy mode; when its PCI
 interrupt line is 14, Linux forces the programming interface to legacy mode.
-Serenity currently leaves this IDE function in native mode and uses the
-firmware BARs. The physical IDE PCI Interrupt Line value will be captured
-on the next boot to determine whether this firmware needs Linux's legacy-mode
-fixup. Do not assume the old `0x21` DMA status identifies an adapter defect.
+The first IRQ-enabled Serenity image left this IDE function in native mode
+and used the firmware BARs. Its physical run later confirmed PCI line 14,
+meeting Linux's condition for the legacy-mode fixup. Do not assume the old
+`0x21` DMA status identifies an adapter defect.
 
-The next source revision follows Linux's use of the IDE completion interrupt.
+The first IRQ-enabled source revision followed Linux's use of the IDE completion interrupt.
 It registers an IRQ handler when the controller cannot mask its PCI output,
 records the bus-master completion latch before acknowledging ATA status, and
 lets the transfer loop observe that recorded completion. For the onboard
 VT8231, Pegasos-specific routing uses primary IRQ 14 and secondary IRQ 15;
-the next physical log also prints the firmware's PCI Interrupt Line value to
-check whether Linux's conditional legacy-mode fixup applies. The driver's
-native BARs have already worked for PIO, so the mode fixup is not applied
-blindly. The IRQ route and completion tests pass, and the PowerPC kernel
-builds. Physical DMA success remains unverified. The current canonical image
+the physical log also printed the firmware's PCI Interrupt Line value.
+That image did not yet apply Linux's mode fixup. The IRQ route and completion
+tests passed, and the PowerPC kernel built. Physical DMA remained unverified.
+The first IRQ-enabled image
 at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
 `a4b913cee8c5702ae07e00b150a2af54dab0c70d393e27bb0f5522c567b3ef7c`)
 contains this revision; its FFS boot partition was updated in place, leaving
@@ -587,6 +586,41 @@ negotiated at runtime. The
 [VT8231 datasheet](https://www.bitsavers.org/components/viaTechnologies/VT8231_South_Bridge_rev_2.32_20040510.pdf)
 and [Linux's Pegasos 2 fixup](https://github.com/torvalds/linux/blob/master/arch/powerpc/platforms/chrp/pci.c)
 are the references for IDE interrupt routing.
+
+The first physical boot of the IRQ-enabled image (`a4b913...`) used
+`weakrng fullram dma`. Firmware PCI Interrupt Line was 14; the driver
+registered IRQ 14 for primary and IRQ 15 for secondary, then selected UDMA2.
+The first logged DMA read, eight sectors at LBA 151920, failed with drive
+status `0x2f`, ATA error register `0x00`, and bus-master status `0x21`.
+There was no bus-master completion interrupt. The first channel reset returned
+ready status `0x50`, PIO fallback continued, and `/init`, WindowServer, and
+later VFS syncs ran without a kernel panic in the supplied excerpt. This
+does not establish a successful DMA transfer or a complete desktop boot.
+
+The driver used to treat ATA error/fault bits sampled during an active DMA
+command as final, even before the bus-master interrupt. This can explain the
+new fast failure on status `0x2f` with bus-master `0x21`; whether that ATA
+status was transient is not yet proven. Linux's
+[BMDMA interrupt path](https://github.com/torvalds/linux/blob/master/drivers/ata/libata-sff.c)
+checks the bus-master interrupt before evaluating ATA status and pauses after
+issuing the ATA command. The current source revision follows that order: only
+bus-master error is immediately fatal; ATA status is final after the
+completion interrupt. It also gives the command a 400 ns settling interval
+and waits briefly after starting the bus master before polling its status.
+The physical `0x2f`/`0x21` case now has a regression test, but hardware DMA
+success is still unverified.
+
+The current image also applies Linux's Pegasos 2 compatibility-mode fixup on
+explicit `dma` or `udma=N` boots when the onboard VIA IDE function reports
+PCI line 14. It maps the fixed primary ports `0x1f0`/`0x3f6` and secondary
+ports `0x170`/`0x376` in the firmware's legacy I/O window, while keeping the
+bus-master BAR. A `nodma` boot retains the proven native BAR path. The
+source, route tests, DMA completion tests, and PowerPC kernel and loader
+build pass. The sole card image at
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
+`7cf6ebff2e801d7c912c62dded3533beb94d4db83408cc0eb8f99b8b2f73e5f7`)
+has the new loader in its FFS partition; the ext2 root is byte-for-byte
+unchanged. FFS loader bytes match the built loader. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

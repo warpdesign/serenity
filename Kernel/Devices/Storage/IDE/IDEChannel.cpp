@@ -254,6 +254,10 @@ ErrorOr<void> IDEChannel::issue_transfer_command(Drive drive, bool use_lba48, u6
         m_command_block->write8(ATA_REG_LBA2, (lba >> 16) & 0xff);
         m_command_block->write8(ATA_REG_COMMAND, command_28);
     }
+    // The ATA command write needs a 400 ns settling interval before the next
+    // controller operation. Four alternate-status reads provide that delay.
+    for (int i = 0; i < 4; ++i)
+        (void)alternate_status();
     return {};
 }
 
@@ -368,6 +372,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
         return command_result.release_error();
     }
     m_bus_master->write8(bus_master_command, direction | bus_master_command_start);
+    microseconds_delay(1);
 
     // Poll both the controller latch and the IRQ handler's recorded completion.
     ErrorOr<void> result = Error::from_errno(ETIMEDOUT);
@@ -376,11 +381,7 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
         drive_status = alternate_status();
         engine_status = m_bus_master->read8(bus_master_status);
-        if (engine_status & bus_master_status_error) {
-            result = Error::from_errno(EIO);
-            break;
-        }
-        if (!(drive_status & ATA_SR_BSY) && (drive_status & (ATA_SR_ERR | ATA_SR_DF))) {
+        if (ide_dma_has_failed(drive_status, engine_status, m_dma_irq_observed.load())) {
             result = Error::from_errno(EIO);
             break;
         }

@@ -27,6 +27,19 @@ constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status, bool
         && !(drive_status & busy_or_data_request_or_error);
 }
 
+// An ATA status sampled while DMA is active is not final. Linux's BMDMA path
+// checks the bus-master interrupt first and then examines the drive status.
+constexpr bool ide_dma_has_failed(u8 drive_status, u8 bus_master_status, bool irq_observed = false)
+{
+    constexpr u8 bus_master_interrupt = 0x04;
+    constexpr u8 bus_master_error = 0x02;
+    constexpr u8 drive_busy = 0x80;
+    constexpr u8 drive_error_or_fault = 0x20 | 0x01;
+    return (bus_master_status & bus_master_error)
+        || (((bus_master_status & bus_master_interrupt) || irq_observed)
+            && !(drive_status & drive_busy) && (drive_status & drive_error_or_fault));
+}
+
 // The IRQ handler acknowledges completion without clearing a simultaneous
 // bus-master error before the transfer loop can observe it.
 constexpr u8 ide_dma_irq_acknowledgement(u8 bus_master_status)
