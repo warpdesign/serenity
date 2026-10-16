@@ -14,6 +14,7 @@
 #include "Window.h"
 #include "WindowManager.h"
 #include "WindowSwitcher.h"
+#include "WindowMoveCopy.h"
 #include <AK/Debug.h>
 #include <AK/Memory.h>
 #include <AK/ScopeGuard.h>
@@ -24,7 +25,10 @@
 #include <LibGfx/Painter.h>
 #include <LibGfx/StylePainter.h>
 #include <LibThreading/BackgroundAction.h>
+#include <fcntl.h>
+#include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 namespace WindowServer {
 
@@ -33,6 +37,30 @@ static u64 monotonic_microseconds()
     timespec now {};
     clock_gettime(CLOCK_MONOTONIC, &now);
     return static_cast<u64>(now.tv_sec) * 1'000'000 + now.tv_nsec / 1'000;
+}
+
+static bool accelerated_moves_requested()
+{
+    int fd = open("/sys/kernel/cmdline", O_RDONLY | O_CLOEXEC);
+    if (fd < 0)
+        return false;
+    char command_line[256];
+    ssize_t length = read(fd, command_line, sizeof(command_line));
+    close(fd);
+    if (length <= 0)
+        return false;
+    for (size_t offset = 0; offset < static_cast<size_t>(length);) {
+        while (offset < static_cast<size_t>(length) && (command_line[offset] == ' ' || command_line[offset] == '\t'))
+            ++offset;
+        size_t start = offset;
+        while (offset < static_cast<size_t>(length) && command_line[offset] != ' ' && command_line[offset] != '\t' && command_line[offset] != '\n')
+            ++offset;
+        if (offset - start == 5 && memcmp(command_line + start, "gfx2d", 5) == 0)
+            return true;
+        if (offset == start)
+            ++offset;
+    }
+    return false;
 }
 
 Compositor& Compositor::the()
@@ -57,6 +85,9 @@ static WallpaperMode mode_to_enum(ByteString const& name)
 Compositor::Compositor()
 {
     m_profile_composition = g_config->read_bool_entry("Debug", "ProfileComposition", false);
+    m_enable_radeon_2d = accelerated_moves_requested();
+    if (m_enable_radeon_2d)
+        dbgln("WindowServer: experimental Radeon 2D window moves enabled");
     if (m_profile_composition)
         dbgln("WindowServer perf: composition profiling enabled");
     m_display_link_notify_timer = add<Core::Timer>(
@@ -196,6 +227,21 @@ void Compositor::compose()
     u64 profile_frame_start_us = m_profile_composition ? monotonic_microseconds() : 0;
     m_profile_frame_upload_bytes = 0;
 
+    Window* moving_window = nullptr;
+    auto old_moving_window_rect = m_last_moving_window_rect;
+    if (m_enable_radeon_2d && wm.m_move_window && m_last_moving_window.ptr() == wm.m_move_window.ptr()
+        && m_dirty_screen_rects.is_empty() && m_overlay_list.is_empty() && m_animations.is_empty()
+        && !m_transitioning_to_window_stack) {
+        auto& window = *wm.m_move_window;
+        if (&window.window_stack() == m_current_window_stack && window.is_opaque()
+            && window.backing_store() && window.backing_store_visible_size() == window.size()
+            && window.content_generation() == m_last_moving_window_content_generation
+            && window.backing_store_serial() == m_last_moving_window_backing_serial
+            && window.rect() != old_moving_window_rect
+            && window.opaque_rects().contains(old_moving_window_rect))
+            moving_window = &window;
+    }
+
     if (m_occlusions_dirty) {
         m_occlusions_dirty = false;
         recompute_occlusions();
@@ -227,6 +273,35 @@ void Compositor::compose()
             window.dirty_rects().translate_by(transition_offset);
         return IterationDecision::Continue;
     });
+
+    if (moving_window) {
+        auto& screen = Screen::main();
+        auto new_rect = moving_window->rect();
+        auto& screen_data = screen.compositor_screen_data();
+        if (screen.scale_factor() == 1 && new_rect.size() == old_moving_window_rect.size()
+            && screen.rect().contains(old_moving_window_rect) && screen.rect().contains(new_rect)
+            && moving_window->opaque_rects().contains(new_rect)
+            && !current_cursor_rect().intersects(old_moving_window_rect)
+            && !current_cursor_rect().intersects(new_rect)
+            && !screen_data.m_last_cursor_rect.intersects(old_moving_window_rect)
+            && !screen_data.m_last_cursor_rect.intersects(new_rect)) {
+            auto source = old_moving_window_rect.translated(-screen.location());
+            auto destination = new_rect.translated(-screen.location());
+            FBCopyArea area {
+                static_cast<unsigned>(source.x()), static_cast<unsigned>(source.y()),
+                static_cast<unsigned>(destination.x()), static_cast<unsigned>(destination.y()),
+                static_cast<unsigned>(source.width()), static_cast<unsigned>(source.height())
+            };
+            if (auto result = screen.copy_display_area(area); !result.is_error()) {
+                copy_rectangle_in_place(screen_data.m_back_bitmap->scanline(0), screen_data.m_back_bitmap->pitch(), area);
+                moving_window->dirty_rects() = moving_window->dirty_rects().shatter(new_rect);
+                ++m_recent_2d_blits;
+            } else {
+                dbgln("WindowServer: Radeon 2D move failed: {}, using software from now on", result.error());
+                m_enable_radeon_2d = false;
+            }
+        }
+    }
 
     // Any dirty rects in transparency areas may require windows above or below
     // to also be marked dirty in these areas
@@ -623,10 +698,18 @@ void Compositor::compose()
             finished_at_us - profile_upload_start_us, m_profile_frame_upload_bytes);
         CompositionProfileStats::Report report;
         if (m_profile_stats.take_report_if_due(finished_at_us, report)) {
-            dbgln("WindowServer perf: frames {} composition {} us upload {} us bytes {} longest frame {} us longest upload {} us",
+            dbgln("WindowServer perf: frames {} composition {} us upload {} us bytes {} longest frame {} us longest upload {} us 2d blits {}",
                 report.frames, report.composition_us, report.upload_us, report.upload_bytes,
-                report.longest_frame_us, report.longest_upload_us);
+                report.longest_frame_us, report.longest_upload_us, m_recent_2d_blits);
+            m_recent_2d_blits = 0;
         }
+    }
+
+    m_last_moving_window = wm.m_move_window;
+    if (auto* moving_window_now = wm.m_move_window.ptr()) {
+        m_last_moving_window_rect = moving_window_now->rect();
+        m_last_moving_window_backing_serial = moving_window_now->backing_store_serial();
+        m_last_moving_window_content_generation = moving_window_now->content_generation();
     }
 }
 

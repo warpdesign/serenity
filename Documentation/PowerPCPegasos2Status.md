@@ -1010,6 +1010,38 @@ uncached framebuffer writes remain significant.
 They do not separate RAM bandwidth from CPU drawing and occlusion work, and
 menu item drawing occurs outside the timed `Compositor::compose()` call.
 
+An experimental Radeon 2D screen-copy path now follows these measurements.
+The generic framebuffer copy ioctl is restricted to the responsible display
+process. The Radeon driver programs the 2D pitch from `MC_FB_LOCATION`,
+handles overlapping copies in the correct direction, and bounds FIFO, engine
+idle, and destination-cache waits. It disables further 2D commands after a
+timeout. WindowServer enables the path only with the short `gfx2d` boot
+argument. On the first requested move it saves a 4×4 pixel test area, checks
+one hardware copy, and restores the area. A failed test or ioctl returns to
+software repainting for the session.
+
+The window-move fast path requires an opaque, fully visible, unchanged client
+area on one screen, with no overlapping cursor, overlay, or transition. It
+copies that area in both the Radeon framebuffer and WindowServer's RAM
+backbuffer, then leaves exposed regions and window decorations to the normal
+compositor. The usual move-geometry overlay is suppressed for `gfx2d` moves
+so it does not invalidate the fast path. The timing log now adds a `2d blits`
+count. Host overlap/bounds and RAM-copy regressions pass in quick and normal
+targets, as do the installed-root checks; the PowerPC kernel, loader, and
+WindowServer build. No QEMU run was made. The physical self-test, visual
+correctness, actual fast-path hit rate, and performance remain unverified.
+
+The sole named `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` now contains
+this opt-in experiment (SHA-256
+`d7f2709dc2029598f7f2e0a4fe0911d2bc1f1f30e8d602added7b2efc66eb19f`).
+Its extracted FFS loader and embedded kernel match the built files, and its
+ext2 partition matches `pegasos2-root.ext2` byte for byte. Boot with
+`fullram weakrng udma=5` for the software baseline or
+`fullram weakrng udma=5 gfx2d` to try accelerated moves on the same card.
+Compare the same opaque window move in each boot and capture
+`WindowServer: Radeon 2D`, `Radeon: 2D`, `WindowServer perf:`, and any fault
+lines. One SD-card write is enough for both boots.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`

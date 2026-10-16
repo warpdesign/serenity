@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -111,6 +111,7 @@ protected:
     virtual void disable_console() = 0;
     virtual ErrorOr<void> flush_first_surface() = 0;
     virtual ErrorOr<void> flush_rectangle(size_t buffer_index, FBRect const& rect);
+    virtual ErrorOr<void> copy_area(FBCopyArea const&) { return Error::from_errno(ENOTSUP); }
 
     ErrorOr<void> initialize_edid_for_generic_monitor(Optional<Array<u8, 3>> manufacturer_id_string);
 

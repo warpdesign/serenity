@@ -313,6 +313,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCRadeonApertureEndianCheckQuick
         VERBATIM
     )
+    set(powerpc_radeon_2d_blit_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestRadeon2DBlitPlan.cpp")
+    set(powerpc_radeon_2d_blit_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-Radeon-2D-blit-plan")
+    add_custom_target(PowerPCRadeon2DBlitPlanCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${powerpc_radeon_2d_blit_source}" -o "${powerpc_radeon_2d_blit_executable}"
+        COMMAND "${powerpc_radeon_2d_blit_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCRadeon2DBlitPlanCheck
+        COMMAND "${powerpc_radeon_2d_blit_executable}" extended
+        DEPENDS PowerPCRadeon2DBlitPlanCheckQuick
+        VERBATIM
+    )
     set(powerpc_native_pci_boot_test "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/test_native_pci_boot.py")
     add_custom_target(PowerPCNativePCIHardwareCheckQuick
         COMMAND python3 "${powerpc_native_pci_boot_test}"

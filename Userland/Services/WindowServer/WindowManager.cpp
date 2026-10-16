@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -700,7 +700,8 @@ void WindowManager::start_window_move(Window& window, Gfx::IntPoint origin)
     m_move_origin = origin;
     m_move_window_origin = window.position();
     m_move_window_cursor_position = window.is_tiled() ? to_floating_cursor_position(m_mouse_down_origin) : m_mouse_down_origin;
-    if (system_effects().geometry() == ShowGeometry::OnMoveAndResize || system_effects().geometry() == ShowGeometry::OnMoveOnly) {
+    if (!Compositor::the().experimental_2d_moves_enabled()
+        && (system_effects().geometry() == ShowGeometry::OnMoveAndResize || system_effects().geometry() == ShowGeometry::OnMoveOnly)) {
         m_geometry_overlay = Compositor::the().create_overlay<WindowGeometryOverlay>(window);
         m_geometry_overlay->set_enabled(true);
     }
@@ -910,7 +911,7 @@ bool WindowManager::process_ongoing_window_move(MouseEvent& event)
                 m_move_window_origin = m_move_window->position();
             }
         }
-        if (system_effects().geometry() == ShowGeometry::OnMoveAndResize || system_effects().geometry() == ShowGeometry::OnMoveOnly) {
+        if (m_geometry_overlay) {
             m_geometry_overlay->window_rect_changed();
         }
     }

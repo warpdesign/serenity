@@ -23,6 +23,7 @@ constexpr char loader_help[] =
     "  dma      Try experimental IDE DMA on physical Pegasos 2\r\n"
     "  weakrng  Allow interrupt-timing entropy during bring-up\r\n"
     "  udma=N   Select supported IDE UDMA mode 0-5\r\n"
+    "  gfx2d    Try accelerated Radeon window moves\r\n"
     "  root=... Select the root device (native default: lun3:0:0;part1)\r\n"
     "At the prompt, Enter boots with the typed options; exit returns to firmware.\r\n"
     "The typed line replaces the original boot options.\r\n"

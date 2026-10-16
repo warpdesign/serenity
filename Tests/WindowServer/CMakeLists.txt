@@ -16,4 +16,19 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS WindowServerCompositionProfileCheckQuick
         VERBATIM
     )
+    set(windowserver_move_copy_test "${CMAKE_CURRENT_SOURCE_DIR}/TestWindowMoveCopy.cpp")
+    set(windowserver_move_copy_executable "${CMAKE_CURRENT_BINARY_DIR}/WindowServer-window-move-copy-check")
+    add_custom_target(WindowServerRadeonMoveCopyCheckQuick
+        COMMAND "${WINDOWSERVER_PROFILE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+            "${windowserver_move_copy_test}" -o "${windowserver_move_copy_executable}"
+        COMMAND "${windowserver_move_copy_executable}"
+        VERBATIM
+    )
+    add_custom_target(WindowServerRadeonMoveCopyCheck
+        COMMAND "${windowserver_move_copy_executable}" extended
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test_radeon_move_root.py"
+            "${CMAKE_BINARY_DIR}/PowerPCBoot/pegasos2-root.ext2"
+        DEPENDS WindowServerRadeonMoveCopyCheckQuick
+        VERBATIM
+    )
 endif()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Liav A. <liavalb@hotmail.co.il>
+ * Copyright (c) 2022-2026, Liav A. <liavalb@hotmail.co.il>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -294,6 +294,7 @@ static constexpr GraphicsIOCtlChecker s_checkers[] = {
     { GRAPHICS_IOCTL_GET_HEAD_VERTICAL_OFFSET_BUFFER, "GRAPHICS_IOCTL_GET_HEAD_VERTICAL_OFFSET_BUFFER"sv, false },
     { GRAPHICS_IOCTL_FLUSH_HEAD_BUFFERS, "GRAPHICS_IOCTL_FLUSH_HEAD_BUFFERS"sv, true },
     { GRAPHICS_IOCTL_FLUSH_HEAD, "GRAPHICS_IOCTL_FLUSH_HEAD"sv, true },
+    { GRAPHICS_IOCTL_COPY_AREA, "GRAPHICS_IOCTL_COPY_AREA"sv, true },
     { GRAPHICS_IOCTL_SET_HEAD_MODE_SETTING, "GRAPHICS_IOCTL_SET_HEAD_MODE_SETTING"sv, true },
     { GRAPHICS_IOCTL_GET_HEAD_MODE_SETTING, "GRAPHICS_IOCTL_GET_HEAD_MODE_SETTING"sv, false },
     { GRAPHICS_IOCTL_SET_SAFE_HEAD_MODE_SETTING, "GRAPHICS_IOCTL_SET_SAFE_HEAD_MODE_SETTING"sv, true },
@@ -514,6 +515,14 @@ ErrorOr<void> DisplayConnector::ioctl(OpenFileDescription&, unsigned request, Us
 
         TRY(flush_first_surface());
         return {};
+    }
+    case GRAPHICS_IOCTL_COPY_AREA: {
+        auto user_area = static_ptr_cast<FBCopyArea const*>(arg);
+        auto area = TRY(copy_typed_from_user(user_area));
+        SpinlockLocker control_locker(m_control_lock);
+        if (console_mode())
+            return Error::from_errno(EBUSY);
+        return copy_area(area);
     }
     }
     // Note: We already verify that the IOCTL is supported and not unknown in

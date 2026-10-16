@@ -1,12 +1,13 @@
 /*
- * Copyright (c) 2018-2020, the SerenityOS developers.
- * Copyright (c) 2022, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2018-2026, the SerenityOS developers.
+ * Copyright (c) 2022-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include "HardwareScreenBackend.h"
 #include "ScreenBackend.h"
+#include <AK/Debug.h>
 #include <AK/Try.h>
 #include <LibCore/System.h>
 #include <fcntl.h>
@@ -169,6 +170,61 @@ ErrorOr<void> HardwareScreenBackend::flush_framebuffer()
         m_can_device_flush_entire_framebuffer = false;
     else if (rc != 0)
         return Error::from_syscall("fb_flush_head"sv, rc);
+    return {};
+}
+
+ErrorOr<void> HardwareScreenBackend::copy_area(FBCopyArea const& area)
+{
+    if (!m_copy_area_checked) {
+        m_copy_area_checked = true;
+        auto mode = TRY(get_head_mode_setting());
+        if (mode.horizontal_active < 8 || mode.vertical_active < 4)
+            return Error::from_errno(ENOTSUP);
+
+        unsigned test_x = static_cast<unsigned>(mode.horizontal_active - 8);
+        unsigned test_y = static_cast<unsigned>(mode.vertical_active - 4);
+        u32 saved[32];
+        for (unsigned row = 0; row < 4; ++row) {
+            auto* pixels = scanline(0, test_y + row) + test_x;
+            for (unsigned column = 0; column < 8; ++column)
+                saved[row * 8 + column] = pixels[column];
+            for (unsigned column = 0; column < 4; ++column) {
+                pixels[column] = 0x00204060u + row * 0x100 + column;
+                pixels[column + 4] = 0;
+            }
+        }
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        FBCopyArea test { test_x, test_y, test_x + 4, test_y, 4, 4 };
+        int test_result = fb_copy_area(m_display_connector_fd, &test);
+        int test_errno = errno;
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        bool pixels_match = test_result == 0;
+        if (pixels_match) {
+            for (unsigned row = 0; row < 4; ++row) {
+                auto* pixels = scanline(0, test_y + row) + test_x;
+                for (unsigned column = 0; column < 4; ++column) {
+                    if (pixels[column + 4] != 0x00204060u + row * 0x100 + column)
+                        pixels_match = false;
+                }
+            }
+        }
+        for (unsigned row = 0; row < 4; ++row) {
+            auto* pixels = scanline(0, test_y + row) + test_x;
+            for (unsigned column = 0; column < 8; ++column)
+                pixels[column] = saved[row * 8 + column];
+        }
+        __atomic_thread_fence(__ATOMIC_SEQ_CST);
+        if (test_result < 0)
+            return Error::from_syscall("fb_copy_area self-test"sv, test_errno);
+        if (!pixels_match)
+            return Error::from_errno(EIO);
+        m_copy_area_usable = true;
+        dbgln("WindowServer: Radeon 2D copy self-test passed");
+    }
+    if (!m_copy_area_usable)
+        return Error::from_errno(ENOTSUP);
+    if (fb_copy_area(m_display_connector_fd, &area) < 0)
+        return Error::from_syscall("fb_copy_area"sv, errno);
     return {};
 }
 }

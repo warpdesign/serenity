@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -120,6 +120,7 @@ ErrorOr<int> serenity_main(Main::Arguments)
     TRY(Core::System::unveil("/bin/keymap", "x"));
     TRY(Core::System::unveil("/sys/kernel/keymap", "r"));
     TRY(Core::System::unveil("/sys/kernel/processes", "r"));
+    TRY(Core::System::unveil("/sys/kernel/cmdline", "r"));
     TRY(Core::System::unveil("/etc/passwd", "r"));
 
     struct sigaction act = {};

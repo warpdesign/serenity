@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2022, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2022-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -173,6 +173,7 @@ public:
     void flush_display(int buffer_index);
     void flush_display_front_buffer(int front_buffer_index, Gfx::IntRect&);
     void flush_display_entire_framebuffer();
+    ErrorOr<void> copy_display_area(FBCopyArea const& area) { return m_backend->copy_area(area); }
 
     CompositorScreenData& compositor_screen_data() { return *m_compositor_screen_data; }
 

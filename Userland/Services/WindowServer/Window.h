@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2023, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, David Ganz <david.g.ganz@gmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, David Ganz <david.g.ganz@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -233,6 +233,8 @@ public:
 
     Gfx::Bitmap const* backing_store() const { return m_backing_store.ptr(); }
     Gfx::Bitmap* backing_store() { return m_backing_store.ptr(); }
+    i32 backing_store_serial() const { return m_backing_store_serial; }
+    u64 content_generation() const { return m_content_generation; }
 
     void set_backing_store(RefPtr<Gfx::Bitmap> backing_store, i32 serial)
     {
@@ -241,6 +243,7 @@ public:
 
         m_last_backing_store_serial = m_backing_store_serial;
         m_backing_store_serial = serial;
+        ++m_content_generation;
     }
 
     Gfx::IntSize backing_store_visible_size() const { return m_backing_store_visible_size; }
@@ -442,6 +445,7 @@ private:
     Gfx::IntSize m_backing_store_visible_size {};
     Gfx::IntSize m_backup_backing_store_visible_size {};
     i32 m_backing_store_serial { -1 };
+    u64 m_content_generation { 0 };
     i32 m_last_backing_store_serial { -1 };
     int m_window_id { -1 };
     i32 m_client_id { -1 };

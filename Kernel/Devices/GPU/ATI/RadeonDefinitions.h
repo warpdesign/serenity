@@ -56,6 +56,34 @@ static constexpr u32 SurfaceControl = 0x0b00;
 static constexpr u32 Surface0LowerBound = 0x0b04;
 static constexpr u32 Surface0UpperBound = 0x0b08;
 static constexpr u32 Surface0Info = 0x0b0c;
+static constexpr u32 MemoryControllerFrameBufferLocation = 0x0148;
+static constexpr u32 RBBMStatus = 0x0e40;
+static constexpr u32 SourceYX = 0x1434;
+static constexpr u32 DestinationYX = 0x1438;
+static constexpr u32 DestinationHeightWidth = 0x143c;
+static constexpr u32 SourcePitchOffset = 0x1428;
+static constexpr u32 DestinationPitchOffset = 0x142c;
+static constexpr u32 GUIControl = 0x146c;
+static constexpr u32 DirectionControl = 0x16c0;
+static constexpr u32 WriteMask = 0x16cc;
+static constexpr u32 DefaultPitchOffset = 0x16e0;
+static constexpr u32 DefaultScissorBottomRight = 0x16e8;
+static constexpr u32 RB3DControl = 0x1c3c;
+static constexpr u32 DestinationCacheControlStatus = 0x342c;
+}
+
+namespace Engine2D {
+static constexpr u32 FIFOCountMask = 0x7f;
+static constexpr u32 Active = 1u << 31;
+static constexpr u32 DestinationCacheBusy = 1u << 31;
+static constexpr u32 FlushDestinationCache = 0xf;
+static constexpr u32 Destination32BPP = 6u << 8;
+static constexpr u32 BrushNone = 15u << 4;
+static constexpr u32 SourceColor = 3u << 12;
+static constexpr u32 CopySource = 0x00cc0000;
+static constexpr u32 SourceMemory = 2u << 24;
+static constexpr u32 DisableColorComparison = 1u << 28;
+static constexpr u32 SourcePitchOffsetControl = 1u;
 }
 
 namespace CRTCGeneralControl {

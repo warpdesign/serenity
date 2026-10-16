@@ -6,6 +6,8 @@
 
 #include <AK/Endian.h>
 #include <Kernel/Arch/Delay.h>
+#include <Kernel/Arch/MemoryFences.h>
+#include <Kernel/Devices/GPU/ATI/Radeon2DBlitPlan.h>
 #include <Kernel/Devices/GPU/ATI/RadeonDisplayConnector.h>
 #include <Kernel/Devices/GPU/Console/ContiguousFramebufferConsole.h>
 #include <Kernel/Devices/GPU/Management.h>
@@ -323,6 +325,7 @@ ErrorOr<void> RadeonDisplayConnector::set_mode_setting(ModeSetting const& mode_s
 
     m_framebuffer_console->set_resolution(width, height, mode_setting.horizontal_stride);
     m_current_mode_setting = mode_setting;
+    m_2d_engine_initialized = false;
     return {};
 }
 
@@ -359,6 +362,95 @@ ErrorOr<void> RadeonDisplayConnector::unblank()
 ErrorOr<void> RadeonDisplayConnector::flush_first_surface()
 {
     return Error::from_errno(ENOTSUP);
+}
+
+ErrorOr<void> RadeonDisplayConnector::wait_for_2d_fifo(u32 entries)
+{
+    for (u32 attempt = 0; attempt < 10'000; ++attempt) {
+        if ((read32(Register::RBBMStatus) & Engine2D::FIFOCountMask) >= entries)
+            return {};
+        microseconds_delay(1);
+    }
+    return Error::from_errno(ETIMEDOUT);
+}
+
+ErrorOr<void> RadeonDisplayConnector::wait_for_2d_idle()
+{
+    TRY(wait_for_2d_fifo(64));
+    for (u32 attempt = 0; attempt < 10'000; ++attempt) {
+        if (!(read32(Register::RBBMStatus) & Engine2D::Active)) {
+            write32(Register::DestinationCacheControlStatus, Engine2D::FlushDestinationCache);
+            for (u32 flush_attempt = 0; flush_attempt < 10'000; ++flush_attempt) {
+                if (!(read32(Register::DestinationCacheControlStatus) & Engine2D::DestinationCacheBusy))
+                    return {};
+                microseconds_delay(1);
+            }
+            return Error::from_errno(ETIMEDOUT);
+        }
+        microseconds_delay(1);
+    }
+    return Error::from_errno(ETIMEDOUT);
+}
+
+ErrorOr<void> RadeonDisplayConnector::initialize_2d_engine()
+{
+    TRY(wait_for_2d_idle());
+    TRY(wait_for_2d_fifo(6));
+
+    // On PowerPC the firmware can map VRAM at a chip-local offset different
+    // from the PCI BAR. Match the MC_FB_LOCATION offset as Linux radeonfb does.
+    u32 local_base = read32(Register::MemoryControllerFrameBufferLocation) << 16;
+    u32 pitch_offset = ((m_current_mode_setting.horizontal_stride >> 6) << 22) | (local_base >> 10);
+    dmesgln("Radeon: 2D engine VRAM base {:#08x}, pitch/offset {:#08x}", local_base, pitch_offset);
+    write32(Register::RB3DControl, 0);
+    write32(Register::DefaultPitchOffset, pitch_offset);
+    write32(Register::DestinationPitchOffset, pitch_offset);
+    write32(Register::SourcePitchOffset, pitch_offset);
+    write32(Register::DefaultScissorBottomRight, 0x1fff1fff);
+    write32(Register::WriteMask, 0xffffffff);
+    m_2d_engine_initialized = true;
+    return {};
+}
+
+ErrorOr<void> RadeonDisplayConnector::copy_area(FBCopyArea const& area)
+{
+    if (m_2d_engine_failed)
+        return Error::from_errno(ENODEV);
+    auto plan = plan_2d_blit(area, m_current_mode_setting.horizontal_active, m_current_mode_setting.vertical_active);
+    if (!plan.has_value())
+        return Error::from_errno(EINVAL);
+    if (area.source_x == area.destination_x && area.source_y == area.destination_y)
+        return {};
+
+    if (!m_2d_engine_initialized) {
+        if (auto result = initialize_2d_engine(); result.is_error()) {
+            m_2d_engine_failed = true;
+            dmesgln("Radeon: 2D engine initialization failed: {}", result.error());
+            return result.release_error();
+        }
+    }
+    if (auto result = wait_for_2d_fifo(6); result.is_error()) {
+        m_2d_engine_failed = true;
+        return result.release_error();
+    }
+
+    full_memory_fence();
+    write32(Register::GUIControl,
+        Engine2D::Destination32BPP | Engine2D::BrushNone | Engine2D::SourceColor
+            | Engine2D::CopySource | Engine2D::SourceMemory | Engine2D::DisableColorComparison
+            | Engine2D::SourcePitchOffsetControl);
+    write32(Register::DirectionControl, plan->direction);
+    write32(Register::SourceYX, plan->source_y_x);
+    write32(Register::DestinationYX, plan->destination_y_x);
+    write32(Register::DestinationHeightWidth, plan->height_width);
+
+    if (auto result = wait_for_2d_idle(); result.is_error()) {
+        m_2d_engine_failed = true;
+        dmesgln("Radeon: 2D blit timed out: {}", result.error());
+        return result.release_error();
+    }
+    full_memory_fence();
+    return {};
 }
 
 void RadeonDisplayConnector::enable_console()

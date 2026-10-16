@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2022-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -27,6 +27,7 @@ public:
     virtual ErrorOr<void> flush_framebuffer_rects(int buffer_index, ReadonlySpan<FBRect> rects) override;
 
     virtual ErrorOr<void> flush_framebuffer() override;
+    virtual ErrorOr<void> copy_area(FBCopyArea const&) override;
 
     virtual ErrorOr<void> unmap_framebuffer() override;
     virtual ErrorOr<void> map_framebuffer() override;
@@ -38,6 +39,8 @@ public:
 
     ByteString m_device {};
     int m_display_connector_fd { -1 };
+    bool m_copy_area_checked { false };
+    bool m_copy_area_usable { false };
 
     Gfx::ARGB32* scanline(int buffer_index, int y) const
     {

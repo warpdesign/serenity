@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2021, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2023, David Ganz <david.g.ganz@gmail.com>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2023-2026, David Ganz <david.g.ganz@gmail.com>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -178,7 +178,9 @@ void Window::set_rect_without_repaint(Gfx::IntRect const& rect)
     auto old_rect = m_rect;
     m_rect = rect;
 
+    auto content_generation = m_content_generation;
     invalidate(true, old_rect.size() != rect.size());
+    m_content_generation = content_generation;
     m_frame.window_rect_changed(old_rect, rect);
     invalidate_last_rendered_screen_rects();
 }
@@ -579,6 +581,7 @@ void Window::set_frameless(bool frameless)
 
 void Window::invalidate(bool invalidate_frame, bool re_render_frame)
 {
+    ++m_content_generation;
     m_invalidated = true;
     m_invalidated_all = true;
     if (invalidate_frame && !m_invalidated_frame) {
@@ -592,6 +595,7 @@ void Window::invalidate(bool invalidate_frame, bool re_render_frame)
 
 void Window::invalidate(Gfx::IntRect const& rect, bool invalidate_frame)
 {
+    ++m_content_generation;
     if (type() == WindowType::Applet) {
         AppletManager::the().invalidate_applet(*this, rect);
         return;

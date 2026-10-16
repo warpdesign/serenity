@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, kleines Filmröllchen <filmroellchen@serenityos.org>
+ * Copyright (c) 2022-2026, kleines Filmröllchen <filmroellchen@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -33,6 +33,7 @@ public:
     virtual ErrorOr<void> map_framebuffer() = 0;
 
     virtual ErrorOr<void> flush_framebuffer() = 0;
+    virtual ErrorOr<void> copy_area(FBCopyArea const&) { return Error::from_errno(ENOTSUP); }
 
     virtual ErrorOr<void> set_head_mode_setting(GraphicsHeadModeSetting) = 0;
     virtual ErrorOr<void> set_safe_head_mode_setting() = 0;

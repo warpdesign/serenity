@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -112,6 +112,11 @@ ALWAYS_INLINE int fb_flush_buffers(int fd, int index, FBRect const* rects, unsig
 ALWAYS_INLINE int fb_flush_head(int fd)
 {
     return ioctl(fd, GRAPHICS_IOCTL_FLUSH_HEAD, nullptr);
+}
+
+ALWAYS_INLINE int fb_copy_area(int fd, FBCopyArea const* area)
+{
+    return ioctl(fd, GRAPHICS_IOCTL_COPY_AREA, area);
 }
 
 __END_DECLS

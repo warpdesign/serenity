@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
- * Copyright (c) 2021, Edwin Hoksberg <mail@edwinhoksberg.nl>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2021-2026, Edwin Hoksberg <mail@edwinhoksberg.nl>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -69,6 +69,15 @@ struct FBFlushRects {
     int buffer_index;
     unsigned count;
     struct FBRect const* rects;
+};
+
+struct FBCopyArea {
+    unsigned source_x;
+    unsigned source_y;
+    unsigned destination_x;
+    unsigned destination_y;
+    unsigned width;
+    unsigned height;
 };
 
 enum ConsoleModes {
@@ -150,6 +159,7 @@ enum IOCtlNumber {
     V3D_ALLOCATE_BUFFER,
     V3D_FREE_BUFFER,
     V3D_SUBMIT_JOB,
+    GRAPHICS_IOCTL_COPY_AREA,
 };
 
 #define TIOCGPGRP TIOCGPGRP
@@ -170,6 +180,7 @@ enum IOCtlNumber {
 #define GRAPHICS_IOCTL_GET_HEAD_VERTICAL_OFFSET_BUFFER GRAPHICS_IOCTL_GET_HEAD_VERTICAL_OFFSET_BUFFER
 #define GRAPHICS_IOCTL_FLUSH_HEAD_BUFFERS GRAPHICS_IOCTL_FLUSH_HEAD_BUFFERS
 #define GRAPHICS_IOCTL_FLUSH_HEAD GRAPHICS_IOCTL_FLUSH_HEAD
+#define GRAPHICS_IOCTL_COPY_AREA GRAPHICS_IOCTL_COPY_AREA
 #define GRAPHICS_IOCTL_SET_HEAD_MODE_SETTING GRAPHICS_IOCTL_SET_HEAD_MODE_SETTING
 #define GRAPHICS_IOCTL_GET_HEAD_MODE_SETTING GRAPHICS_IOCTL_GET_HEAD_MODE_SETTING
 #define GRAPHICS_IOCTL_SET_SAFE_HEAD_MODE_SETTING GRAPHICS_IOCTL_SET_SAFE_HEAD_MODE_SETTING

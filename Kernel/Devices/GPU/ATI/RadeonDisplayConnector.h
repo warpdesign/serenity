@@ -35,6 +35,7 @@ private:
     virtual bool flush_support() const override { return false; }
     virtual bool refresh_rate_support() const override { return false; }
     virtual ErrorOr<void> flush_first_surface() override;
+    virtual ErrorOr<void> copy_area(FBCopyArea const&) override;
     virtual void enable_console() override;
     virtual void disable_console() override;
 
@@ -53,12 +54,17 @@ private:
     void program_digital_output(u32 horizontal_sync, u32 vertical_sync);
     void log_output_routing(StringView when);
     void load_identity_palette();
+    ErrorOr<void> wait_for_2d_fifo(u32 entries);
+    ErrorOr<void> wait_for_2d_idle();
+    ErrorOr<void> initialize_2d_engine();
 
     Family const m_family;
     ApertureSwap const m_aperture_swap;
     NonnullOwnPtr<IOWindow> m_registers;
     PLLLimits const m_pll_limits;
     LockRefPtr<Graphics::GenericFramebufferConsole> m_framebuffer_console;
+    bool m_2d_engine_initialized { false };
+    bool m_2d_engine_failed { false };
 };
 
 }

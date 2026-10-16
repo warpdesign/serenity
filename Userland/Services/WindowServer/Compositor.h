@@ -8,6 +8,7 @@
 
 #include <AK/OwnPtr.h>
 #include <AK/RefPtr.h>
+#include <AK/WeakPtr.h>
 #include <LibCore/EventReceiver.h>
 #include <LibGfx/Color.h>
 #include <LibGfx/DisjointRectSet.h>
@@ -184,6 +185,7 @@ public:
     void unregister_animation(Badge<Animation>, Animation&);
 
     void set_flash_flush(bool b) { m_flash_flush = b; }
+    bool experimental_2d_moves_enabled() const { return m_enable_radeon_2d; }
 
     static NonnullOwnPtr<CompositorScreenData> create_screen_data(Badge<Screen>)
     {
@@ -221,6 +223,12 @@ private:
     bool m_profile_composition { false };
     u64 m_profile_frame_upload_bytes { 0 };
     CompositionProfileStats m_profile_stats;
+    bool m_enable_radeon_2d { false };
+    WeakPtr<Window> m_last_moving_window;
+    Gfx::IntRect m_last_moving_window_rect;
+    i32 m_last_moving_window_backing_serial { -1 };
+    u64 m_last_moving_window_content_generation { 0 };
+    u64 m_recent_2d_blits { 0 };
     bool m_occlusions_dirty { true };
     bool m_invalidated_any { true };
     bool m_invalidated_window { false };
