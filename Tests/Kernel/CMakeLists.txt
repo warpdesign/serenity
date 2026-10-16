@@ -89,6 +89,21 @@ endforeach()
 
 target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 
+set(kernel_ide_write_cache_source "${CMAKE_CURRENT_SOURCE_DIR}/IDE/TestWriteCacheState.cpp")
+set(kernel_ide_write_cache_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-IDE-write-cache-state")
+find_program(KERNEL_IDE_HOST_CXX NAMES c++ clang++ REQUIRED)
+add_custom_target(KernelIDEWriteCacheCheckQuick
+    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_ide_write_cache_source}" -o "${kernel_ide_write_cache_executable}"
+    COMMAND "${kernel_ide_write_cache_executable}"
+    VERBATIM
+)
+add_custom_target(KernelIDEWriteCacheCheck
+    COMMAND "${kernel_ide_write_cache_executable}" extended
+    DEPENDS KernelIDEWriteCacheCheckQuick
+    VERBATIM
+)
+
 set(kernel_hid_keyboard_repeat_source "${CMAKE_CURRENT_SOURCE_DIR}/HID/TestKeyboardRepeat.cpp")
 set(kernel_hid_keyboard_repeat_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-HID-keyboard-repeat")
 find_program(KERNEL_HID_HOST_CXX NAMES c++ clang++ REQUIRED)
@@ -108,6 +123,19 @@ add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")
     find_program(POWERPC_HOST_CXX NAMES c++ clang++ REQUIRED)
+    set(powerpc_dynamic_tag_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestPowerPCDynamicTag.cpp")
+    set(powerpc_dynamic_tag_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-dynamic-tag")
+    add_custom_target(PowerPCDynamicTagCheckQuick
+        COMMAND "${POWERPC_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}" -I "${CMAKE_SOURCE_DIR}/Userland/Libraries"
+            "${powerpc_dynamic_tag_source}" -o "${powerpc_dynamic_tag_executable}"
+        COMMAND "${powerpc_dynamic_tag_executable}"
+        VERBATIM
+    )
+    add_custom_target(PowerPCDynamicTagCheck
+        COMMAND "${powerpc_dynamic_tag_executable}"
+        DEPENDS PowerPCDynamicTagCheckQuick
+        VERBATIM
+    )
     set(powerpc_via_udma_mode_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestVIAUDMAMode.cpp")
     set(powerpc_via_udma_mode_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-VIA-UDMA-mode")
     add_custom_target(PowerPCVIAUDMAModeCheckQuick

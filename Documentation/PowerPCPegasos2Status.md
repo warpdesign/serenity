@@ -446,12 +446,50 @@ reliable DMA. Since UDMA0 also fails, transfer speed alone is insufficient
 to explain the problem. The subsequent image records the ATA error register to
 separate interface CRC or media errors from a controller-side stall.
 
-The current 929 MiB image at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
+The previous 929 MiB image at `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`
 has SHA-256 `ef9c13eb88454b5f468757f17fabe5c7f40b452840d554d4f0c737f73a23f4cb`.
 It includes the HID key-repeat commit and logs the ATA error register on a
 DMA failure. The ext2 root is the same as the first rebuilt image. Its boot
-partition and root have been compared to the built inputs; the new image
-still needs a physical run.
+partition and root were compared to the built inputs. Its physical results
+follow below.
+
+On the next physical run, USB held-key repeat was confirmed working. The full
+serial capture is
+`/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-f89554b6-ef4b-4683-b1c9-5b934ab8d2b4-txt.txt`.
+Default UDMA2 again stalled an eight-sector read, this time at LBA 184032:
+drive status `0x58` still had DRQ but no ERR, ATA error register `0x00`, and
+bus-master status `0x21` still had Active. The timeout and reset returned
+`0x50`; PIO carried the desktop boot onward. This is a DMA hang, not evidence
+of an ATA CRC error.
+
+Shell logged its first dynamic object at uptime 63.067 s. After the fifth
+library at 63.844 s, the next Shell log did not arrive until 70.896 s,
+immediately after a VFS sync reported 16 blocks flushed at 70.866 s. Further
+7–8 s gaps accompany VFS syncs. The user's `disk_benchmark -t 1 -f 131072
+-b 8192 -d /home/anon` reported two runs in 8815 ms, with write throughput
+102500 bytes/s and read throughput 1311000 bytes/s. Each ext2 block is 4 KiB,
+so 16 blocks are 64 KiB; Shell is loading libraries, while the background
+sync writes desktop and filesystem changes. The current IDE driver sends ATA
+FLUSH CACHE after every small block write. `BlockBasedFileSystem` also holds
+its cache lock through the entire writeback loop, an independent generic
+upstream issue now recorded in `Documentation/UpstreamBugBacklog.md`.
+
+The IDE driver now records successful writes and issues one ATA cache flush
+when the filesystem syncs the backing partition, including explicit `fsync`.
+The sync still waits for the flush, so durability is preserved at that point.
+A new log reports the count of writes and flush duration when significant.
+The PowerPC dynamic loader also recognizes `DT_PPC_GOT` as a handled
+architecture tag: its PLT code already used the tag, but the generic scanner
+had printed an “unhandled DT_LOPROC” line for every library. Host regressions
+for cache-flush grouping and dynamic-tag recognition pass, and the kernel,
+dynamic loader, and LibELF build. Physical speed and stability are unverified.
+
+The newest 929 MiB image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`,
+SHA-256 `050dade55256bc5f42c17f8cc13d929910c7313afe7e98c4eab7d5c04da82ed4`.
+It contains the rebuilt PowerPC dynamic loader in the ext2 root; its FFS
+loader and root bytes match the built inputs. The root has `/bin/membench`
+but no benchmark boot service, and e2fsck reports a clean filesystem. No
+QEMU run was made, per the user's request.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

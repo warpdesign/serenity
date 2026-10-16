@@ -6,6 +6,24 @@ Keep platform-specific work in [PowerPCPegasos2Status.md](PowerPCPegasos2Status.
 These entries are candidates for separate upstream fixes; none has been
 submitted upstream as of 2026-10-16.
 
+## Block filesystem cache lock spans all slow device writes
+
+- **Observed risk:** On the physical Pegasos 2, a VFS sync of 16 dirty ext2
+  blocks can take about seven seconds. The Shell's library-loading log stops
+  during that sync and resumes immediately afterward. Device write latency is
+  a separate problem, but the filesystem cache lock can make readers wait for
+  the entire batch rather than one block.
+- **Upstream source:** [BlockBasedFileSystem.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/FileSystem/BlockBasedFileSystem.cpp)
+  holds `m_cache.with_exclusive` around the loop that calls
+  `file_description().write()` for every dirty block. Verified against
+  upstream `master` on 2026-10-16.
+- **Local status:** The Pegasos IDE driver now batches ATA cache flushes at
+  filesystem sync; the shared filesystem locking is unchanged. Physical
+  timing of the new image is pending.
+- **Upstream scope:** Let reads interleave with slow writeback without losing
+  concurrent dirty updates, and propagate writeback errors before marking
+  blocks clean. This needs a separate concurrency regression.
+
 ## USB HID keyboards have no held-key repeat
 
 - **Observed:** On the Pegasos 2, a USB keyboard now registers separate

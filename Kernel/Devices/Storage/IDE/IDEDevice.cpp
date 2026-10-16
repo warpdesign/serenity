@@ -32,6 +32,11 @@ IDEDevice::IDEDevice(NonnullRefPtr<IDEChannel> channel, IDEChannel::Drive drive,
 {
 }
 
+ErrorOr<void> IDEDevice::sync()
+{
+    return m_channel->flush_device_cache(m_drive, m_use_lba48);
+}
+
 void IDEDevice::start_request(AsyncBlockDeviceRequest& request)
 {
     // Transfers poll the drive, so run them on the I/O work queue instead of the caller's context.

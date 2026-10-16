@@ -13,6 +13,7 @@
 #include <Kernel/Devices/Storage/IDE/IDEChannel.h>
 #include <Kernel/Library/Assertions.h>
 #include <Kernel/Memory/MemoryManager.h>
+#include <Kernel/Time/TimeManagement.h>
 
 namespace Kernel {
 
@@ -367,13 +368,32 @@ ErrorOr<void> IDEChannel::write_sectors(Drive drive, bool use_lba48, u64 lba, si
     MutexLocker locker(m_lock);
     if (is_dma_enabled(drive)) {
         auto result = transfer_dma(drive, use_lba48, lba, count, true, const_cast<u8*>(buffer.data()), physical_buffer);
-        if (!result.is_error())
-            return flush_cache(drive, use_lba48);
+        if (!result.is_error()) {
+            m_write_cache_state[to_underlying(drive)].write_completed();
+            return {};
+        }
         disable_dma_after_error(drive, result.release_error());
         TRY(reset_after_dma_error());
     }
     TRY(write_sectors_pio(drive, use_lba48, lba, count, buffer));
-    return flush_cache(drive, use_lba48);
+    m_write_cache_state[to_underlying(drive)].write_completed();
+    return {};
+}
+
+ErrorOr<void> IDEChannel::flush_device_cache(Drive drive, bool use_lba48)
+{
+    MutexLocker locker(m_lock);
+    auto& state = m_write_cache_state[to_underlying(drive)];
+    if (!state.needs_flush())
+        return {};
+    auto writes = state.pending_writes();
+    auto started = TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE);
+    TRY(flush_cache(drive, use_lba48));
+    auto elapsed_ms = (TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE) - started).to_milliseconds();
+    if (writes >= 8 || elapsed_ms >= 100)
+        dmesgln("IDE: cache flush after {} writes took {} ms", writes, elapsed_ms);
+    state.flush_completed();
+    return {};
 }
 
 ErrorOr<void> IDEChannel::read_sectors_pio(Drive drive, bool use_lba48, u64 lba, size_t count, Bytes buffer)

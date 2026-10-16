@@ -8,6 +8,7 @@
 #include <AK/ByteString.h>
 #include <AK/Debug.h>
 #include <AK/StringBuilder.h>
+#include <LibELF/Arch/DynamicTag.h>
 #include <LibELF/DynamicLoader.h>
 #include <LibELF/DynamicObject.h>
 #include <LibELF/ELFABI.h>
@@ -192,7 +193,8 @@ void DynamicObject::parse()
         case DT_SYMBOLIC:
             break;
         default:
-            dbgln("DynamicObject: DYNAMIC tag handling not implemented for DT_{} ({}) in {}", name_for_dtag(entry.tag()), entry.tag(), m_filepath);
+            if (!handled_dynamic_tag_name(entry.tag()))
+                dbgln("DynamicObject: DYNAMIC tag handling not implemented for DT_{} ({}) in {}", name_for_dtag(entry.tag()), entry.tag(), m_filepath);
             break;
         }
     });
@@ -399,6 +401,8 @@ char const* DynamicObject::raw_symbol_string_table_string(Elf_Word index) const
 
 char const* DynamicObject::name_for_dtag(Elf_Sword d_tag)
 {
+    if (auto name = handled_dynamic_tag_name(d_tag))
+        return name;
     switch (d_tag) {
     case DT_NULL:
         return "NULL"; /* marks end of _DYNAMIC array */

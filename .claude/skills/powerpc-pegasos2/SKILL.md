@@ -435,10 +435,37 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   The new image needs physical repeat and DMA tests; do not claim DMA works
   from the recovered desktop boot.
 
-Next: test the new card's USB held-key repeat and capture the ATA error byte
-if its default UDMA2 fails. The new image accepts `udma=0` or `nodma`
-without another rewrite. Do not assume a faster UDMA mode will fix the
-observed UDMA0 failure. `boot ide:0 serenity.elf /?` opens the optional firmware
+- 2026-10-16: The user confirmed USB key repeat works in the physical image.
+  Full serial capture:
+  `/Users/leo/.t3/userdata/attachments/046af1a9-eae0-4cea-8013-ceea9167016f-f89554b6-ef4b-4683-b1c9-5b934ab8d2b4-txt.txt`.
+  UDMA2 still stalls after an eight-sector read at LBA 184032; ATA status
+  `0x58` has DRQ without ERR, ATA error `0x00`, bus-master status `0x21` has
+  Active. Reset to `0x50` and PIO fallback boot the desktop. The user's Shell
+  waits 7–8 s in gaps aligned with VFS syncs of 16–19 ext2 blocks; the Shell
+  itself is loading shared libraries, not writing that data. On the card,
+  `disk_benchmark -t 1 -f 131072 -b 8192 -d /home/anon` reported two runs in
+  8815 ms, write_bps 102500, read_bps 1311000. Source inspection found that
+  the IDE driver sent ATA FLUSH CACHE after every small write, while the
+  generic block filesystem cache lock spans the whole writeback loop. The
+  latter is confirmed in upstream and recorded in
+  `Documentation/UpstreamBugBacklog.md` for a separate fix.
+  IDE writes now defer their ATA flush until filesystem sync/fsync, with a
+  pending-write counter and flush-duration diagnostic. Generic partition
+  sync forwards to the device; unsupported devices retain their prior behavior.
+  The PowerPC ELF `DT_PPC_GOT` tag was already used by the PLT resolver but
+  logged as unhandled `DT_LOPROC` by the generic scanner; architecture-specific
+  recognition now suppresses that warning. Host tests, kernel, loader,
+  dynamic loader, LibELF, ext2 fsck and card content comparison pass. No QEMU
+  run. **Physical performance of this newest image is unverified.** Current
+  929 MiB card SHA-256:
+  `050dade55256bc5f42c17f8cc13d929910c7313afe7e98c4eab7d5c04da82ed4`.
+
+Next: write the newest card image once, boot `fullram weakrng`, measure Shell
+window delay and rerun the one-case disk benchmark to compare with the 102500
+bytes/s write baseline. Check for `IDE: cache flush after ... writes took ...`
+and any DMA failure/reset. USB repeat is already confirmed. The image accepts
+`udma=0` or `nodma` without another rewrite. Do not assume a faster UDMA mode
+will fix the observed UDMA0 failure. `boot ide:0 serenity.elf /?` opens the optional firmware
 prompt; `exit` should return to SmartFirmware without restarting it.
 Short options are `/?`, `weakrng`, `fullram`, `halt`, `ofdump`, `realmode`,
 `claimram`, `native`, `nodma`, `udma=<mode>`, and `fixedio`. Check the serial log for

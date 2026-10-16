@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, Andreas Kling <kling@serenityos.org>
+ * Copyright (c) 2018-2026, Andreas Kling <kling@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -26,6 +26,14 @@ StorageDevicePartition::StorageDevicePartition(StorageDevice& device, MinorNumbe
 }
 
 StorageDevicePartition::~StorageDevicePartition() = default;
+
+ErrorOr<void> StorageDevicePartition::sync()
+{
+    auto device = m_device.strong_ref();
+    if (!device)
+        return Error::from_errno(EIO);
+    return device->sync();
+}
 
 Partition::DiskPartitionMetadata const& StorageDevicePartition::metadata() const
 {
