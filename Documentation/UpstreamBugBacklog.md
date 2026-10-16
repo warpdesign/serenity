@@ -58,7 +58,8 @@ submitted upstream as of 2026-10-16.
   lets the Pegasos IDE device advertise its existing 64 KiB contiguous DMA
   buffer. A host regression checks that a 1 MiB raw request now plans sixteen
   64 KiB IDE requests instead of 256 one-page requests. The PowerPC kernel
-  builds; physical validation is pending, and the current SD image is unchanged.
+  builds and the updated local SD image includes the change; physical
+  validation is pending.
 - **Upstream scope:** Let each storage driver report its safe maximum transfer
   size while preserving the one-page limit for drivers that need it.
 

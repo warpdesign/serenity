@@ -749,7 +749,7 @@ IRQ wait expired, the ATA taskfile registers, and how many bus-master IRQs
 arrived outside an active transfer. A physical boot check requires an
 IRQ-waited success and no later PIO fallback for a stable-DMA result. The
 PowerPC kernel and host regression checks build; physical behavior remains
-unverified. The sole current image is
+unverified. The preceding image was
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` with SHA-256
 `11b4366dd5dcc70fb5de07a315a6e3a730d88124f4a87e9f9dad796eec31571a`.
 Its extracted FFS loader matches the built ELF byte for byte, and its ext2
@@ -760,8 +760,8 @@ internally adds `nodma` unless `dma` or `udma=N` is explicit. Boot with
 `fullram weakrng udma=0` to isolate UDMA timing. The source now removes that
 implicit `nodma` argument and its user-facing help entry. Native Pegasos IDE
 instead requires explicit `dma` or `udma=N`; QEMU keeps its existing DMA
-default. This source cleanup is **not** in the already built card image and
-does not require another SD write for the current IRQ-wait test.
+default. This cleanup was not in the preceding IRQ-wait image; it is included
+in the updated local image described below.
 
 A physical boot of the existing card with `fullram weakrng udma=0` also
 stalled. It completed 619 DMA transfers, then an eight-sector read at LBA
@@ -790,8 +790,8 @@ filesystem write latency. `IDEChannel::write_sectors()` still issues an ATA
 cache flush after each request. Earlier PIO logs measured a batched flush at
 near zero; the per-request UDMA5 flush cost, drive write completion, and Ext2
 sync locking remain candidates. Compare the same `disk_benchmark` command
-against the
-earlier PIO result before attributing the LED stalls to any one component.
+against the earlier PIO result before attributing the LED stalls to any one
+component.
 
 On a later physical boot with `udma=5`, the same
 `disk_benchmark -t 1 -f 131072 -b 8192 -d /home/anon` reported
@@ -800,8 +800,8 @@ On a later physical boot with `udma=5`, the same
 4.4 times and read rate about 1.6 times. The tool uses `O_DIRECT` by default
 and issues sequential 8 KiB calls; ext2 splits each call into 4 KiB
 filesystem blocks. Its per-phase rates exclude file close/unlink and do not
-directly measure background ext2 sync. This confirms
-a useful DMA speedup for that workload, while leaving the seconds-long
+directly measure background ext2 sync. This confirms a useful DMA speedup for
+that workload, while leaving the seconds-long
 desktop and LED pauses as a separate unresolved problem. The UDMA5 result
 also does not prove long-term DMA stability.
 
@@ -835,9 +835,19 @@ IDE device already has a contiguous 64 KiB buffer, so the source now lets
 that device advertise a 64 KiB limit while all other storage devices retain
 the one-page default. A host regression checks that a 1 MiB request is
 planned as sixteen IDE transfers instead of 256 page-sized transfers; the
-PowerPC kernel builds. This is not in the currently running SD image and
-does not change ext2's separate 4 KiB direct-I/O splitting. Physical
-throughput for the larger raw requests remains unmeasured.
+PowerPC kernel builds. It does not change ext2's separate 4 KiB direct-I/O
+splitting. Physical throughput for the larger raw requests remains unmeasured.
+
+The sole updated local image is
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`, SHA-256
+`cdcf304559ddefce3ba8db8268aab25cfc6e699b48d91411e70ad8d462e7c459`.
+It includes the explicit Pegasos `dma` opt-in and the IDE 64 KiB raw-request
+limit. The extracted FFS loader matches the rebuilt ELF byte for byte, and
+the ext2 root partition matches `pegasos2-root.ext2` byte for byte. The
+existing physical card has not yet been rewritten with this image. Boot it
+with `fullram weakrng dma` to keep the previously validated DMA path, or
+with `fullram weakrng udma=5` for the measured UDMA5 mode. Plain
+`fullram weakrng` selects the PIO default. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
