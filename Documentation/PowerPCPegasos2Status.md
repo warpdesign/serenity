@@ -620,16 +620,51 @@ on this firmware; changing the programming-interface bits is insufficient.
 Do not reapply the legacy-mode fixup without evidence that the fixed ports
 actually decode on this machine.
 
-The current source restores the previously working native BAR path for every
+The previous source revision restored the working native BAR path for every
 boot, including `dma`. It retains the independent correction that waits for
 the bus-master completion interrupt before treating ATA status as final.
 The physical legacy-mode failure has a regression case in the native IDE
 boot checker. The IRQ route and completion tests, native IDE checker
-self-test, and PowerPC kernel and loader build pass. The sole card image at
+self-test, and PowerPC kernel and loader build passed. That card image at
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
 `4d114132491e6efb24bf52fd60f2c2bc75a3ac0594e4d3345d1c25a4fc992727`)
 has the new loader in its FFS partition; the ext2 root is byte-for-byte
 unchanged. FFS loader bytes match the built loader. No QEMU run was made.
+
+The physical run of that native-mode image (`4d114132...`) found the drive,
+negotiated UDMA2 and mounted ext2. `/init` and the initial SystemServer
+services started. A later eight-sector DMA read at LBA 277408 timed out with
+drive status `0x58`, ATA error `0x00`, and bus-master status `0x21`: the drive
+requested data, the bus master was active, and no completion interrupt was
+latched. Reset returned `0x50` on its first attempt, then PIO fallback
+continued into the WindowServer main loop. Thus ignoring the early `0x2f`
+sample avoids the premature abort but does not solve the stalled transfer.
+Because root and user programs loaded before this first reported failure,
+earlier DMA reads may have succeeded; old logs did not record successful
+transfers, so that remains an inference.
+
+The current source checks that PCI Command retains both I/O and bus
+master enable bits, confirms VIA UDMA timing register readback, and logs the
+bus-master command and PRD pointer if a transfer stalls. It also uses full
+memory fences between DMA setup, ATA command issue, and bus-master start,
+matching the ordering around PowerPC PCI I/O in Haiku's
+[PCI I/O implementation](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/bus_managers/pci/pci_io.cpp).
+The driver now logs the first successful DMA transfer and reports the number
+of successful transfers and handled IRQs at failure. Haiku's
+[PowerPC PCI DMA address conversion](https://github.com/warpdesign/Haiku-PowerPC/blob/pegasos2-support/src/add-ons/kernel/bus_managers/pci/pci.cpp)
+uses physical RAM addresses directly, as Serenity does. This makes a missing
+PCI DMA address offset less likely, but does not prove the controller can
+reach every RAM page used here. Hardware DMA stability is still unverified.
+The sole current card image is at
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
+`499b0a2ae2850b86315631f23b2c8a82fe76ba232b146117fc042e95363e65e7`).
+It also contains a check that PCI Command retains I/O and bus-master enable,
+a readback of the VIA UDMA timing byte, and full fences between major PCI
+DMA register writes. If another transfer stalls, it reports the bus-master
+command, PRD pointer, number of successful transfers, and IRQ count. The
+first successful transfer is logged once. The FFS loader matches the built
+loader and ext2 root is unchanged. DMA stability is still unverified on
+physical hardware; no QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

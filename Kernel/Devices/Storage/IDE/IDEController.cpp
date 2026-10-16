@@ -76,6 +76,7 @@ ErrorOr<NonnullRefPtr<IDEController>> IDEController::initialize(PCI::DeviceIdent
     // CPU interrupt. Controllers without that mask use a registered IRQ.
     PCI::disable_interrupt_line(identifier);
     if (identifier.hardware_id().vendor_id == via_vendor_id) {
+        dmesgln("IDE: VIA channel enable {:#02x}, PIO mode select {:#02x}", read_config8(identifier, 0x40), read_config8(identifier, 0x42));
         dmesgln("IDE: VIA timing registers: drive timing {:#02x} {:#02x} {:#02x} {:#02x}, Ultra DMA {:#02x} {:#02x} {:#02x} {:#02x}",
             read_config8(identifier, 0x48), read_config8(identifier, 0x49), read_config8(identifier, 0x4a), read_config8(identifier, 0x4b),
             read_config8(identifier, 0x50), read_config8(identifier, 0x51), read_config8(identifier, 0x52), read_config8(identifier, 0x53));
@@ -157,8 +158,20 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
     if (bus_master && dma_irq.has_value()) {
         dmesgln("IDE: channel {} using IRQ {} for DMA (PCI line {})", channel_index, dma_irq->value(), identifier.interrupt_line().value());
     }
-    if (bus_master)
+    if (bus_master) {
         PCI::enable_bus_mastering(identifier);
+        u16 command;
+        {
+            SpinlockLocker locker(identifier.operation_lock());
+            command = PCI::read16_locked(identifier, PCI::RegisterOffset::COMMAND);
+        }
+        if (channel_index == 0)
+            dmesgln("IDE: PCI command after bus-master enable {:#04x}", command);
+        if (!ide_dma_pci_command_allows_mastering(command)) {
+            dmesgln("IDE: PCI bus mastering or I/O decoding did not enable, using PIO");
+            bus_master = nullptr;
+        }
+    }
     auto channel = TRY(IDEChannel::create(move(command_block), move(control_block), move(bus_master), dma_irq));
 
     for (auto drive : { IDEChannel::Drive::Master, IDEChannel::Drive::Slave }) {
@@ -208,7 +221,12 @@ void IDEController::configure_dma(PCI::DeviceIdentifier const& identifier, IDECh
         mode = selected_mode.value();
         u8 new_timing = (old_timing & via_udma_cable_bit) | via_udma_enable_bits | via_udma100_cycle_fields[mode];
         write_config8(identifier, offset, new_timing);
-        dmesgln("IDE: {} drive Ultra DMA timing register {:#02x}: {:#02x} -> {:#02x}", drive_name, offset, old_timing, new_timing);
+        u8 actual_timing = read_config8(identifier, offset);
+        dmesgln("IDE: {} drive Ultra DMA timing register {:#02x}: {:#02x} -> {:#02x}, readback {:#02x}", drive_name, offset, old_timing, new_timing, actual_timing);
+        if (actual_timing != new_timing) {
+            dmesgln("IDE: {} drive Ultra DMA timing did not stick, using PIO", drive_name);
+            return;
+        }
     } else {
         // Without chipset knowledge, keep the mode and controller timing the firmware set up.
         if (!channel.bus_master_reports_dma_capable(drive) || identity.selected_udma_modes == 0) {

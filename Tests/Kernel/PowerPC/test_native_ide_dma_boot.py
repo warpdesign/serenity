@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 
-def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2) -> None:
+def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2, require_stable_dma: bool = False) -> None:
     if "channel 0 in legacy mode" in log:
         raise AssertionError("the physical Pegasos 2 loses its IDE drive in legacy mode")
     if "StorageManagement: Detected 0 storage devices" in log or "KERNEL PANIC" in log:
@@ -19,6 +19,8 @@ def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2) -> N
         raise AssertionError("the drive was not reset before PIO fallback")
     if "IDEDevice: Request for block" in log or "Init process quit unexpectedly" in log:
         raise AssertionError("a disk request or the init process failed")
+    if require_stable_dma and ("IDE: First DMA transfer succeeded" not in log or "IDE: Master drive DMA transfer failed" in log):
+        raise AssertionError("DMA did not remain operational through boot")
     if "SystemServer(9): Activating" not in log:
         raise AssertionError("the initial services did not start after disk access")
     if require_desktop and "Entering WindowServer main loop" not in log:
@@ -48,6 +50,18 @@ Entering WindowServer main loop
 """
     check_dma_boot(recovered, False)
     check_dma_boot(recovered, True)
+    try:
+        check_dma_boot(recovered, True, require_stable_dma=True)
+    except AssertionError as error:
+        if "DMA did not remain operational" not in str(error):
+            raise
+    else:
+        raise AssertionError("PIO fallback must not count as stable DMA")
+    stable = "IDE: First DMA transfer succeeded: drive status 0x50, DMA status 0x24, handled interrupt true\n" + recovered
+    stable = stable.replace("IDE: DMA read of 8 sectors at 68136 failed, drive status 0x58, DMA status 0x21\n", "")
+    stable = stable.replace("IDE: Master drive DMA transfer failed (Error(errno=69)), using PIO from now on\n", "")
+    stable = stable.replace("IDE: Channel reset after DMA failure, drive status 0x50\n", "")
+    check_dma_boot(stable, True, require_stable_dma=True)
     try:
         check_dma_boot("IDE: channel 0 in legacy mode\n" + recovered, True)
     except AssertionError as error:
@@ -93,7 +107,7 @@ def main() -> None:
     path = os.environ.get("PEGASOS2_NATIVE_SERIAL_LOG")
     if not path:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
-    check_dma_boot(Path(path).read_text(errors="replace"), args.normal, args.mode)
+    check_dma_boot(Path(path).read_text(errors="replace"), args.normal, args.mode, args.normal)
 
 
 if __name__ == "__main__":

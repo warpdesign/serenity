@@ -15,6 +15,12 @@ constexpr bool ide_dma_pin_interrupt_is_masked(u16 pci_command)
     return (pci_command & (1 << 10)) != 0;
 }
 
+constexpr bool ide_dma_pci_command_allows_mastering(u16 pci_command)
+{
+    // PCI Command bits 0 and 2 enable I/O port decoding and bus mastering.
+    return (pci_command & 0x05) == 0x05;
+}
+
 // PCI IDE bus-master status bit 2 is set by a rising edge on the drive's
 // INTRQ line. Active alone means the command is still in progress.
 constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status, bool irq_observed = false)

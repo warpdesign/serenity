@@ -9,6 +9,7 @@
 using Kernel::ide_dma_has_completed;
 using Kernel::ide_dma_has_failed;
 using Kernel::ide_dma_irq_acknowledgement;
+using Kernel::ide_dma_pci_command_allows_mastering;
 using Kernel::ide_dma_pin_interrupt_is_masked;
 using Kernel::ide_drive_ready_after_reset;
 
@@ -25,6 +26,9 @@ static_assert(!ide_dma_has_failed(0x2f, 0x21)); // Transient ATA status before I
 static_assert(ide_dma_has_failed(0x2f, 0x25)); // The same status after INTRQ is an error.
 static_assert(ide_dma_has_failed(0x50, 0x22)); // Bus-master error is final immediately.
 static_assert(ide_dma_irq_acknowledgement(0x27) == 0x25); // Keep error latched while acknowledging IRQ.
+static_assert(ide_dma_pci_command_allows_mastering(0x85)); // I/O and bus master enabled.
+static_assert(!ide_dma_pci_command_allows_mastering(0x81)); // I/O enabled, bus master disabled.
+static_assert(!ide_dma_pci_command_allows_mastering(0x84)); // Bus master enabled, I/O decoder disabled.
 static_assert(ide_drive_ready_after_reset(0x50));
 static_assert(!ide_drive_ready_after_reset(0x58));
 static_assert(!ide_drive_ready_after_reset(0x51));
