@@ -790,6 +790,17 @@ itself as near zero; the drive's write completion and Ext2 sync locking
 remain candidates. Compare the same `disk_benchmark` command against the
 earlier PIO result before attributing the LED stalls to any one component.
 
+On a later physical boot with `udma=5`, the same
+`disk_benchmark -t 1 -f 131072 -b 8192 -d /home/anon` reported
+`write_bps=453666 read_bps=2060000`. The earlier PIO run reported
+`write_bps=102500 read_bps=1311000`, so the measured write rate rose about
+4.4 times and read rate about 1.6 times. The tool uses `O_DIRECT` by default
+and transfers sequential 8 KiB chunks; its per-phase rates do not include
+file close/unlink or background ext2 sync. This confirms a useful DMA speedup
+for that workload, while leaving the seconds-long desktop/LED pauses as a
+separate unresolved problem. The UDMA5 result also does not prove long-term
+DMA stability.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
