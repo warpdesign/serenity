@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2025-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,13 +12,15 @@
 
 namespace Kernel::HID {
 
+class KeyboardRepeatState;
+
 class KeyboardDriver final : public ApplicationCollectionDriver {
 public:
     virtual ~KeyboardDriver() override;
     static ErrorOr<NonnullRefPtr<KeyboardDriver>> create(Device const&, ::HID::ApplicationCollection const&);
 
 private:
-    KeyboardDriver(Device const&, ::HID::ApplicationCollection const&, NonnullRefPtr<KeyboardDevice>);
+    KeyboardDriver(Device const&, ::HID::ApplicationCollection const&, NonnullRefPtr<KeyboardDevice>, NonnullRefPtr<KeyboardRepeatState>);
 
     void handle_keyboard_or_keypad_change_event(u16 keycode, bool value);
 
@@ -26,6 +28,7 @@ private:
     virtual ErrorOr<void> on_report(ReadonlyBytes) override;
 
     NonnullRefPtr<KeyboardDevice> m_keyboard_device;
+    NonnullRefPtr<KeyboardRepeatState> m_repeat_state;
     EntropySource m_entropy_source;
 
     // FIXME: We can't use an AK::Bitmap here, since we need to iterate over all key state bits that are different in the new state to generate key up/down events,

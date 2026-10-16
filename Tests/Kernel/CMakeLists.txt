@@ -89,6 +89,21 @@ endforeach()
 
 target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 
+set(kernel_hid_keyboard_repeat_source "${CMAKE_CURRENT_SOURCE_DIR}/HID/TestKeyboardRepeat.cpp")
+set(kernel_hid_keyboard_repeat_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-HID-keyboard-repeat")
+find_program(KERNEL_HID_HOST_CXX NAMES c++ clang++ REQUIRED)
+add_custom_target(KernelHIDKeyboardRepeatCheckQuick
+    COMMAND "${KERNEL_HID_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
+        "${kernel_hid_keyboard_repeat_source}" -o "${kernel_hid_keyboard_repeat_executable}"
+    COMMAND "${kernel_hid_keyboard_repeat_executable}"
+    VERBATIM
+)
+add_custom_target(KernelHIDKeyboardRepeatCheck
+    COMMAND "${kernel_hid_keyboard_repeat_executable}" extended
+    DEPENDS KernelHIDKeyboardRepeatCheckQuick
+    VERBATIM
+)
+
 add_subdirectory(POSIX)
 
 if (SERENITY_ARCH STREQUAL "powerpc")

@@ -6,6 +6,24 @@ Keep platform-specific work in [PowerPCPegasos2Status.md](PowerPCPegasos2Status.
 These entries are candidates for separate upstream fixes; none has been
 submitted upstream as of 2026-10-16.
 
+## USB HID keyboards have no held-key repeat
+
+- **Observed:** On the Pegasos 2, a USB keyboard now registers separate
+  presses after the UHCI DATA toggle fix, but holding a key sends only one
+  key-down event. Backspace, letters, and Space do not repeat.
+- **Upstream source:** [HID KeyboardDriver.cpp](https://github.com/SerenityOS/serenity/blob/master/Kernel/Devices/Input/HID/KeyboardDriver.cpp)
+  generates key events only where the old and new report bitmaps differ.
+  Unchanged held-key reports cannot produce a repeat, and the driver has no
+  timer. Verified against upstream `master` on 2026-10-16.
+- **Local fix:** The HID keyboard now starts a 500 ms repeat delay on a
+  repeatable key press and emits further presses every 40 ms while held.
+  Release, switching keys, and disconnect invalidate pending timers. A host
+  regression checks those transitions; physical confirmation is pending.
+- **Upstream scope:** Add typematic timing to the generic HID keyboard path
+  independently of the UHCI toggle correction. The previous UHCI fix stopped
+  processing NAKs and empty packets as reports, exposing the existing absence
+  of repeat handling; the HID state-diff rule itself predates that fix.
+
 ## One-page DMA buffers are zeroed through a mismatched cacheable mapping
 
 - **Observed risk:** A driver can request an uncached DMA page, but the page

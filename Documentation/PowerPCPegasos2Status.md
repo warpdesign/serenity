@@ -411,6 +411,18 @@ same prompt, `fullram weakrng udma=0` tests the lowest UDMA mode, while
 `fullram weakrng nodma` remains the known boot path. This has not been
 verified on physical hardware yet.
 
+While the user writes that card, a separate USB keyboard issue was identified:
+holding a key produces a single press. Commit `3ee3673b02` correctly advances
+the UHCI DATA toggle and ignores NAK/empty transfers; it did not remove
+typematic handling. The generic HID keyboard driver only emits an event when
+a usage changes between input reports, and it has no repeat timer. The same
+state-diff-only behavior is present in upstream SerenityOS (2026-10-16).
+The HID driver source now schedules 500 ms initial and 40 ms subsequent
+key-down repeats, stops them on release/disconnect, and excludes modifiers and
+lock keys. Host repeat tests and a PowerPC kernel build pass. The card image
+being written by the user is **unchanged** and does not include this new fix;
+a later image will be needed for physical repeat testing.
+
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt
 source. The RNG wait now uses the predicate-based wait queue, which rechecks

@@ -399,6 +399,19 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   SHA-256:
   `44ae3b8869c28135f33d0e81beb798ab32cb766a6587283508f9ef8a67a31d92`.
 
+- 2026-10-16: USB held-key repeat investigation while the user writes the
+  card above. `3ee3673b02` fixed UHCI DATA toggling and ignored NAK/empty
+  transfers, but HID's report-state diff only sends presses on transitions;
+  unchanged held keys had no typematic timer before that commit either.
+  Upstream SerenityOS has the same generic HID behavior; it is logged in
+  `Documentation/UpstreamBugBacklog.md`. Source now synthesizes HID key-down
+  events after 500 ms and every 40 ms until release, another key takes over,
+  or device detach; modifiers and lock keys do not repeat. Host regression
+  and PowerPC kernel build pass. **Do not replace the current card image
+  while the user writes/tests it.** That image does not include this later
+  USB change. Wait for the user's test result and combine any needed fixes
+  into a single subsequent card rebuild.
+
 Next: write the rebuilt card once. Use `boot ide:0 serenity.elf /?` to check
 the firmware prompt, then type `fullram weakrng` for default conservative
 UDMA2. Confirm `exit` returns to SmartFirmware if testing that path first.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025, Sönke Holz <soenke.holz@serenityos.org>
+ * Copyright (c) 2025-2026, Sönke Holz <soenke.holz@serenityos.org>
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -8,28 +8,96 @@
 #include <Kernel/Devices/Input/HID/Device.h>
 #include <Kernel/Devices/Input/HID/KeyboardDriver.h>
 #include <Kernel/Devices/Input/HID/KeyboardKeymap.h>
+#include <Kernel/Devices/Input/HID/KeyboardRepeat.h>
 #include <Kernel/Devices/Input/Management.h>
+#include <Kernel/Time/TimeManagement.h>
+#include <Kernel/Time/TimerQueue.h>
 
 #include <LibHID/ReportParser.h>
 
 namespace Kernel::HID {
 
+class KeyboardRepeatState final : public AtomicRefCounted<KeyboardRepeatState> {
+public:
+    explicit KeyboardRepeatState(NonnullRefPtr<::KeyboardDevice> keyboard_device)
+        : m_keyboard_device(move(keyboard_device))
+    {
+    }
+
+    void press(KeyEvent const& event)
+    {
+        u32 generation;
+        {
+            SpinlockLocker locker(m_lock);
+            m_event = event;
+            generation = m_repeat.press(static_cast<u16>(event.scancode));
+        }
+        schedule(generation, KeyboardRepeat::initial_delay_ms);
+    }
+
+    void release(u16 usage_id)
+    {
+        SpinlockLocker locker(m_lock);
+        m_repeat.release(usage_id);
+    }
+
+    void stop()
+    {
+        SpinlockLocker locker(m_lock);
+        m_repeat.stop();
+    }
+
+private:
+    void schedule(u32 generation, u32 delay_ms)
+    {
+        auto timer_or_error = try_make_ref_counted<Timer>();
+        if (timer_or_error.is_error()) {
+            dmesgln("HID: Could not allocate keyboard repeat timer: {}", timer_or_error.error());
+            return;
+        }
+        auto deadline = TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE) + Duration::from_milliseconds(delay_ms);
+        NonnullRefPtr<KeyboardRepeatState> self { *this };
+        TimerQueue::the().add_timer_without_id(timer_or_error.release_value(), CLOCK_MONOTONIC_COARSE, deadline,
+            [self = move(self), generation]() { self->fire(generation); });
+    }
+
+    void fire(u32 generation)
+    {
+        {
+            SpinlockLocker locker(m_lock);
+            if (!m_repeat.on_timer(generation).has_value())
+                return;
+            // Serialize the repeated press with a report's key release.
+            m_keyboard_device->handle_input_event(m_event);
+        }
+        schedule(generation, KeyboardRepeat::interval_ms);
+    }
+
+    NonnullRefPtr<::KeyboardDevice> m_keyboard_device;
+    Spinlock<LockRank::None> m_lock {};
+    KeyboardRepeat m_repeat;
+    KeyEvent m_event {};
+};
+
 KeyboardDriver::~KeyboardDriver()
 {
+    m_repeat_state->stop();
     InputManagement::the().detach_standalone_input_device(*m_keyboard_device);
 }
 
 ErrorOr<NonnullRefPtr<KeyboardDriver>> KeyboardDriver::create(Device const& device, ::HID::ApplicationCollection const& application_collection)
 {
     auto keyboard_device = TRY(::KeyboardDevice::try_to_initialize());
-    auto handler = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) KeyboardDriver(device, application_collection, move(keyboard_device))));
+    auto repeat_state = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) KeyboardRepeatState(keyboard_device)));
+    auto handler = TRY(adopt_nonnull_ref_or_enomem(new (nothrow) KeyboardDriver(device, application_collection, move(keyboard_device), move(repeat_state))));
     InputManagement::the().attach_standalone_input_device(*handler->m_keyboard_device);
     return handler;
 }
 
-KeyboardDriver::KeyboardDriver(Device const& device, ::HID::ApplicationCollection const& application_collection, NonnullRefPtr<::KeyboardDevice> keyboard_device)
+KeyboardDriver::KeyboardDriver(Device const& device, ::HID::ApplicationCollection const& application_collection, NonnullRefPtr<::KeyboardDevice> keyboard_device, NonnullRefPtr<KeyboardRepeatState> repeat_state)
     : ApplicationCollectionDriver(device, application_collection)
     , m_keyboard_device(move(keyboard_device))
+    , m_repeat_state(move(repeat_state))
 {
 }
 
@@ -37,6 +105,9 @@ void KeyboardDriver::handle_keyboard_or_keypad_change_event(u16 usage_id, bool v
 {
     if (usage_id == 0)
         return;
+
+    if (!value)
+        m_repeat_state->release(usage_id);
 
     m_entropy_source.add_random_event(usage_id);
 
@@ -125,6 +196,8 @@ void KeyboardDriver::handle_keyboard_or_keypad_change_event(u16 usage_id, bool v
     }
 
     m_keyboard_device->handle_input_event(key_event);
+    if (value && key_may_repeat(usage_id, key_event.key))
+        m_repeat_state->press(key_event);
 }
 
 ErrorOr<void> KeyboardDriver::on_report(ReadonlyBytes report_data)
