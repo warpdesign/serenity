@@ -924,6 +924,35 @@ no loader-start timestamp; neither the full visible boot time nor the
 firmware-to-kernel loader improvement is measured here. No DMA failure or PIO
 fallback appears in the supplied excerpt.
 
+## Pegasos 2 graphics performance investigation
+
+The physical desktop remains at 1024×768 while graphics performance is
+measured. Source review confirms that the current Radeon connector maps its
+framebuffer cache-inhibited on PowerPC, exposes neither buffer flipping nor
+flush support, and has no 2D drawing or blit implementation. WindowServer
+composes changed regions in a RAM bitmap and copies their scanlines into the
+mapped framebuffer with `fast_u32_copy`, which calls the PowerPC `memcpy`.
+Moving a window invalidates its previous and new positions. Menu hover
+redraws the old and new highlighted items, so menu-specific lag is not by
+itself proof that an entire frame was copied. Input handling and composition
+share WindowServer's event loop; long composition or framebuffer copies can
+delay pointer updates.
+
+The existing `/bin/membench -f /dev/gpu/connector0` tests both RAM and
+framebuffer access on the current card, including the RAM-to-framebuffer
+`memcpy` path and 64-bit floating-point stores. It restores the screen after
+briefly changing its pixels. The `anon` user belongs to the connector's
+`window` access group. Physical throughput results are pending. If
+framebuffer writes dominate, compare the existing copy methods and PCI
+aperture mapping before changing the compositor. If they do not, collect
+WindowServer composition, framebuffer-copy, dirty-area, and input-delay
+timings in one future diagnostic image. Linux's
+[radeonfb 2D acceleration path](https://github.com/torvalds/linux/blob/master/drivers/video/fbdev/aty/radeon_accel.c)
+shows that this Radeon family can accelerate VRAM fills and copies, but those
+operations do not by themselves eliminate uploads of CPU-composited pixels.
+Its source also warns that PowerPC firmware can leave the chip's VRAM base at
+a different engine offset, which must be handled before enabling 2D commands.
+
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
 16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
