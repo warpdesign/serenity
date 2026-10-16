@@ -798,12 +798,33 @@ On a later physical boot with `udma=5`, the same
 `write_bps=453666 read_bps=2060000`. The earlier PIO run reported
 `write_bps=102500 read_bps=1311000`, so the measured write rate rose about
 4.4 times and read rate about 1.6 times. The tool uses `O_DIRECT` by default
-and transfers sequential 8 KiB chunks; its per-phase rates exclude file
-close/unlink and do not directly measure background ext2 sync. This confirms
+and issues sequential 8 KiB calls; ext2 splits each call into 4 KiB
+filesystem blocks. Its per-phase rates exclude file close/unlink and do not
+directly measure background ext2 sync. This confirms
 a useful DMA speedup for that workload, while leaving the seconds-long
 desktop and LED pauses as a separate unresolved problem. The UDMA5 result
-also does not prove long-term
-DMA stability.
+also does not prove long-term DMA stability.
+
+On that UDMA5 boot, a second command with a 1 MiB file and 64 KiB userland
+buffer (`disk_benchmark -t 1 -f 1048576 -b 65536 -d /home/anon`) took
+16,342 ms and reported `write_bps=66000 read_bps=2240000`. The larger file's
+write rate fell sharply while its read rate barely changed. Source review
+shows `Ext2FSInode::write_bytes_locked()` splits `O_DIRECT` file writes into
+4 KiB blocks; `BlockBasedFileSystem::write_block()` sends each block to the
+IDE driver, and the driver issues ATA FLUSH CACHE after each write request.
+Thus this benchmark made about 256 separate 4 KiB device writes, not sixteen
+64 KiB DMA transfers. It cannot isolate the two-entry 64 KiB PRD path or
+prove that FLUSH CACHE alone caused the slowdown. The extra write latency may
+depend on sustained media writes, metadata allocation, flushes, or locking.
+
+The user also ran the 1 MiB case with `-b 8192` on the same UDMA5 boot:
+`write_bps=65000 read_bps=2012000`, with no DMA failure or PIO fallback in
+the serial log. Holding file size fixed while changing the userland buffer
+from 64 KiB to 8 KiB therefore changed little. This agrees with ext2's
+4 KiB device requests and points away from a two-entry 64 KiB PRD defect.
+The reported total time of 1,649 ms conflicts with the tool's 65,000 B/s
+write rate for a 1 MiB file (which implies roughly 16 seconds), so only the
+rates are used for comparison.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

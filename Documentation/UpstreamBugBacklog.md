@@ -26,6 +26,25 @@ submitted upstream as of 2026-10-16.
   concurrent dirty updates, and propagate writeback errors before marking
   blocks clean. This needs a separate concurrency regression.
 
+## Ext2 direct I/O splits large requests into filesystem blocks
+
+- **Observed:** On a real Pegasos 2 using UDMA5, `disk_benchmark` wrote a
+  1 MiB file at about 65-66 KB/s whether userland called `write()` with 8 KiB
+  or 64 KiB buffers. Reads stayed near 2 MB/s. Changing the userland buffer
+  size did not exercise larger IDE DMA descriptors.
+- **Upstream source:** [Ext2FSInode::write_bytes_locked()](https://github.com/SerenityOS/serenity/blob/master/Kernel/FileSystem/Ext2FS/Inode.cpp)
+  iterates one logical block at a time even with `O_DIRECT`, and
+  [BlockBasedFileSystem::write_block()](https://github.com/SerenityOS/serenity/blob/master/Kernel/FileSystem/BlockBasedFileSystem.cpp)
+  sends each uncached block as a separate device write. Confirmed on upstream
+  `master` on 2026-10-16.
+- **Local impact:** The Pegasos image uses 4 KiB ext2 blocks, so a 1 MiB
+  direct write causes about 256 block-device requests. The local IDE driver
+  then sends ATA FLUSH CACHE after each request. Raw DMA throughput has not
+  yet been measured; the adapter's internal write latency may also matter.
+- **Upstream scope:** Coalesce physically adjacent blocks without changing
+  partial-block, allocation, cache-coherency, or error semantics. Add a
+  regression that checks fewer device requests for a large direct write.
+
 ## USB HID keyboards have no held-key repeat
 
 - **Observed:** On the Pegasos 2, a USB keyboard now registers separate
