@@ -397,12 +397,13 @@ ErrorOr<void> IDEChannel::transfer_dma(Drive drive, bool use_lba48, u64 lba, siz
     bool stopped_for_interrupt = false;
     for (size_t attempt = 0; attempt < status_poll_attempts; ++attempt) {
         drive_status = alternate_status();
-        engine_status = m_bus_master->read8(bus_master_status);
-        if (engine_status & bus_master_status_error) {
+        u8 polled_engine_status = m_bus_master->read8(bus_master_status);
+        bool interrupt_observed = m_dma_irq_observed.load();
+        engine_status = ide_dma_effective_status(polled_engine_status, m_dma_status_at_irq.load(), interrupt_observed);
+        if ((polled_engine_status | engine_status) & bus_master_status_error) {
             result = Error::from_errno(EIO);
             break;
         }
-        bool interrupt_observed = m_dma_irq_observed.load();
         if (ide_dma_should_stop(engine_status, interrupt_observed)) {
             // Linux and Haiku stop the bus master on its completion IRQ before
             // checking the drive's final status. Do not wait for DRQ to clear

@@ -34,6 +34,13 @@ constexpr bool ide_dma_irq_belongs_to_transfer(bool dma_in_progress, u8 bus_mast
     return dma_in_progress && (bus_master_status & 0x04);
 }
 
+// The IRQ handler acknowledges the controller latch. A poll that read status
+// just before the IRQ may still hold an obsolete Active bit afterward.
+constexpr u8 ide_dma_effective_status(u8 polled_status, u8 status_at_irq, bool irq_observed)
+{
+    return irq_observed ? status_at_irq : polled_status;
+}
+
 constexpr bool ide_dma_has_completed(u8 drive_status, u8 bus_master_status, bool irq_observed = false)
 {
     constexpr u8 busy_or_data_request_or_error = 0x80 | 0x08 | 0x20 | 0x01;

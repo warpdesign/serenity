@@ -688,12 +688,28 @@ It rejects an interrupt received while the PRD engine is still active, to
 avoid treating incomplete DMA data as a successful disk read. DMA stability
 remains unverified on physical hardware.
 
-The sole current card image at
+The previous card image at
 `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (SHA-256
 `8f6b8964e283b7349d168bab57bc9261abfca8d7b4951f09a461002dcf578a8e`)
-contains this change in the FFS loader. The ext2 root partition is unchanged;
-the FFS loader bytes match the built loader. The host IRQ/completion tests and
-PowerPC kernel/loader builds pass. No QEMU run was made.
+contained that change in the FFS loader. Its ext2 root partition was unchanged.
+
+The physical run of that image reached 14 successful DMA transfers before
+reporting an error on an eight-sector read at LBA 151920. This was a false
+failure: the IRQ handler captured bus-master status `0x24` (interrupt set,
+PRD engine inactive) and ATA status `0x50` (ready), with one IRQ assigned
+to that transfer. The polling thread had read `0x21` before the IRQ, then
+observed the handler's completion flag and used its stale `0x21` value to
+reject the transfer. Reset succeeded and PIO fallback continued.
+
+The current source uses the handler's recorded bus-master status when it
+observes that handler's IRQ. It still treats an actual active PRD engine or
+ATA error as a failure. The physical `0x21`/IRQ `0x24` race reproduced in a
+host regression test before the change and passes afterward. The sole current
+card image at the same path has SHA-256
+`3667a4e95d5b7227ce2582eba7836157d1f4c00dd2984df5c23b1d9b9106d65f`.
+Its FFS loader and unchanged ext2 root match the built inputs; host tests
+and the PowerPC kernel and loader build pass. Physical validation remains
+for a later time, at the user's preference. No QEMU run was made.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for

@@ -10,6 +10,7 @@ using Kernel::ide_dma_has_completed;
 using Kernel::ide_dma_has_failed;
 using Kernel::ide_dma_irq_acknowledgement;
 using Kernel::ide_dma_irq_belongs_to_transfer;
+using Kernel::ide_dma_effective_status;
 using Kernel::ide_dma_should_stop;
 using Kernel::ide_dma_pci_command_allows_mastering;
 using Kernel::ide_dma_pin_interrupt_is_masked;
@@ -28,6 +29,9 @@ static_assert(!ide_dma_has_completed(0x50, 0x21, true)); // IRQ seen, PRDs still
 static_assert(!ide_dma_irq_belongs_to_transfer(false, 0x24)); // Firmware-pending IRQ before DMA starts.
 static_assert(ide_dma_irq_belongs_to_transfer(true, 0x24)); // Current DMA command's IRQ.
 static_assert(!ide_dma_irq_belongs_to_transfer(true, 0x20)); // Another device's IRQ.
+static_assert(ide_dma_effective_status(0x21, 0x24, true) == 0x24); // Poll raced the IRQ acknowledgement.
+static_assert(ide_dma_has_completed(0x50, ide_dma_effective_status(0x21, 0x24, true), true));
+static_assert(ide_dma_effective_status(0x21, 0x24, false) == 0x21); // No IRQ belongs to this transfer.
 static_assert(ide_dma_has_completed(0x50, 0x20, true)); // IRQ handler acknowledged the latch.
 static_assert(!ide_dma_has_completed(0x58, 0x20, true)); // Drive still requests data.
 static_assert(!ide_dma_has_completed(0x50, 0x22, true)); // Bus-master error takes precedence.
