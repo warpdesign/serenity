@@ -381,32 +381,13 @@ ErrorOr<void> IDEChannel::write_sectors(Drive drive, bool use_lba48, u64 lba, si
     MutexLocker locker(m_lock);
     if (is_dma_enabled(drive)) {
         auto result = transfer_dma(drive, use_lba48, lba, count, true, const_cast<u8*>(buffer.data()), physical_buffer);
-        if (!result.is_error()) {
-            m_write_cache_state[to_underlying(drive)].write_completed();
-            return {};
-        }
+        if (!result.is_error())
+            return flush_cache(drive, use_lba48);
         disable_dma_after_error(drive, result.release_error());
         TRY(reset_after_dma_error());
     }
     TRY(write_sectors_pio(drive, use_lba48, lba, count, buffer));
-    m_write_cache_state[to_underlying(drive)].write_completed();
-    return {};
-}
-
-ErrorOr<void> IDEChannel::flush_device_cache(Drive drive, bool use_lba48)
-{
-    MutexLocker locker(m_lock);
-    auto& state = m_write_cache_state[to_underlying(drive)];
-    if (!state.needs_flush())
-        return {};
-    auto writes = state.pending_writes();
-    auto started = TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE);
-    TRY(flush_cache(drive, use_lba48));
-    auto elapsed_ms = (TimeManagement::the().current_time(CLOCK_MONOTONIC_COARSE) - started).to_milliseconds();
-    if (writes >= 8 || elapsed_ms >= 100)
-        dmesgln("IDE: cache flush after {} writes took {} ms", writes, elapsed_ms);
-    state.flush_completed();
-    return {};
+    return flush_cache(drive, use_lba48);
 }
 
 ErrorOr<void> IDEChannel::read_sectors_pio(Drive drive, bool use_lba48, u64 lba, size_t count, Bytes buffer)
@@ -438,20 +419,39 @@ ErrorOr<void> IDEChannel::write_sectors_pio(Drive drive, bool use_lba48, u64 lba
 {
     VERIFY(m_lock.is_locked());
 
+    auto now = [] { return TimeManagement::the().current_time(CLOCK_MONOTONIC); };
+    u64 setup_us = 0;
+    u64 device_wait_us = 0;
+    u64 data_out_us = 0;
+    u64 completion_us = 0;
     auto max_per_command = use_lba48 ? max_sectors_per_lba48_command : max_sectors_per_lba28_command;
     for (size_t done = 0; done < count;) {
         auto chunk = min(count - done, max_per_command);
+        auto started = now();
         TRY(issue_transfer_command(drive, use_lba48, lba + done, chunk, ATA_CMD_WRITE_PIO, ATA_CMD_WRITE_PIO_EXT));
+        setup_us += (now() - started).to_microseconds();
         for (size_t sector = 0; sector < chunk; ++sector) {
+            started = now();
             TRY(wait_for_data_request());
+            device_wait_us += (now() - started).to_microseconds();
             auto const* source = buffer.offset_pointer((done + sector) * sector_size);
+            started = now();
             for (size_t i = 0; i < words_per_sector; ++i)
                 m_command_block->write16(ATA_REG_DATA, static_cast<u16>(source[i * 2] | (source[i * 2 + 1] << 8)));
+            data_out_us += (now() - started).to_microseconds();
         }
+        started = now();
         u8 status = TRY(wait_until_not_busy());
+        completion_us += (now() - started).to_microseconds();
         if (status & (ATA_SR_ERR | ATA_SR_DF))
             return Error::from_errno(EIO);
         done += chunk;
+    }
+    if (m_pio_write_timing_reports < 8
+        && (m_pio_write_timing_reports == 0 || setup_us + device_wait_us + data_out_us + completion_us >= 100'000)) {
+        dmesgln("IDE: PIO write {} sectors at {}: setup {} us, wait {} us, data {} us, completion {} us",
+            count, lba, setup_us, device_wait_us, data_out_us, completion_us);
+        ++m_pio_write_timing_reports;
     }
     return {};
 }

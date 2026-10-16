@@ -468,23 +468,23 @@ immediately after a VFS sync reported 16 blocks flushed at 70.866 s. Further
 7–8 s gaps accompany VFS syncs. The user's `disk_benchmark -t 1 -f 131072
 -b 8192 -d /home/anon` reported two runs in 8815 ms, with write throughput
 102500 bytes/s and read throughput 1311000 bytes/s. Each ext2 block is 4 KiB,
-so 16 blocks are 64 KiB; Shell is loading libraries, while the background
+so 16 reported cache blocks are 64 KiB, but direct metadata writes in that
+same sync are not counted. Shell is loading libraries, while the background
 sync writes desktop and filesystem changes. The current IDE driver sends ATA
 FLUSH CACHE after every small block write. `BlockBasedFileSystem` also holds
 its cache lock through the entire writeback loop, an independent generic
 upstream issue now recorded in `Documentation/UpstreamBugBacklog.md`.
 
-The IDE driver now records successful writes and issues one ATA cache flush
-when the filesystem syncs the backing partition, including explicit `fsync`.
-The sync still waits for the flush, so durability is preserved at that point.
-A new log reports the count of writes and flush duration when significant.
-The PowerPC dynamic loader also recognizes `DT_PPC_GOT` as a handled
+An experiment batched ATA cache flushes at filesystem sync instead of after
+each block write. The physical result below showed that flush commands were
+not the expensive part, so the experiment was reverted and per-write flush
+semantics restored. The PowerPC dynamic loader also recognizes `DT_PPC_GOT` as a handled
 architecture tag: its PLT code already used the tag, but the generic scanner
 had printed an “unhandled DT_LOPROC” line for every library. Host regressions
-for cache-flush grouping and dynamic-tag recognition pass, and the kernel,
-dynamic loader, and LibELF build. Physical speed and stability are unverified.
+for dynamic-tag recognition pass, and the kernel, dynamic loader, and LibELF
+build. Physical DMA stability remains unverified.
 
-The newest 929 MiB image is `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`,
+The prior 929 MiB image was `Build/powerpc/PowerPCBoot/pegasos2-sdcard.img`,
 SHA-256 `050dade55256bc5f42c17f8cc13d929910c7313afe7e98c4eab7d5c04da82ed4`.
 It contains the rebuilt PowerPC dynamic loader in the ext2 root; its FFS
 loader and root bytes match the built inputs. The root has `/bin/membench`
@@ -516,15 +516,33 @@ the drive is declared unusable; this cannot guarantee recovery from a wedged
 adapter. If the PCI interrupt cannot be masked, it uses PIO. This is built
 and covered by host status tests, but **physical DMA is not yet proven**.
 
-The user is testing the `050dade...` image with explicit `nodma`; its bytes
-remain unchanged. A separate candidate image at
-`Build/powerpc/PowerPCBoot/pegasos2-sdcard-next.img` (929 MiB; SHA-256
-`7cf7e9ad22c74287a21fc139c6e42081349c8b9428badf0a3a80bb9b94293595`)
-contains the new loader. It defaults physical Pegasos boots to PIO for safety;
-`dma` or `udma=N` opts into experimental DMA on that same image. QEMU retains
-its existing default. Loader argument, DMA status, and recovery self-tests
-pass; its FFS loader and ext2 root match the built inputs. The candidate has
-not been written to or booted on physical hardware.
+The canonical image has now been replaced at
+`Build/powerpc/PowerPCBoot/pegasos2-sdcard.img` (929 MiB; SHA-256
+`a2ca58ac738634188fa95f8ebe74fe075f4a24d066cea5485492d2bcd925a3bf`).
+It contains the revised loader and restores per-write ATA cache flushes.
+The kernel logs up to eight slow PIO writes with separate setup, device wait,
+data-port transfer, and completion times, so one physical run can locate
+the expensive stage.
+Physical Pegasos boots default to PIO for safety; `dma` or `udma=N` opts into
+experimental DMA on this same image. QEMU retains its existing default.
+Loader argument, DMA status, and recovery self-tests pass; the FFS loader and
+ext2 root match the built inputs. The temporary candidate image was removed
+so there is only one card image to write. This image has not yet booted on
+physical hardware.
+
+The explicit `nodma` run of the `050dade...` image reached the desktop, but
+did not clearly improve startup time. VFS sync still took around 8 s for
+16–23 blocks, while `IDE: cache flush after 18/25/22 writes took 0 ms`
+showed the ATA FLUSH CACHE command itself was cheap. The user saw the Shell
+window fully drawn around uptime 81.090 s. This disproves the hypothesis
+that per-write ATA flushes caused most of the delay. Slow data writes, the
+PIO data transfer, device write latency, and the filesystem cache lock remain
+candidates; the upstream lock issue is documented separately. The batching
+change has been reverted in source. Per-write cache flushes are restored.
+The user recalls that MorphOS uses UDMA on this same adapter, strengthening
+the case for a Serenity DMA protocol issue rather than an inherent adapter
+limit. MorphOS's different boot workload does not measure Serenity's PIO
+write path.
 
 The periodic timing fallback is opt-in. PowerPC external interrupt timing is
 also mixed into the RNG by default, matching the existing x86 interrupt

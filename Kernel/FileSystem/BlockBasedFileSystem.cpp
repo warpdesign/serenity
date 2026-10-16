@@ -298,12 +298,6 @@ void BlockBasedFileSystem::flush_writes_impl()
 ErrorOr<void> BlockBasedFileSystem::flush_writes()
 {
     flush_writes_impl();
-    // Keep device cache flushes at the filesystem sync boundary instead of
-    // issuing one after every block written from the filesystem cache.
-    // Older block devices may not implement File::sync().
-    auto result = file_description().sync();
-    if (result.is_error() && result.error().code() != EINVAL)
-        return result.release_error();
     return {};
 }
 

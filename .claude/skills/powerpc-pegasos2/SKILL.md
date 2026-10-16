@@ -480,23 +480,30 @@ Each target has a `Quick` variant (750 CPU) and a full one (750cxe):
   Pegasos, the loader now appends `nodma` by default; `dma` or `udma=N` opts
   into experimental DMA, while QEMU defaults remain unchanged. Host tests
   and the PowerPC kernel/loader build pass; no QEMU or physical run of this
-  source yet. The user is now booting the prior card with explicit `nodma` to
-  check the writeback change independently of DMA. **Do not overwrite the
-  canonical `pegasos2-sdcard.img` while that baseline is under test.** A
-  separate 929 MiB candidate is ready at
-  `Build/powerpc/PowerPCBoot/pegasos2-sdcard-next.img`, SHA-256
-  `7cf7e9ad22c74287a21fc139c6e42081349c8b9428badf0a3a80bb9b94293595`.
-  Its FFS loader and ext2 root match the built inputs; it still needs a
+  source yet. The prior card then booted with explicit `nodma`, but still
+  took around 81 s to finish drawing the Shell window. VFS syncs of 16–23
+  blocks took around 8 s; `IDE: cache flush after 18/25/22 writes took 0 ms`
+  shows the ATA flush itself was not the bottleneck. The flush-batching
+  experiment was reverted; per-write cache flushes are restored. The user
+  requested one image only: the canonical `pegasos2-sdcard.img` was replaced
+  with the revised loader and the temporary candidate removed. New 929 MiB
+  SHA-256:
+  `a2ca58ac738634188fa95f8ebe74fe075f4a24d066cea5485492d2bcd925a3bf`.
+  The kernel now logs up to eight slow PIO writes broken into command setup,
+  device wait, 16-bit data-port transfer, and completion times. The earlier
+  `Flushed 16 blocks` count covers cached blocks only; other metadata writes
+  may add to the total. The user recalls MorphOS uses UDMA on this adapter,
+  so do not attribute Serenity's slow PIO path to a proven adapter limit.
+  Capture `IDE: PIO write ...` lines and test explicit `dma` separately.
+  FFS loader and ext2 root match the built inputs; this image needs a
   physical run. Spec:
   `https://read.seas.harvard.edu/~kohler/class/04f-aos/ref/hardware/IDE-BusMaster.pdf`.
 
-Next: inspect the user's `nodma` boot result on the current card. The
-candidate image is already built with safe default PIO and opt-in `dma`.
+Next: write the one canonical image with safe default PIO and opt-in `dma`.
 Boot it with `fullram weakrng`
 first, then `fullram weakrng dma` to test the revised DMA completion. Measure Shell
 window delay and rerun the one-case disk benchmark to compare with the 102500
-bytes/s write baseline. Check for `IDE: cache flush after ... writes took ...`
-and any DMA failure/reset. USB repeat is already confirmed. The image accepts
+bytes/s write baseline. Check for any DMA failure/reset. USB repeat is already confirmed. The image accepts
 `udma=0` or `nodma` without another rewrite. Do not assume a faster UDMA mode
 will fix the observed UDMA0 failure. `boot ide:0 serenity.elf /?` opens the optional firmware
 prompt; `exit` should return to SmartFirmware without restarting it.

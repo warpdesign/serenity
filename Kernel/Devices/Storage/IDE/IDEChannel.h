@@ -13,7 +13,6 @@
 #include <AK/Optional.h>
 #include <AK/OwnPtr.h>
 #include <AK/Span.h>
-#include <Kernel/Devices/Storage/IDE/WriteCacheState.h>
 #include <Kernel/Library/IOWindow.h>
 #include <Kernel/Locking/Mutex.h>
 #include <Kernel/Memory/PhysicalAddress.h>
@@ -54,7 +53,6 @@ public:
     // physical_buffer is the physical address of buffer, used only for DMA.
     ErrorOr<void> read_sectors(Drive, bool use_lba48, u64 lba, size_t count, Bytes, PhysicalAddress physical_buffer);
     ErrorOr<void> write_sectors(Drive, bool use_lba48, u64 lba, size_t count, ReadonlyBytes, PhysicalAddress physical_buffer);
-    ErrorOr<void> flush_device_cache(Drive, bool use_lba48);
 
 private:
     IDEChannel(NonnullOwnPtr<IOWindow> command_block, NonnullOwnPtr<IOWindow> control_block, OwnPtr<IOWindow> bus_master, OwnPtr<Memory::Region> descriptor_table, PhysicalAddress descriptor_table_physical);
@@ -77,7 +75,7 @@ private:
     OwnPtr<Memory::Region> m_descriptor_table;
     PhysicalAddress m_descriptor_table_physical;
     Array<bool, 2> m_dma_enabled {};
-    Array<IDEWriteCacheState, 2> m_write_cache_state {};
+    u8 m_pio_write_timing_reports { 0 };
     Mutex m_lock { "IDEChannel"sv };
 };
 

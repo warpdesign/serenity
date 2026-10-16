@@ -23,7 +23,6 @@ public:
 
     // ^BlockDevice
     virtual void start_request(AsyncBlockDeviceRequest&) override;
-    virtual ErrorOr<void> sync() override;
 
 private:
     IDEDevice(NonnullRefPtr<IDEChannel>, IDEChannel::Drive, IDEChannel::Identity, NonnullOwnPtr<Memory::Region> bounce_buffer, PhysicalAddress bounce_buffer_physical, LUNAddress, u32 hardware_relative_controller_id);

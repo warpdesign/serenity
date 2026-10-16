@@ -27,14 +27,6 @@ StorageDevicePartition::StorageDevicePartition(StorageDevice& device, MinorNumbe
 
 StorageDevicePartition::~StorageDevicePartition() = default;
 
-ErrorOr<void> StorageDevicePartition::sync()
-{
-    auto device = m_device.strong_ref();
-    if (!device)
-        return Error::from_errno(EIO);
-    return device->sync();
-}
-
 Partition::DiskPartitionMetadata const& StorageDevicePartition::metadata() const
 {
     return m_metadata;

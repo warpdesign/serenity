@@ -26,7 +26,6 @@ public:
     // ^BlockDevice
     virtual ErrorOr<size_t> read(OpenFileDescription&, u64, UserOrKernelBuffer&, size_t) override;
     virtual ErrorOr<size_t> write(OpenFileDescription&, u64, UserOrKernelBuffer const&, size_t) override;
-    virtual ErrorOr<void> sync() override;
 
     // NOTE: Technically we need to query the underlying StorageDevice,
     // but since it will always return true in both of these methods,

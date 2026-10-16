@@ -17,9 +17,10 @@ submitted upstream as of 2026-10-16.
   holds `m_cache.with_exclusive` around the loop that calls
   `file_description().write()` for every dirty block. Verified against
   upstream `master` on 2026-10-16.
-- **Local status:** The Pegasos IDE driver now batches ATA cache flushes at
-  filesystem sync; the shared filesystem locking is unchanged. Physical
-  timing of the new image is pending.
+- **Local status:** A Pegasos IDE experiment batched ATA cache flushes at
+  filesystem sync. The physical log measured each drive-cache flush at 0 ms,
+  while the slow VFS writeback and Shell wait remained. The experiment was
+  reverted. The shared filesystem locking remains unchanged.
 - **Upstream scope:** Let reads interleave with slow writeback without losing
   concurrent dirty updates, and propagate writeback errors before marking
   blocks clean. This needs a separate concurrency regression.

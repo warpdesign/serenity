@@ -89,20 +89,7 @@ endforeach()
 
 target_link_libraries(TestPageFaultRace PRIVATE LibThreading)
 
-set(kernel_ide_write_cache_source "${CMAKE_CURRENT_SOURCE_DIR}/IDE/TestWriteCacheState.cpp")
-set(kernel_ide_write_cache_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-IDE-write-cache-state")
 find_program(KERNEL_IDE_HOST_CXX NAMES c++ clang++ REQUIRED)
-add_custom_target(KernelIDEWriteCacheCheckQuick
-    COMMAND "${KERNEL_IDE_HOST_CXX}" -std=c++23 -I "${CMAKE_SOURCE_DIR}"
-        "${kernel_ide_write_cache_source}" -o "${kernel_ide_write_cache_executable}"
-    COMMAND "${kernel_ide_write_cache_executable}"
-    VERBATIM
-)
-add_custom_target(KernelIDEWriteCacheCheck
-    COMMAND "${kernel_ide_write_cache_executable}" extended
-    DEPENDS KernelIDEWriteCacheCheckQuick
-    VERBATIM
-)
 
 set(kernel_ide_dma_completion_source "${CMAKE_CURRENT_SOURCE_DIR}/IDE/TestDMACompletion.cpp")
 set(kernel_ide_dma_completion_executable "${CMAKE_CURRENT_BINARY_DIR}/Kernel-IDE-DMA-completion")
