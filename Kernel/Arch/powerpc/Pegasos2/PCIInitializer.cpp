@@ -132,6 +132,8 @@ UNMAP_AFTER_INIT void initialize()
     }
 
     auto& access = Access::the();
+    if (native_firmware)
+        IDEController::require_dma_opt_in();
     IDEController::set_irq_override(pegasos2_ide_irq_override);
     access.add_host_controller(move(south_controller));
     access.add_host_controller(move(agp_controller));

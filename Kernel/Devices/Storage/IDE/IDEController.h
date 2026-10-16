@@ -21,6 +21,7 @@ public:
     using IRQOverride = Optional<InterruptNumber> (*)(PCI::DeviceIdentifier const&, u8 channel_index);
 
     static void set_irq_override(IRQOverride);
+    static void require_dma_opt_in();
     static bool is_handled(PCI::DeviceIdentifier const&);
     static ErrorOr<NonnullRefPtr<IDEController>> initialize(PCI::DeviceIdentifier const&);
 

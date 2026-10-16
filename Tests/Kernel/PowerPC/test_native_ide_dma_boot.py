@@ -29,7 +29,44 @@ def check_dma_boot(log: str, require_desktop: bool, expected_mode: int = 2, requ
         raise AssertionError("the desktop did not start after disk access")
 
 
+def check_default_pio_boot(log: str, require_desktop: bool) -> None:
+    command_line = next((line.split("Kernel Commandline:", 1)[1].split() for line in log.splitlines()
+                         if "Kernel Commandline:" in line), [])
+    if not command_line or "dma" in command_line or "nodma" in command_line or any(
+            argument.startswith("udma=") for argument in command_line):
+        raise AssertionError("the loader must pass the unmodified PIO-default options")
+    if "IDE: DMA requires an explicit dma or udma=N boot argument on this board" not in log:
+        raise AssertionError("the Pegasos IDE controller did not select its PIO default")
+    if "IDE: Master drive using Ultra DMA mode" in log or "KERNEL PANIC" in log:
+        raise AssertionError("the default boot attempted DMA or crashed")
+    if "Ext2FS: Mount successful" not in log:
+        raise AssertionError("the PIO default did not mount the root filesystem")
+    if require_desktop and "Entering WindowServer main loop" not in log:
+        raise AssertionError("the PIO default did not reach the desktop")
+
+
 def self_test() -> None:
+    default_pio = """Kernel Commandline: fullram weakrng serial_debug root=lun3:0:0;part1
+IDE: DMA requires an explicit dma or udma=N boot argument on this board
+Ext2FS: Mount successful, setting superblock to error state.
+Entering WindowServer main loop
+"""
+    check_default_pio_boot(default_pio, True)
+    try:
+        check_default_pio_boot(default_pio.replace("weakrng serial_debug", "weakrng nodma serial_debug"), True)
+    except AssertionError as error:
+        if "unmodified PIO-default options" not in str(error):
+            raise
+    else:
+        raise AssertionError("the loader must not append the redundant nodma flag")
+    try:
+        check_default_pio_boot(default_pio.replace("weakrng serial_debug", "weakrng dma serial_debug"), True)
+    except AssertionError as error:
+        if "unmodified PIO-default options" not in str(error):
+            raise
+    else:
+        raise AssertionError("the default PIO check must reject an explicit DMA boot")
+
     failure = """IDE: Master drive using Ultra DMA mode 5
 IDE: DMA read of 8 sectors at 68136 failed, drive status 0x58, DMA status 0x21
 IDE: Master drive DMA transfer failed (Error(errno=69)), using PIO from now on
@@ -125,6 +162,7 @@ def main() -> None:
     parser.add_argument("--normal", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--mode", type=int, default=2)
+    parser.add_argument("--default-pio", action="store_true")
     args = parser.parse_args()
     if args.self_test:
         self_test()
@@ -132,7 +170,11 @@ def main() -> None:
     path = os.environ.get("PEGASOS2_NATIVE_SERIAL_LOG")
     if not path:
         parser.error("set PEGASOS2_NATIVE_SERIAL_LOG to the physical serial capture")
-    check_dma_boot(Path(path).read_text(errors="replace"), args.normal, args.mode, args.normal)
+    log = Path(path).read_text(errors="replace")
+    if args.default_pio:
+        check_default_pio_boot(log, args.normal)
+    else:
+        check_dma_boot(log, args.normal, args.mode, args.normal)
 
 
 if __name__ == "__main__":

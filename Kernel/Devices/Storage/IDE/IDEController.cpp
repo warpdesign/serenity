@@ -31,11 +31,17 @@ static constexpr u8 via_udma_enable_bits = 0xe0;
 // Cycle time fields for a 33 MHz PCI clock: ceil(mode cycle time / 10 ns) clamped to 2..7, minus 2.
 static constexpr Array<u8, 6> via_udma100_cycle_fields { 5, 5, 4, 3, 1, 0 };
 static IDEController::IRQOverride s_irq_override;
+static bool s_dma_requires_opt_in;
 
 void IDEController::set_irq_override(IRQOverride override)
 {
     VERIFY(!s_irq_override);
     s_irq_override = override;
+}
+
+void IDEController::require_dma_opt_in()
+{
+    s_dma_requires_opt_in = true;
 }
 // Modes above this need an 80-wire cable.
 
@@ -137,6 +143,8 @@ ErrorOr<void> IDEController::initialize_channel(PCI::DeviceIdentifier const& ide
         dmesgln("IDE: PCI interrupt output masked for polled DMA: {}", pci_interrupt_is_masked);
     if (kernel_command_line().contains("nodma"sv)) {
         dmesgln("IDE: DMA disabled by the nodma boot argument");
+    } else if (s_dma_requires_opt_in && !kernel_command_line().contains("dma"sv) && !kernel_command_line().lookup("udma"sv).has_value()) {
+        dmesgln("IDE: DMA requires an explicit dma or udma=N boot argument on this board");
     } else if (!pci_interrupt_is_masked && !dma_irq.has_value()) {
         dmesgln("IDE: PCI interrupt cannot be masked and IRQ {} is invalid, using PIO", identifier.interrupt_line().value());
     } else if (!(programming_interface & bus_master_capable) || PCI::get_BAR(identifier, PCI::HeaderType0BaseRegister::BAR4) == 0) {

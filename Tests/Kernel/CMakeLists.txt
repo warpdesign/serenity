@@ -173,6 +173,15 @@ if (SERENITY_ARCH STREQUAL "powerpc")
         DEPENDS PowerPCNativeIDEDMABootCheckQuick
         VERBATIM
     )
+    add_custom_target(PowerPCNativeIDEPIOBootCheckQuick
+        COMMAND python3 "${powerpc_native_ide_dma_test}" --default-pio
+        VERBATIM
+    )
+    add_custom_target(PowerPCNativeIDEPIOBootCheck
+        COMMAND python3 "${powerpc_native_ide_dma_test}" --default-pio --normal
+        DEPENDS PowerPCNativeIDEPIOBootCheckQuick
+        VERBATIM
+    )
     set(powerpc_uhci_interrupt_source "${CMAKE_CURRENT_SOURCE_DIR}/PowerPC/TestUHCIInterruptTransfer.cpp")
     set(powerpc_uhci_interrupt_executable "${CMAKE_CURRENT_BINARY_DIR}/PowerPC-UHCI-interrupt-transfer")
     add_custom_target(PowerPCUHCIInterruptTransferCheckQuick

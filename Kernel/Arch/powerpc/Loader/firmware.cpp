@@ -284,20 +284,6 @@ static bool append_native_root(u32& count)
     return true;
 }
 
-static bool append_native_dma_default(u32& count, bool is_qemu)
-{
-    if (!Kernel::PowerPC::Loader::should_append_native_nodma(s_command_line, is_qemu))
-        return true;
-    char const* flag = " nodma";
-    for (u32 index = 0; flag[index] != '\0'; ++index) {
-        if (count + 1 >= sizeof(s_command_line))
-            return false;
-        s_command_line[count++] = flag[index];
-    }
-    s_command_line[count] = '\0';
-    return true;
-}
-
 static bool should_stop_before_kernel()
 {
     return has_flag("halt");
@@ -742,8 +728,6 @@ extern "C" void loader_main(FirmwareEntry raw_firmware, u32 entry_msr)
     }
     bool native_boot = has_flag("native");
     if ((!is_qemu || native_boot) && !append_native_root(command_line_length))
-        return;
-    if (!append_native_dma_default(command_line_length, is_qemu))
         return;
     write_firmware_identity(firmware, stdout, chosen, entry_msr, is_qemu);
     if (has_flag("ofdump"))

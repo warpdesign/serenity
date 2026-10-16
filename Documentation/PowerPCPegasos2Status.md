@@ -752,9 +752,14 @@ unverified. The sole current image is
 `11b4366dd5dcc70fb5de07a315a6e3a730d88124f4a87e9f9dad796eec31571a`.
 Its extracted FFS loader matches the built ELF byte for byte, and its ext2
 root partition still matches `pegasos2-root.ext2` byte for byte. No QEMU run
-was made. On physical Pegasos 2 the loader appends `nodma` unless `dma` or
-`udma=N` is explicit. Boot with `fullram weakrng dma` for the default UDMA2
-path; the same image accepts `fullram weakrng udma=0` to isolate UDMA timing.
+was made. PIO is the physical Pegasos 2 default in this image: the loader
+internally adds `nodma` unless `dma` or `udma=N` is explicit. Boot with
+`fullram weakrng dma` for the default UDMA2 path; the same image accepts
+`fullram weakrng udma=0` to isolate UDMA timing. The source now removes that
+implicit `nodma` argument and its user-facing help entry. Native Pegasos IDE
+instead requires explicit `dma` or `udma=N`; QEMU keeps its existing DMA
+default. This source cleanup is **not** in the already built card image and
+does not require another SD write for the current IRQ-wait test.
 
 A physical boot of the existing card with `fullram weakrng udma=0` also
 stalled. It completed 619 DMA transfers, then an eight-sector read at LBA
@@ -764,6 +769,26 @@ since channel creation. Reset recovered the drive and switched to PIO.
 Thus UDMA2 timing alone cannot explain the stall; UDMA0 changes neither the
 failure shape nor the need to recover. The excerpt does not establish whether
 the IRQ-wait image above was on the physical card for this boot.
+
+The first real Pegasos 2 boot of the IRQ-wait image used explicit
+`dma fullram weakrng`. It reported the first DMA success at 9.365 seconds and
+`First IRQ-waited DMA transfer succeeded` at 9.382 seconds. Ext2 mounted at
+10.032 seconds, WindowServer entered its main loop at 30.485 seconds, and
+serial output continued through 86.909 seconds without any DMA failure or
+PIO fallback line. This validates the IRQ-backed completion path through
+desktop startup on this machine. Longer-running DMA stability and write
+throughput remain to be measured; a slow UDMA0 boot on the previous image
+does not negate this new-image result.
+
+The user reports that desktop startup still feels slow and the SD adapter's
+LED can stay lit for several seconds. The DMA boot log shows Ext2 syncs of
+16-23 blocks continuing at 30.206, 41.351, 51.555, 59.873, 70.799, 78.798,
+and 86.909 seconds. Thus successful DMA completion has not resolved the
+filesystem write latency. `IDEChannel::write_sectors()` still issues an ATA
+cache flush after each request, although earlier PIO logs measured the flush
+itself as near zero; the drive's write completion and Ext2 sync locking
+remain candidates. Compare the same `disk_benchmark` command against the
+earlier PIO result before attributing the LED stalls to any one component.
 
 The explicit `nodma` run of the `050dade...` image reached the desktop, but
 did not clearly improve startup time. VFS sync still took around 8 s for
